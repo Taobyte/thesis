@@ -1,0 +1,7 @@
+defaults:
+  - model: mlp
+  - dataset: dalia 
+
+seed: 123
+look_back_window: 320
+prediction_window: 128
