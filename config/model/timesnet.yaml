@@ -1,0 +1,5 @@
+
+model_name: "TimesNet"
+
+pl_module: 
+  _target_: src.models.timesnet.TimesNet

@@ -1,5 +1,6 @@
 defaults:
-  - model: mlp
+  - _self_
+  - model: timesnet
   - dataset: dalia 
 
 seed: 123

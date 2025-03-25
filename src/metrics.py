@@ -1,5 +1,15 @@
 import torch
+import lightning as L
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+
+def evaluate(model: L.LightningModule, preds: torch.Tensor, y: torch.Tensor):
+    metric_mae = mae(preds, y)
+    metric_mse = mse(preds, y)
+    metric_mape = mape(preds, y)
+    model.log("metric_mae", metric_mae)
+    model.log("metric_mse", metric_mse)
+    model.log("metric_mape", metric_mape)
 
 
 def mae(preds: torch.Tensor, targets: torch.Tensor) -> float:
