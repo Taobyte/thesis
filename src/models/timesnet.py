@@ -351,51 +351,34 @@ class Model(nn.Module):
 class TimesNet(L.LightningModule):
     def __init__(
         self,
-        look_back_window: int = 128,
-        prediction_window: int = 64,
-        c_out: int = 1,
-        top_k: int = 5,
-        d_model: int = 32,
-        d_ff: int = 32,
-        num_kernels: int = 6,
-        e_layers: int = 2,
-        enc_in: int = 1,
-        embed_type: str = "fixed",
-        freq: str = "h",
-        dropout: float = 0.0,
+        model: torch.nn.Module,
+        learning_rate: float = 1e-3,
     ):
         super().__init__()
-
-        self.model = Model(
-            look_back_window,
-            prediction_window,
-            c_out,
-            top_k,
-            d_model,
-            d_ff,
-            num_kernels,
-            e_layers,
-            enc_in,
-            embed_type,
-            freq,
-            dropout,
-        )
+        self.model = model
         self.loss = torch.nn.MSELoss()
+        self.learning_rate = learning_rate
 
     def training_step(self, batch, batch_idx) -> float:
         x, y = batch
-        time = torch.zeros((1, 1))  # TODO
-        preds = self.model(x)
+        B, L = x.shape
+        x = x.unsqueeze(-1)
+        time = torch.zeros((B, L, 5))
+        preds = self.model(x, time)
+        preds = preds.squeeze(-1)
         loss = self.loss(preds, y)
         return loss
 
     def validation_step(self, batch, batch_idx) -> None:
         x, y = batch
-        preds = self.model(x)
+        B, L = x.shape
+        x = x.unsqueeze(-1)
+        time = torch.zeros((B, L, 5))
+        preds = self.model(x, time)
         evaluate(self, preds, y)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 

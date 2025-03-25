@@ -4,6 +4,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
 def evaluate(model: L.LightningModule, preds: torch.Tensor, y: torch.Tensor):
+    if len(preds.shape) == 3:
+        preds = preds.squeeze(-1)
     metric_mae = mae(preds, y)
     metric_mse = mse(preds, y)
     metric_mape = mape(preds, y)
