@@ -2,10 +2,7 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-import torch
 import lightning as L
-import wandb
-
 from lightning.pytorch.loggers import WandbLogger
 
 
