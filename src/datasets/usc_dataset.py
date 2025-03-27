@@ -5,11 +5,7 @@ import lightning as L
 from pathlib import Path
 from scipy.io import loadmat
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
-from pathlib import Path
 from typing import Tuple
-
-import pdb
 
 
 class USCDataset(Dataset):
@@ -39,8 +35,12 @@ class USCDataset(Dataset):
         subject = index // 60
         mat_file_idx = index - subject * 60
         mat_file = loadmat(self.sub_mats[subject][mat_file_idx])["sensor_readings"]
+
         acc = mat_file[:, :3]
+        ger = mat_file[:, 3:]
+
         acc_norm = np.sqrt(np.sum(np.square(acc), axis=1))
+        ger_norm = np.sqrt(np.sum(np.square(ger), axis=1))
 
         # random sampling
         n_windows = len(acc_norm) - self.window + 1
@@ -53,7 +53,7 @@ class USCDataset(Dataset):
         )
 
 
-class DaLiADataModule(L.LightningDataModule):
+class USCDataModule(L.LightningDataModule):
     def __init__(
         self,
         data_dir: str,

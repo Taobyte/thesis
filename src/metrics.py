@@ -14,6 +14,35 @@ def evaluate(model: L.LightningModule, preds: torch.Tensor, y: torch.Tensor):
     model.log("metric_mape", metric_mape)
 
 
+def correlation(preds: torch.Tensor, targets: torch.Tensor) -> float:
+    """
+    Computes the mean Pearson correlation between predictions and targets
+    across batch and channels.
+
+    Args:
+        preds (torch.Tensor): Predicted values, shape (B, T, C)
+        targets (torch.Tensor): Ground truth values, shape (B, T, C)
+
+    Returns:
+        float: Mean Pearson correlation over (B, C)
+    """
+    preds_mean = preds.mean(dim=1, keepdim=True)
+    targets_mean = targets.mean(dim=1, keepdim=True)
+
+    preds_centered = preds - preds_mean
+    targets_centered = targets - targets_mean
+
+    numerator = torch.sum(preds_centered * targets_centered, dim=1)
+    denominator = torch.sqrt(
+        torch.sum(preds_centered**2, dim=1) * torch.sum(targets_centered**2, dim=1)
+    )
+
+    corr = numerator / (denominator + 1e-8)  # shape: (B, C)
+
+    mean_corr = corr.mean().item()  # scalar
+    return mean_corr
+
+
 def mae(preds: torch.Tensor, targets: torch.Tensor) -> float:
     return mean_absolute_error(targets.cpu().numpy(), preds.cpu().numpy())
 

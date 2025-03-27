@@ -1,10 +1,14 @@
-
-model_name: "AdaMSHyper"
+model_name: "SimpleTM"
 
 model:
-  _target_: src.models.ada_mshyper.Model
+  _target_: src.models.simpletm.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
+  output_attention: True
+  use_norm: True
+  geomattn_dropout: 0.5
+  alpha: 1 
+  kernel_size: 5
   channels: 7
   dec_in: 7
   d_model: 512
@@ -21,15 +25,15 @@ model:
   embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   activation: 'gelu'
   output_attention: True
+  wv: "db1"
+  factor: 1
+  dropout: 0.1
+  requires_grad: True # set to true to enable trainable wavelets
+  m: 3 # Number of levels for the stationary wavelet transform 
+  d_ff: 32 # Dimensionality of the feed forward network
+
+
 
 pl_model: 
-  _target_: src.models.ada_mshyper.AdaMSHyper
-  num_workers: 10
-  itr: 2
-  train_epochs: 5
-  batch_size: 32
-  patience: 3 # early stopping patience
-  learning_rate: 0.0001
-  loss: 'mse'
-  lradj: 'type1' # adjust learning rate
-  use_amp: False
+  _target_: src.models.simpletm.SimpleTM
+  learning_rate: 0.001
