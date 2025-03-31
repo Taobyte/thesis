@@ -3,6 +3,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 import lightning as L
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 
 
@@ -17,7 +18,14 @@ def main(config: DictConfig):
     model = instantiate(config.model.model)
     pl_model = instantiate(config.model.pl_model, model=model)
 
-    trainer = L.Trainer(logger=wandb_logger)
+    trainer = L.Trainer(
+        logger=wandb_logger,
+        callbacks=[
+            EarlyStopping(
+                monitor="val_loss", mode="min", patience=config.pl_model.patience
+            )
+        ],
+    )
     trainer.fit(pl_model, datamodule=datamodule)
 
 

@@ -18,6 +18,7 @@ import torch.fft
 
 import lightning as L
 from ..metrics import evaluate
+from ..losses import smape_loss
 
 
 class PositionalEmbedding(nn.Module):
@@ -350,13 +351,14 @@ class Model(nn.Module):
 
 class TimesNet(L.LightningModule):
     def __init__(
-        self,
-        model: torch.nn.Module,
-        learning_rate: float = 1e-3,
+        self, model: torch.nn.Module, learning_rate: float = 1e-3, loss: str = "SMAPE"
     ):
         super().__init__()
         self.model = model
-        self.loss = torch.nn.MSELoss()
+        if loss == "SMAPE":
+            self.loss = smape_loss()
+        else:
+            self.loss = torch.nn.MSELoss()
         self.learning_rate = learning_rate
 
     def training_step(self, batch, batch_idx) -> float:

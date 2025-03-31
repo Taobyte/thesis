@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as L
 from math import sqrt
 import pywt
 
@@ -417,6 +418,11 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         dec_out, attns = self.forecast(x_enc, None, None, None)
         return dec_out, attns
+
+
+class SimpleTM(L.LightningModule):
+    def __init__(self, model: nn.Module):
+        self.model = model
 
 
 if __name__ == "__main__":

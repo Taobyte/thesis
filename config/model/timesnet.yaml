@@ -5,16 +5,26 @@ model:
   _target_: src.models.timesnet.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  c_out: 1
+  e_layers: 2
   top_k: 5
-  d_model: 32
+  d_model: 32 # chosen according to min(max(2^log(C), d_min), d_max) Long-term: (d_min=32, d_max=512) |  Short-term: (d_min=16, d_max=64) 
+  c_out: 1
   d_ff: 32
   num_kernels: 6
-  e_layers: 2
   enc_in: 1
   dropout: 0.0
 
 
 pl_model: 
   _target_: src.models.timesnet.TimesNet
-  learning_rate: 0.001
+  learning_rate: 0.0001
+  train_epochs: 10
+  batch_size: 32 # Long-term batch_size = 32 | Short-term batch_size = 16
+  loss_name: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
+  # Optimizer
+  optimizer: 'Adam'
+  beta_1: 0.9
+  bet_2: 0.999
+  # Early Stopping
+  patience: 3
+  use_amp: False

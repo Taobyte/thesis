@@ -1588,4 +1588,13 @@ class ElasTST(Forecaster):
 
 
 if __name__ == "__main__":
-    model = ElasTST(target_dim=96, context_length=96, prediction_length=720, freq="h")
+    model = ElasTST(
+        target_dim=96,
+        context_length=96,
+        prediction_length=720,
+        freq="h",
+        lags_list=[64],
+    )
+    input = torch.randn((1, 96, 1))
+    output = model(input, 96)
+    print(output.shape)
