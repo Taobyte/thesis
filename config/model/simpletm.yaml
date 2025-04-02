@@ -4,6 +4,7 @@ model:
   _target_: src.models.simpletm.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
+  e_layers: 1
   output_attention: True
   use_norm: True
   geomattn_dropout: 0.5
@@ -36,4 +37,6 @@ model:
 
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
-  learning_rate: 0.001
+  learning_rate: 0.02
+  batch_size: 256 
+  epochs: 10

@@ -10,27 +10,25 @@ pl_model:
   default_root_dir: ./results
   accumulate_grad_batches: 1
 model:
-  forecaster:
-    class_path: probts.model.forecaster.point_forecaster.ElasTST
-    init_args:
-      l_patch_size: '8_16_32'
-      dropout: 0.0
-      f_hidden_size: 256
-      d_inner: 256
-      t_layers: 2
-      v_layers: 0
-      n_heads: 8
-      d_v: 64
-      d_k: 64
-      structured_mask: true
-      rotate: true
-      rope_theta_init: 'exp'
-      learnable_rope: true
-      min_period: 1
-      max_period: 1000
-      addv: false
-      bin_att: false
-      learn_tem_emb: false
+  _target_: probts.model.forecaster.point_forecaster.ElasTST
+  l_patch_size: '8_16_32'
+  dropout: 0.0
+  f_hidden_size: 256
+  d_inner: 256
+  t_layers: 2
+  v_layers: 0
+  n_heads: 8
+  d_v: 64
+  d_k: 64
+  structured_mask: true
+  rotate: true
+  rope_theta_init: 'exp'
+  learnable_rope: true
+  min_period: 1
+  max_period: 1000
+  addv: false
+  bin_att: false
+  learn_tem_emb: false
   learning_rate: 0.001
   quantiles_num: 20
   sampling_weight_scheme: random

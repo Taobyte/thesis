@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as L
 from torch import Tensor
 from einops import rearrange, repeat
 from typing import List, Union, Optional, Callable, Tuple
@@ -1376,7 +1377,7 @@ class Forecaster(nn.Module):
         raise NotImplementedError
 
 
-class ElasTST(Forecaster):
+class Model(Forecaster):
     def __init__(
         self,
         l_patch_size: Union[str, int, list] = "8_16_32",
@@ -1587,6 +1588,15 @@ class ElasTST(Forecaster):
         return loss
 
 
+class ElasTST(L.LightningModule):
+    def __init__(self):
+        pass
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optimizer
+
+
 if __name__ == "__main__":
     model = ElasTST(
         target_dim=96,
@@ -1596,5 +1606,5 @@ if __name__ == "__main__":
         lags_list=[64],
     )
     input = torch.randn((1, 96, 1))
-    output = model(input, 96)
+    output = model(input)
     print(output.shape)
