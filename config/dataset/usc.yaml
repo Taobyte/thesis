@@ -1,0 +1,10 @@
+datamodule:
+  _target_: src.datasets.usc_dataset.USCDataModule
+  data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD/"
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  start_time: "2017-01-01T12"
+  train_participants: [1, 2, 3, 4, 5, 6, 7, 8]
+  val_participants: [9, 10, 11]
+  test_participants: [12, 13, 14] 
+  batch_size: 32
