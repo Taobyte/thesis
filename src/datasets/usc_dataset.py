@@ -13,8 +13,8 @@ class USCDataset(Dataset):
         self,
         data_dir: str,
         mode: str,
-        look_back_window: int = 320,
-        prediction_window: int = 128,
+        look_back_window: int = 10,
+        prediction_window: int = 5,
         train_participants: list = [1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: list = [9, 10, 11],
         test_participants: list = [12, 13, 14],
@@ -74,7 +74,7 @@ class USCDataset(Dataset):
 
         look_back_window = mat_file[series_pos : series_pos + self.look_back_window, :]
         prediction_window = mat_file[
-            series_pos + self.look_back_window + series_pos + self.window, :
+            (series_pos + self.look_back_window) : (series_pos + self.window), :
         ]
 
         return look_back_window, prediction_window
