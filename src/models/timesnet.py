@@ -17,8 +17,6 @@ import torch.nn.functional as F
 import torch.fft
 
 import lightning as L
-from ..metrics import evaluate
-from ..losses import smape_loss
 
 
 class PositionalEmbedding(nn.Module):
@@ -32,7 +30,6 @@ class PositionalEmbedding(nn.Module):
         div_term = (
             torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model)
         ).exp()
-
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
 
@@ -351,36 +348,53 @@ class Model(nn.Module):
 
 class TimesNet(L.LightningModule):
     def __init__(
-        self, model: torch.nn.Module, learning_rate: float = 1e-3, loss: str = "SMAPE"
+        self,
+        model: torch.nn.Module,
+        learning_rate: float = 1e-3,
+        loss: str = "SMAPE",
+        optimizer: str = "Adam",
+        beta_1: float = 0.9,
+        beta_2: float = 0.999,
     ):
+        super().__init__()
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
         super().__init__()
         self.model = model
         if loss == "SMAPE":
+            from ..losses import smape_loss
+
             self.loss = smape_loss()
         else:
             self.loss = torch.nn.MSELoss()
         self.learning_rate = learning_rate
 
+        self.save_hyperparameters(ignore=["model"])
+
     def training_step(self, batch, batch_idx) -> float:
         x, y = batch
-        B, L = x.shape
-        x = x.unsqueeze(-1)
-        time = torch.zeros((B, L, 5))
+        B, L, _ = x.shape
+        x = x.float()
+        time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        preds = preds.squeeze(-1)
-        loss = self.loss(preds, y)
+        loss = self.loss(preds, y.float())
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
-    def validation_step(self, batch, batch_idx) -> None:
+    def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
-        B, L = x.shape
-        x = x.unsqueeze(-1)
-        time = torch.zeros((B, L, 5))
+        B, L, _ = x.shape
+        x = x.float()
+        time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        evaluate(self, preds, y)
+        val_loss = self.loss(preds, y.float())
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        return val_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.learning_rate, betas=(self.beta_1, self.beta_2)
+        )
         return optimizer
 
 

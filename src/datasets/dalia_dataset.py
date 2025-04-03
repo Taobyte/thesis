@@ -4,6 +4,7 @@ import pandas as pd
 import torch
 import lightning as L
 
+from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from typing import Tuple
@@ -34,7 +35,7 @@ class DaLiADataset(Dataset):
 
         self.data = []
         self.lengths = []
-        for i in self.participants:
+        for i in tqdm(self.participants):
             label = "S" + str(i)
             data_path = Path(path) / label / (label + ".pkl")
             with open(data_path, "rb") as f:
@@ -57,10 +58,14 @@ class DaLiADataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.data[file_idx][index : (index + self.window)]
-        look_back_window = torch.from_numpy(window[: self.look_back_window, 0])
-        prediction_window = torch.from_numpy(window[self.look_back_window :, 0])
+        look_back_window = torch.from_numpy(
+            window[: self.look_back_window, 0]
+        ).unsqueeze(-1)
+        prediction_window = torch.from_numpy(
+            window[self.look_back_window :, 0]
+        ).unsqueeze(-1)
 
-        return look_back_window, prediction_window
+        return look_back_window.float(), prediction_window.float()
 
 
 class DaLiADataModule(L.LightningDataModule):
@@ -76,6 +81,7 @@ class DaLiADataModule(L.LightningDataModule):
         test_participants: list = [1, 13, 14],
     ):
         super().__init__()
+
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.look_back_window = look_back_window
@@ -87,7 +93,7 @@ class DaLiADataModule(L.LightningDataModule):
         self.val_participants = val_participants
         self.test_participants = test_participants
 
-    def setup(self, stage: str):
+    def setup(self, stage: str = None):
         if stage == "fit":
             self.train_dataset = DaLiADataset(
                 self.data_dir,
@@ -131,6 +137,14 @@ if __name__ == "__main__":
     modes = ["train", "val", "test"]
     use_heart_rate = [True, False]
     path = Path("C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy")
+
+    module = DaLiADataModule(str(path))
+    module.setup("fit")
+    import pdb
+
+    pdb.set_trace()
+
+    """
     for mode in tqdm(modes):
         for b in use_heart_rate:
             dataset = DaLiADataset(
@@ -143,3 +157,5 @@ if __name__ == "__main__":
             indices = np.random.choice(len(dataset), size=100, replace=False)
             for idx in indices:
                 look_back_window, prediction_window = dataset[idx]
+
+    """

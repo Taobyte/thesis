@@ -1,8 +1,9 @@
 defaults:
   - _self_
   - model: timesnet
-  - dataset: dalia 
+  - dataset: dalia
 
 seed: 123
-look_back_window: 320
-prediction_window: 128
+overfit: True
+look_back_window: 60
+prediction_window: 10

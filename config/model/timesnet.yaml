@@ -18,13 +18,15 @@ model:
 pl_model: 
   _target_: src.models.timesnet.TimesNet
   learning_rate: 0.0001
-  train_epochs: 10
-  batch_size: 32 # Long-term batch_size = 32 | Short-term batch_size = 16
-  loss_name: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
-  # Optimizer
+  loss: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
   optimizer: 'Adam'
   beta_1: 0.9
-  bet_2: 0.999
-  # Early Stopping
+  beta_2: 0.999
+  # use_amp: False
+
+trainer: 
+  max_epochs: 10
   patience: 3
-  use_amp: False
+
+data:
+  batch_size: 3 # Long-term batch_size = 32 | Short-term batch_size = 16

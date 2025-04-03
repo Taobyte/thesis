@@ -4,9 +4,7 @@ import torch
 import lightning as L
 
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
 from pathlib import Path
-from typing import Tuple
 
 
 class WildPPGDataset(Dataset):

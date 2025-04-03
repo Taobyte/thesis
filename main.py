@@ -9,24 +9,37 @@ from lightning.pytorch.loggers import WandbLogger
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig):
-    print(config)
+    # print(config)
     L.seed_everything(config.seed)
 
-    wandb_logger = WandbLogger(project="thesis")
+    # wandb_logger = WandbLogger(project="thesis")
 
-    datamodule = instantiate(config.dataset.datamodule)
+    datamodule = instantiate(
+        config.dataset.datamodule, batch_size=config.model.data.batch_size
+    )
+
     model = instantiate(config.model.model)
     pl_model = instantiate(config.model.pl_model, model=model)
 
     trainer = L.Trainer(
-        logger=wandb_logger,
-        callbacks=[
-            EarlyStopping(
-                monitor="val_loss", mode="min", patience=config.pl_model.patience
-            )
-        ],
+        max_epochs=config.model.trainer.max_epochs,
+        enable_progress_bar=True,
+        enable_model_summary=True,
+        overfit_batches=1 if config.overfit else 0.0,
     )
+    """
+    callbacks=[
+                EarlyStopping(
+                    monitor="val_loss", mode="min", patience=config.model.trainer.patience
+                )
+            ],
+            logger=False,
+
+    """
+
+    print("Start Training.")
     trainer.fit(pl_model, datamodule=datamodule)
+    print("End Training.")
 
 
 if __name__ == "__main__":
