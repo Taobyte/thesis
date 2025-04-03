@@ -12,9 +12,12 @@ class USCDataset(Dataset):
     def __init__(
         self,
         data_dir: str,
+        mode: str,
         look_back_window: int = 320,
         prediction_window: int = 128,
-        subjects: list = [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        train_participants: list = [1, 2, 3, 4, 5, 6, 7, 8],
+        val_participants: list = [9, 10, 11],
+        test_participants: list = [12, 13, 14],
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -22,35 +25,59 @@ class USCDataset(Dataset):
         self.window = look_back_window + prediction_window
 
         self.data_dir = Path(data_dir)
-        self.subjects = subjects
+        if mode == "train":
+            self.participants = train_participants
+        elif mode == "val":
+            self.participants = val_participants
+        else:
+            self.participants = test_participants
 
-        self.sub_mats = []
-        for i in range(len(self.subjects)):
-            self.sub_mats.append(list(self.data_dir.glob(f"Subject{i + 1}/*.mat")))
+        self.part_cum_sum = []
+        self.participant_data = []
+        outer_lengths = []
+        for participant in self.participants:
+            participant_dir = self.data_dir / f"Subject{participant}"
+            participant_mat_paths = participant_dir.glob("*.mat")
+            part_data = []
+            lengths = []
+            for mat_path in participant_mat_paths:
+                mat_file = loadmat(mat_path)["sensor_readings"]
+                mat_length = len(mat_file) - self.window + 1
+                part_data.append(mat_file)
+                lengths.append(mat_length)
+
+            cumsum = np.cumsum([0] + lengths)
+            self.part_cum_sum.append(cumsum)
+            total_length = cumsum[-1]
+            outer_lengths.append(total_length)
+            self.participant_data.append(part_data)
+
+        self.cumulative_lengths = np.cumsum([0] + outer_lengths)
+        self.total_length = self.cumulative_lengths[-1]
 
     def __len__(self) -> int:
-        return len(self.subjects) * 60
+        return self.total_length
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        subject = index // 60
-        mat_file_idx = index - subject * 60
-        mat_file = loadmat(self.sub_mats[subject][mat_file_idx])["sensor_readings"]
-
-        acc = mat_file[:, :3]
-        ger = mat_file[:, 3:]
-
-        acc_norm = np.sqrt(np.sum(np.square(acc), axis=1))
-        ger_norm = np.sqrt(np.sum(np.square(ger), axis=1))
-
-        # random sampling
-        n_windows = len(acc_norm) - self.window + 1
-        start = torch.randint(n_windows, (1,)).item()
-        x = acc_norm[start : start + self.look_back_window]
-        y = acc_norm[start + self.look_back_window : start + self.window]
-
-        return torch.tensor(x, dtype=torch.float32), torch.tensor(
-            y, dtype=torch.float32
+        participant_idx = (
+            np.searchsorted(self.cumulative_lengths, index, side="right") - 1
         )
+        idx = index - self.cumulative_lengths[participant_idx]
+
+        file_idx = (
+            np.searchsorted(self.part_cum_sum[participant_idx], idx, side="right") - 1
+        )
+
+        series_pos = idx - self.part_cum_sum[participant_idx][file_idx]
+
+        mat_file = self.participant_data[participant_idx][file_idx]
+
+        look_back_window = mat_file[series_pos : series_pos + self.look_back_window, :]
+        prediction_window = mat_file[
+            series_pos + self.look_back_window + series_pos + self.window, :
+        ]
+
+        return look_back_window, prediction_window
 
 
 class USCDataModule(L.LightningDataModule):
@@ -104,7 +131,9 @@ class USCDataModule(L.LightningDataModule):
 
 
 if __name__ == "__main__":
+    from tqdm import tqdm
+
     usc_path = Path("C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD")
-    dataset = USCDataset(usc_path)
-    for i in range(len(dataset)):
+    dataset = USCDataset(usc_path, "train")
+    for i in tqdm(range(len(dataset))):
         x, y = dataset[i]

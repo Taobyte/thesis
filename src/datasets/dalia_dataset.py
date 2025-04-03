@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 import pandas as pd
 import torch
@@ -31,16 +32,20 @@ class DaLiADataset(Dataset):
         else:
             self.participants = test_participants
 
-        signal_type = "label.csv" if use_heart_rate else "BVP.csv"
-
         self.data = []
         self.lengths = []
         for i in self.participants:
             label = "S" + str(i)
-            case_path = Path(path) / label / (label + "_E4") / signal_type
-            df = pd.read_csv(case_path)
-            self.data.append(df)
-            self.lengths.append(len(df))
+            data_path = Path(path) / label / (label + ".pkl")
+            with open(data_path, "rb") as f:
+                data = pickle.load(f, encoding="latin1")
+
+            if use_heart_rate:
+                data = data["signal"]["chest"]["ECG"]
+            else:
+                data = data["signal"]["wrist"]["BVP"]
+            self.data.append(data)
+            self.lengths.append(len(data))
 
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
@@ -52,10 +57,10 @@ class DaLiADataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.data[file_idx][index : (index + self.window)]
-        x = torch.from_numpy(window.iloc[: self.look_back_window, 0].values)
-        y = torch.from_numpy(window.iloc[self.look_back_window :, 0].values)
+        look_back_window = torch.from_numpy(window[: self.look_back_window, 0])
+        prediction_window = torch.from_numpy(window[self.look_back_window :, 0])
 
-        return x, y
+        return look_back_window, prediction_window
 
 
 class DaLiADataModule(L.LightningDataModule):
@@ -137,4 +142,4 @@ if __name__ == "__main__":
             )
             indices = np.random.choice(len(dataset), size=100, replace=False)
             for idx in indices:
-                x, y = dataset[idx]
+                look_back_window, prediction_window = dataset[idx]
