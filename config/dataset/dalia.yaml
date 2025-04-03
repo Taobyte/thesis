@@ -3,4 +3,6 @@ datamodule:
   data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
+  train_participants: []
   batch_size: 32
+  use_heart_rate: False

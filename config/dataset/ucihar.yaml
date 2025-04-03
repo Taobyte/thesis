@@ -1,8 +1,9 @@
 datamodule:
-  _target_: srcdatasetsucihar_datasetUCIHARDataModule
+  _target_: src.datasets.ucihar_dataset.UCIHARDataModule
   data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/UCI HAR Dataset/UCI HAR Dataset/"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: [ 1,  3,  5,  6,  7,  8, 11, 14, 15, 16, 17, 19, 21, 22]
+  start_time: "2017-01-01T12"
+  train_participants: [1,  3,  5,  6,  7,  8, 11, 14, 15, 16, 17, 19, 21, 22]
   val_participants: [23, 25, 26, 27, 28, 29, 30]
   batch_size: 32
