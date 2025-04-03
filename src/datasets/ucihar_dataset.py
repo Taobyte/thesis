@@ -124,15 +124,21 @@ class UCIHARDataset(Dataset):
         prediction_window: int,
         train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
         val_participants: list = [4, 5, 6],
+        test_participants: list = [1, 2, 3],
         freq: str = "20L",
         start_time: str = "2000-01-01 00:00:00",
-        sampler: InstanceSampler = None,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
-        datadir += mode + "/"
+        if mode == "train" or mode == "val":
+            datadir += "train/"
+            participants = train_participants if mode == "train" else val_participants
+            mode = "train"
+        else:
+            datadir += "test/"
+            participants = test_participants
 
         subject = np.loadtxt(datadir + f"subject_{mode}.txt")[:, np.newaxis]
         x = np.loadtxt(datadir + f"X_{mode}.txt")
@@ -141,8 +147,8 @@ class UCIHARDataset(Dataset):
 
         self.data = []
         self.lengths = []
-        for train_participant in train_participants:
-            par_data = combined[np.where(combined[:, 0] == train_participant)]
+        for participant in participants:
+            par_data = combined[np.where(combined[:, 0] == participant)]
             length = len(par_data) - self.window + 1
             self.lengths.append(length)
             self.data.append(par_data)
@@ -169,6 +175,9 @@ class UCIHARDataModule(L.LightningDataModule):
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
+        train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
+        val_participants: list = [23, 25, 26, 27, 28, 29, 30],
+        test_participants: list = [1, 2, 3],
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -176,20 +185,22 @@ class UCIHARDataModule(L.LightningDataModule):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
 
-        self.train_participants = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        self.val_participants = [10, 11, 12]
-        self.test_participants = [13, 14, 15]
+        self.train_participants = train_participants
+        self.val_participants = val_participants
+        self.test_participants = test_participants
 
     def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = UCIHARDataset(
                 self.data_dir,
+                "train",
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
             )
             self.val_dataset = UCIHARDataset(
                 self.data_dir,
+                "val",
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
@@ -197,6 +208,7 @@ class UCIHARDataModule(L.LightningDataModule):
         if stage == "test":
             self.test_dataset = UCIHARDataset(
                 self.data_dir,
+                "test",
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
@@ -217,7 +229,9 @@ if __name__ == "__main__":
         "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
     )
 
-    dataset = UCIHARDataset(datadir, "train", 10, 5)
+    test_modes = ["train", "val", "test"]
+    for mode in test_modes:
+        dataset = UCIHARDataset(datadir, mode, 10, 5)
 
-    for i in range(len(dataset)):
-        x, y = dataset[i]
+        for i in range(len(dataset)):
+            x, y = dataset[i]
