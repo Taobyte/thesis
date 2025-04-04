@@ -5,20 +5,46 @@ import lightning as L
 
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
+from scipy.io import loadmat
 
 
 class WildPPGDataset(Dataset):
     def __init__(
         self,
-        path: Path,
+        datadir: str,
+        use_heart_rate: bool = False,
         look_back_window: int = 320,
         prediction_window: int = 128,
-        cases: list = [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        participants: list[str] = [
+            "an0",
+            "e61",
+            "fex",
+            "k2s",
+            "kjd",
+            "l38",
+            "n31",
+            "ngh",
+            "p5d",
+            "p9p",
+        ],
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
         self.arrays = []
+
+        prefix = "WildPPG_Part_"
+        for participant in participants:
+            data = loadmat(datadir + prefix + participant + ".mat")
+            acc_x = data["wrist"]["acc_x"][0][0][0]["v"][0].T
+            acc_y = data["wrist"]["acc_y"][0][0][0]["v"][0].T
+            acc_z = data["wrist"]["acc_z"][0][0][0]["v"][0].T
+            activity = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
+            if use_heart_rate:
+                self.arrays.append(data["sternum"]["ecg"][0][0][0]["v"][0].T)
+            else:
+                self.arrays.append(data["wrist"]["ppg_g"][0][0][0]["v"][0].T)
+
         self.lengths = [len(arr) - self.window + 1 for arr in self.arrays]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
@@ -30,40 +56,58 @@ class WildPPGDataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.arrays[file_idx][index : (index + self.window)]
-        x = torch.Tensor(window.iloc[: self.look_back_window, 0].values)
-        y = torch.Tensor(window.iloc[self.look_back_window :, 0].values)
+        look_back_window = torch.Tensor(window[: self.look_back_window])
+        prediction_window = torch.Tensor(window[self.look_back_window :])
 
-        return x, y
+        return look_back_window.float(), prediction_window.float()
 
 
 class WildPPGDataModule(L.LightningDataModule):
     def __init__(
         self,
         data_dir: str,
+        use_heart_rate: bool = False,
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
+        train_participants: list[str] = [
+            "an0",
+            "e61",
+            "fex",
+            "k2s",
+            "kjd",
+            "l38",
+            "n31",
+            "ngh",
+            "p5d",
+            "p9p",
+        ],
+        val_participants: list[str] = ["qm9", "ssx", "trh"],
+        test_participants: list[str] = ["tz8", "u7y", "w4p"],
     ):
         super().__init__()
         self.data_dir = data_dir
+        self.use_heart_rate = use_heart_rate
         self.batch_size = batch_size
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
 
-        self.train_participants = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        self.val_participants = [10, 11, 12]
-        self.test_participants = [13, 14, 15]
+        self.train_participants = train_participants
+        self.val_participants = val_participants
+        self.test_participants = test_participants
 
     def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = WildPPGDataset(
                 self.data_dir,
+                self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
             )
             self.val_dataset = WildPPGDataset(
                 self.data_dir,
+                self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
@@ -71,6 +115,7 @@ class WildPPGDataModule(L.LightningDataModule):
         if stage == "test":
             self.test_dataset = WildPPGDataset(
                 self.data_dir,
+                self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
@@ -89,8 +134,8 @@ class WildPPGDataModule(L.LightningDataModule):
 if __name__ == "__main__":
     from tqdm import tqdm
 
-    path = Path("C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/WildPPG/data/")
+    path = "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data/"
     dataset = WildPPGDataset(path)
     for i in tqdm(range(len(dataset))):
-        x, y = dataset[i]
+        look_back_window, prediction_window = dataset[i]
         break

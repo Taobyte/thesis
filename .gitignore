@@ -1,3 +1,5 @@
 outputs/
 thesis/
 wandb/
+lightning_logs/
+src/datasets/__pycache__/
