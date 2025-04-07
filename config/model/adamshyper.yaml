@@ -1,0 +1,40 @@
+
+model_name: "AdaMSHyper"
+
+model:
+  _target_: src.models.adamshyper.Model
+  seq_len: ${look_back_window}
+  pred_len: ${prediction_window}
+  channels: 1
+  # dec_in: 7
+  d_model: 512
+  # d_ff: 128
+  # d_bottleneck: 512
+  # d_layers: 1
+  # e_layers: 2
+  # n_heads: 8
+  individual: False
+  # dim: 10
+  hyper_num: [50, 20, 10]
+  inner_size: 5
+  window_size: [4,4]
+  CSCM: 'Bottleneck_Construct'
+  k: 1
+  # activation: 'gelu'
+  # dropout: 0.05
+
+pl_model: 
+  _target_: src.models.adamshyper.AdaMSHyper
+  learning_rate: 0.0001
+  # itr: 1 
+  loss: 'MSE'
+  lradj: 'type1' # adjust learning rate
+  use_amp: False
+
+trainer:
+  max_epochs: 10
+  patience: 3
+
+data:
+  batch_size: 1
+  num_workers: 1

@@ -41,6 +41,8 @@ def main(config: DictConfig):
     trainer.fit(pl_model, datamodule=datamodule)
     print("End Training.")
 
+    # TODO: Add evaluation pipeline!
+
 
 if __name__ == "__main__":
     main()

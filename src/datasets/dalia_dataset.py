@@ -35,7 +35,7 @@ class DaLiADataset(Dataset):
 
         self.data = []
         self.lengths = []
-        for i in tqdm(self.participants):
+        for i in self.participants:
             label = "S" + str(i)
             data_path = Path(path) / label / (label + ".pkl")
             with open(data_path, "rb") as f:

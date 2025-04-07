@@ -757,6 +757,7 @@ class Bottleneck_Construct(nn.Module):
             for i in range(len(window_size)):
                 self.conv_layers.append(ConvLayer(d_inner, window_size[i]))
             self.conv_layers = nn.ModuleList(self.conv_layers)
+
         self.up = Linear(d_inner, d_model)  ####d_inner128 d_model=512
         self.down = Linear(d_model, d_inner)  ####d_model=512 d_inner128
         self.norm = nn.LayerNorm(d_model)
@@ -947,7 +948,7 @@ class Model(nn.Module):
         seq_len: int = 96,
         pred_len: int = 96,
         channels: int = 1,
-        individual: bool = True,
+        individual: bool = False,
         window_size: list = [4, 4],
         CSCM: str = "Bottleneck_Construct",
         d_model: int = 512,
@@ -956,6 +957,7 @@ class Model(nn.Module):
         inner_size: int = 5,
     ):
         super(Model, self).__init__()
+        window_size = list(window_size)
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.channels = channels
@@ -1208,7 +1210,7 @@ class multi_adaptive_hypergraoh(nn.Module):
     def __init__(
         self,
         seq_len: int,
-        window_size: int,
+        window_size: list[int],
         inner_size: int,
         d_model: int,
         hyper_num: int,
@@ -1317,8 +1319,68 @@ def get_mask(input_size, window_size):
     return all_size
 
 
+class AdaMSHyper(L.LightningModule):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        learning_rate: float = 1e-3,
+        loss: str = "MSE",
+        lradj: str = "type1",
+        use_amp: bool = False,
+    ):
+        super().__init__()
+        self.model = model
+
+        self.loss = torch.nn.MSELoss()
+        self.learning_rate = learning_rate
+        self.automatic_optimization = False
+        self.save_hyperparameters(ignore=["model"])
+
+    def training_step(self, batch, batch_idx) -> float:
+        opt_1, opt_2 = self.configure_optimizers()
+        opt_1.zero_grad()
+        opt_2.zero_grad()
+        x, y = batch
+        preds, constraint_loss = self.model(x)
+        mse_loss = self.loss(preds, y)
+        constraint_loss = constraint_loss.abs()
+        self.manual_backward(mse_loss, retain_graph=True)
+        self.manual_backward(constraint_loss)
+        opt_1.step()
+        opt_2.step()
+        self.log_dict(
+            {
+                "mse_loss": mse_loss,
+                "constraint_loss": constraint_loss,
+                "total_loss": mse_loss + constraint_loss,
+            },
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        return mse_loss
+
+    def validation_step(self, batch, batch_idx) -> float:
+        x, y = batch
+        preds, constraint_loss = self.model(x)
+        mse_loss = self.loss(preds, y)
+        self.log_dict(
+            {
+                "mse_loss": mse_loss,
+                "constraint_loss": constraint_loss,
+                "total_loss": mse_loss + constraint_loss,
+            },
+        )
+        return mse_loss
+
+    def configure_optimizers(self):
+        optimizer_1 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer_2 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optimizer_1, optimizer_2
+
+
 if __name__ == "__main__":
-    model = Model(individual=False)
+    model = Model()
     input = torch.randn((1, 96, 1))
     output, loss = model(input)
     print(output.shape)
