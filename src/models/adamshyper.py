@@ -1094,7 +1094,7 @@ class HypergraphConv(MessagePassing):
         dropout=0.1,
         bias=False,
     ):
-        super(HypergraphConv, self).__init__(aggr="add")
+        super(HypergraphConv, self).__init__(aggr="add", node_dim=0)
         self.soft = nn.Softmax(dim=0)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -1318,7 +1318,7 @@ def get_mask(input_size, window_size):
 
 
 if __name__ == "__main__":
-    model = Model()
+    model = Model(individual=False)
     input = torch.randn((1, 96, 1))
-    output = model(input)
+    output, loss = model(input)
     print(output.shape)
