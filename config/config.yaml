@@ -7,3 +7,4 @@ seed: 123
 overfit: True
 look_back_window: 60
 prediction_window: 10
+use_activity_info: False

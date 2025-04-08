@@ -5,30 +5,18 @@ model:
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
   e_layers: 1
-  output_attention: True
-  use_norm: True
-  geomattn_dropout: 0.5
+  output_attention: False # has to be false, otherwise no attn is returned
+  use_norm: True # instance normalization in forward function of the model
   alpha: 1 
-  kernel_size: 5
-  channels: 7
-  dec_in: 7
+  kernel_size: 3  
+  n_channels: 1 
   d_model: 512
-  n_heads: 8
-  individual: True
-  dim: 10
-  hyper_num: [50, 20, 10]
-  inner_size: 5
-  window_size: [4,4]
-  CSCM: 'Bottleneck_Construct'
-  d_bottleneck: 512
-  k: 1
-  embed_type: 0 # '0: default 1: value embedding + temporal embedding + positional embedding 2: value embedding + temporal embedding 3: value embedding + positional embedding 4: value embedding'
-  embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
-  activation: 'gelu'
-  output_attention: True
+  # embed_type: 0 # '0: default 1: value embedding + temporal embedding + positional embedding 2: value embedding + temporal embedding 3: value embedding + positional embedding 4: value embedding'
+  # embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   wv: "db1"
-  factor: 1
+  factor: 1 # TODO: find out what this is doing
   dropout: 0.1
+  geomattn_dropout: 0.5
   requires_grad: True # set to true to enable trainable wavelets
   m: 3 # Number of levels for the stationary wavelet transform 
   d_ff: 32 # Dimensionality of the feed forward network
@@ -38,5 +26,12 @@ model:
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
   learning_rate: 0.02
-  batch_size: 256 
-  epochs: 10
+  lradj: 'TST'
+
+trainer: 
+  max_epochs: 1000
+  patience: 3
+  pct_start: 0.2
+
+data:
+  batch_size: 1

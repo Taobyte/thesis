@@ -5,13 +5,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
-from math import sqrt
 import pywt
+
+from math import sqrt
+from typing import Tuple
 
 
 class EncoderLayer(nn.Module):
     def __init__(
-        self, attention, d_model, d_ff=None, dropout=0.1, activation="relu", dec_in=866
+        self,
+        attention,
+        d_model,
+        d_ff=None,
+        dropout=0.1,
+        activation="relu",
+        n_channels=866,
     ):
         super(EncoderLayer, self).__init__()
         d_ff = d_ff or 4 * d_model
@@ -175,17 +183,68 @@ class WaveletEmbedding(nn.Module):
         return approx_coeff
 
 
+class GeomAttention(nn.Module):
+    def __init__(
+        self,
+        mask_flag=False,
+        factor=5,
+        scale=None,
+        attention_dropout=0.1,
+        output_attention=False,
+        alpha=1.0,
+    ):
+        super(GeomAttention, self).__init__()
+        self.scale = scale
+        self.mask_flag = mask_flag
+        self.output_attention = output_attention
+        self.dropout = nn.Dropout(attention_dropout)
+
+        self.alpha = alpha
+
+    def forward(self, queries, keys, values, attn_mask=None):
+        B, L, H, E = queries.shape
+        _, S, _, _ = values.shape
+        scale = self.scale or 1.0 / sqrt(E)
+
+        dot_product = torch.einsum("blhe,bshe->bhls", queries, keys)
+
+        queries_norm2 = torch.sum(queries**2, dim=-1)
+        keys_norm2 = torch.sum(keys**2, dim=-1)
+        queries_norm2 = queries_norm2.permute(0, 2, 1).unsqueeze(-1)  # (B, H, L, 1)
+        keys_norm2 = keys_norm2.permute(0, 2, 1).unsqueeze(-2)  # (B, H, 1, S)
+        wedge_norm2 = queries_norm2 * keys_norm2 - dot_product**2  # (B, H, L, S)
+        wedge_norm2 = F.relu(wedge_norm2)
+        wedge_norm = torch.sqrt(wedge_norm2 + 1e-8)
+
+        scores = (1 - self.alpha) * dot_product + self.alpha * wedge_norm
+        scores = scores * scale
+
+        if self.mask_flag:
+            if attn_mask is None:
+                attn_mask = torch.tril(torch.ones(L, S)).to(scores.device)
+            scores.masked_fill_(attn_mask.unsqueeze(1).unsqueeze(2) == 0, float("-inf"))
+
+        A = self.dropout(torch.softmax(scores, dim=-1))
+
+        V = torch.einsum("bhls,bshd->blhd", A, values)
+
+        if self.output_attention:
+            return V.contiguous()
+        else:
+            return (V.contiguous(), scores.abs().mean())
+
+
 class GeomAttentionLayer(nn.Module):
     def __init__(
         self,
-        attention,
-        d_model,
-        requires_grad=True,
-        wv="db2",
-        m=2,
-        kernel_size=None,
-        d_channel=None,
-        geomattn_dropout=0.5,
+        attention: GeomAttention,
+        d_model: int,
+        requires_grad: bool = True,
+        wv: str = "db2",
+        m: int = 2,
+        kernel_size: Tuple[int, None] = None,
+        d_channel: Tuple[int, None] = None,
+        geomattn_dropout: float = 0.5,
     ):
         super(GeomAttentionLayer, self).__init__()
 
@@ -241,57 +300,6 @@ class GeomAttentionLayer(nn.Module):
         return out, attn
 
 
-class GeomAttention(nn.Module):
-    def __init__(
-        self,
-        mask_flag=False,
-        factor=5,
-        scale=None,
-        attention_dropout=0.1,
-        output_attention=False,
-        alpha=1.0,
-    ):
-        super(GeomAttention, self).__init__()
-        self.scale = scale
-        self.mask_flag = mask_flag
-        self.output_attention = output_attention
-        self.dropout = nn.Dropout(attention_dropout)
-
-        self.alpha = alpha
-
-    def forward(self, queries, keys, values, attn_mask=None):
-        B, L, H, E = queries.shape
-        _, S, _, _ = values.shape
-        scale = self.scale or 1.0 / sqrt(E)
-
-        dot_product = torch.einsum("blhe,bshe->bhls", queries, keys)
-
-        queries_norm2 = torch.sum(queries**2, dim=-1)
-        keys_norm2 = torch.sum(keys**2, dim=-1)
-        queries_norm2 = queries_norm2.permute(0, 2, 1).unsqueeze(-1)  # (B, H, L, 1)
-        keys_norm2 = keys_norm2.permute(0, 2, 1).unsqueeze(-2)  # (B, H, 1, S)
-        wedge_norm2 = queries_norm2 * keys_norm2 - dot_product**2  # (B, H, L, S)
-        wedge_norm2 = F.relu(wedge_norm2)
-        wedge_norm = torch.sqrt(wedge_norm2 + 1e-8)
-
-        scores = (1 - self.alpha) * dot_product + self.alpha * wedge_norm
-        scores = scores * scale
-
-        if self.mask_flag:
-            if attn_mask is None:
-                attn_mask = torch.tril(torch.ones(L, S)).to(scores.device)
-            scores.masked_fill_(attn_mask.unsqueeze(1).unsqueeze(2) == 0, float("-inf"))
-
-        A = self.dropout(torch.softmax(scores, dim=-1))
-
-        V = torch.einsum("bhls,bshd->blhd", A, values)
-
-        if self.output_attention:
-            return V.contiguous()
-        else:
-            return (V.contiguous(), scores.abs().mean())
-
-
 class DataEmbedding_inverted(nn.Module):
     def __init__(self, c_in, d_model, embed_type="fixed", freq="h", dropout=0.1):
         super(DataEmbedding_inverted, self).__init__()
@@ -312,6 +320,7 @@ class Model(nn.Module):
         self,
         seq_len: int = 96,
         pred_len: int = 96,
+        n_channels: int = 7,
         d_model: int = 512,
         output_attention: bool = False,
         use_norm: int = 1,
@@ -325,7 +334,6 @@ class Model(nn.Module):
         factor: int = 1,
         requires_grad: bool = True,
         m: int = 3,
-        dec_in: int = 7,
         d_ff: int = 32,
         activation: str = "gelu",
         e_layers: int = 1,
@@ -363,7 +371,7 @@ class Model(nn.Module):
                         requires_grad=requires_grad,
                         wv=wv,
                         m=m,
-                        d_channel=dec_in,
+                        d_channel=n_channels,
                         kernel_size=self.kernel_size,
                         geomattn_dropout=self.geomattn_dropout,
                     ),
@@ -372,7 +380,7 @@ class Model(nn.Module):
                     dropout=dropout,
                     activation=activation,
                 )
-                for l in range(e_layers)
+                for _ in range(e_layers)
             ],
             norm_layer=torch.nn.LayerNorm(d_model),
         )
@@ -381,7 +389,7 @@ class Model(nn.Module):
         projector = nn.Linear(d_model, self.pred_len, bias=True)
         self.projector = projector
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
+    def forward(self, x_enc, x_mark_enc):
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -415,18 +423,99 @@ class Model(nn.Module):
 
         return dec_out, attns
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        dec_out, attns = self.forecast(x_enc, None, None, None)
-        return dec_out, attns
-
 
 class SimpleTM(L.LightningModule):
-    def __init__(self, model: nn.Module):
+    def __init__(
+        self,
+        model: nn.Module,
+        learning_rate: float = 0.02,
+        lradj: str = "TST",
+        data: str = "custom",
+    ):
+        super().__init__()
         self.model = model
+        self.criterion = torch.nn.L1Loss() if data == "PEMS" else torch.nn.MSELoss()
+        self.scheduler = None
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        # B, T, C = x.shape
+        # time = torch.zeros((B, T, 5), dtype=float)
+        preds, attn = self.model(
+            x, None
+        )  # None works for the time embedding (see DataEmbedding_inverted)
+        return preds
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        preds = self(x)
+        loss = self.criterion(preds, y)
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("current_lr", current_lr, on_step=True, on_epoch=True)
+        self.log_dict({"train_mse_loss": loss}, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        preds = self(x)
+        loss = self.criterion(preds, y)
+        self.log_dict({"val_mse_loss": loss}, on_epoch=True, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+
+        if self.hparams.lradj == "TST":
+            steps_per_epoch = (
+                self.trainer.estimated_stepping_batches // self.trainer.max_epochs
+            )
+
+            print(self.trainer.estimated_stepping_batches)
+            print(self.trainer.max_epochs)
+
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=self.hparams.learning_rate,
+                steps_per_epoch=steps_per_epoch,
+                epochs=self.trainer.max_epochs,
+                pct_start=0.2,
+            )
+
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # because OneCycleLR is stepped per batch
+                "frequency": 1,
+                "name": "OneCycleLR",
+            }
+            return {"optimizer": optimizer, "lr_scheduler": scheduler_dict}
+
+        return optimizer
+
+    """
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        self.optimizer = optimizer
+        optimizer_dict = {"optimizer": self.optimizer, "scheduler": self.scheduler}
+        return optimizer_dict
+
+    def on_fit_start(self):
+        if self.hparams.lradj == "TST":
+            steps_per_epoch = len(self.trainer.datamodule.train_dataloader())
+
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer=self.optimizer,
+                max_lr=self.hparams.learning_rate,
+                steps_per_epoch=steps_per_epoch,
+                epochs=self.trainer.max_epochs,
+                pct_start=0.2,
+            )
+            self.scheduler = scheduler
+    """
 
 
 if __name__ == "__main__":
     model = Model()
     input = torch.randn((1, 96, 7))
-    dec_out, attns = model(input, None, None, None)
+    time = torch.zeros((1, 96, 5))
+    dec_out, attns = model(input, None)
     print(dec_out.shape)
