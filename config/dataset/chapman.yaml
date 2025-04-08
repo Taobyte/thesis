@@ -1,0 +1,7 @@
+datamodule:
+  _target_: src.datasets.chapman_dataset.ChapmanDataModule
+  data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/Chapman/"
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  use_disease: False
+  batch_size: 32

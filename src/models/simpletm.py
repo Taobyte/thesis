@@ -491,27 +491,6 @@ class SimpleTM(L.LightningModule):
 
         return optimizer
 
-    """
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
-        self.optimizer = optimizer
-        optimizer_dict = {"optimizer": self.optimizer, "scheduler": self.scheduler}
-        return optimizer_dict
-
-    def on_fit_start(self):
-        if self.hparams.lradj == "TST":
-            steps_per_epoch = len(self.trainer.datamodule.train_dataloader())
-
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=self.optimizer,
-                max_lr=self.hparams.learning_rate,
-                steps_per_epoch=steps_per_epoch,
-                epochs=self.trainer.max_epochs,
-                pct_start=0.2,
-            )
-            self.scheduler = scheduler
-    """
-
 
 if __name__ == "__main__":
     model = Model()

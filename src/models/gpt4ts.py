@@ -1,17 +1,38 @@
-from typing import Optional
 import math
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as L
+
 from torch.nn.utils import weight_norm
 from torch import optim
 
+from ..losses import smape_loss
 from transformers import GPT2ForSequenceClassification
 from transformers.models.gpt2.modeling_gpt2 import GPT2Model
 from transformers.models.gpt2.configuration_gpt2 import GPT2Config
 from transformers import BertTokenizer, BertModel
 from einops import rearrange
+from typing import Optional
+
+
+def adjust_learning_rate(
+    optimizer: torch.optim.Optimizer, epoch: int, lradj: str, learning_rate: float
+):
+    # lr = args.learning_rate * (0.2 ** (epoch // 2))
+    if lradj == "type1":
+        lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
+    if lradj == "type7":
+        lr_adjust = {epoch: learning_rate * (0.7 ** ((epoch - 1) // 1))}
+    if lradj == "type6":
+        lr_adjust = {epoch: learning_rate * (0.6 ** ((epoch - 1) // 1))}
+    elif lradj == "type2":
+        lr_adjust = {2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 10: 5e-7, 15: 1e-7, 20: 5e-8}
+    if epoch in lr_adjust.keys():
+        lr = lr_adjust[epoch]
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+        print("Updating learning rate to {}".format(lr))
 
 
 class PositionalEmbedding(nn.Module):
@@ -219,16 +240,16 @@ class Model(nn.Module):
         seq_len: int = 96,
         patch_size: int = 1,
         stride: int = 1,
-        d_ff: int = 2048,
+        d_ff: int = 128,
         enc_in: int = 1,
         c_out: int = 1,
-        d_model: int = 512,
+        d_model: int = 128,
         embed: str = "timeF",
-        freq: str = "h",
+        freq: str = "m",
         dropout: float = 0.1,
         gpt_layers: int = 6,
         mlp: str = 0,
-        use_gpu: bool = True,
+        use_gpu: bool = False,
     ):
         super(Model, self).__init__()
         self.is_ln = ln
@@ -274,8 +295,8 @@ class Model(nn.Module):
         self.ln = nn.LayerNorm(d_ff)
         self.out_layer = nn.Linear(d_ff, c_out)
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+    def forward(self, x_enc, x_mark_enc):
+        dec_out = self.forecast(x_enc, x_mark_enc)
         return dec_out[:, -self.pred_len :, :]  # [B, L, D]
 
     def forecast(self, x_enc, x_mark_enc):
@@ -320,5 +341,67 @@ class Model(nn.Module):
         return dec_out
 
 
+class GPT4TS(L.LightningModule):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        learning_rate: float = 0.002,
+        loss: str = "SMAPE",
+        lradj: str = "type1",
+    ):
+        super().__init__()
+        self.model = model
+        self.criterion = smape_loss()
+        self.save_hyperparameters()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, C = x.shape
+        time = torch.zeros((B, T, 1))
+        return self.model(x, time)
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        mask = torch.ones_like(
+            y
+        )  # the implementation of SMAPE from the paper needs a mask
+        preds = self(x)
+        loss = self.criterion(
+            None, None, preds, y, mask
+        )  # we don't need look_back_window info for the SMAPE
+        self.log("train_smape_loss", loss, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        mask = torch.ones_like(
+            y
+        )  # the implementation of SMAPE from the paper needs a mask
+        preds = self(x)
+        loss = self.criterion(
+            None, None, preds, y, mask
+        )  # we don't need look_back_window info for the SMAPE
+        self.log("val_smape_loss", loss, on_epoch=True, prog_bar=True)
+        return loss
+
+    def on_train_epoch_start(self):
+        # Adjust learning rate at the start of each epoch
+        adjust_learning_rate(
+            self.trainer.optimizers[0],
+            self.current_epoch + 1,
+            self.hparams.lradj,
+            self.hparams.learning_rate,
+        )
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("current_lr", current_lr, on_epoch=True)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        return optimizer
+
+
 if __name__ == "__main__":
     model = Model(use_gpu=False)
+    input = torch.randn((1, 96, 1))
+    time = torch.zeros((1, 96, 1))
+    output = model(input, time)
+    print(output.shape)
