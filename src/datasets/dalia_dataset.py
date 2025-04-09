@@ -6,6 +6,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from typing import Tuple
+from scipy import signal
 
 
 class DaLiADataset(Dataset):
@@ -14,6 +15,7 @@ class DaLiADataset(Dataset):
         path: Path,
         participants: list[int],
         use_heart_rate: bool = False,
+        use_activity_info: bool = False,
         look_back_window: int = 32,
         prediction_window: int = 10,
     ):
@@ -28,10 +30,15 @@ class DaLiADataset(Dataset):
             label = "S" + str(i)
             data_path = Path(path) / (label + ".npz")
             data = np.load(data_path)
-            if use_heart_rate:
-                data = data["signal"]["chest"]["ECG"]
-            else:
-                data = data["signal"]["wrist"]["BVP"]
+            target = data["ecg"] if use_heart_rate else data["bvp"]
+            if use_activity_info:
+                activity = data["wrist_acc"]
+                activity = np.sqrt(
+                    activity[:, 0] ** 2 + activity[:, 1] ** 2, activity[:, 2] ** 2
+                )[:, np.newaxis]
+                activity_resampled = signal.resample(activity, len(target))
+                data = np.concatenate((target, activity_resampled), axis=1)
+
             self.data.append(data)
             self.lengths.append(len(data))
 
@@ -120,10 +127,16 @@ if __name__ == "__main__":
 
     modes = ["train", "val", "test"]
     use_heart_rate = [True, False]
-    path = Path("C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy")
+    path = Path("C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed")
 
-    module = DaLiADataModule(str(path))
-    module.setup("fit")
+    dataset = DaLiADataset(path, [1, 2, 3], False, True)
+    for x, y in dataset:
+        print(x.shape)
+        print(y.shape)
+        break
+
+    #  module = DaLiADataModule(str(path))
+    # module.setup("fit")
     import pdb
 
     pdb.set_trace()
