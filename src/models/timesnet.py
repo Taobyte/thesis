@@ -391,6 +391,9 @@ class TimesNet(L.LightningModule):
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
         return val_loss
 
+    def test_step(self, batch, batch_idx):
+        pass
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
             self.parameters(), lr=self.learning_rate, betas=(self.beta_1, self.beta_2)
