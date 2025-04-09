@@ -1,7 +1,7 @@
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
-  data_dir_local: "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
-  data_dir_cluster: "/cluster/scratch/ckeusch/dalia/data/PPG_FieldStudy"
+  data_dir_local: "C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed"
+  data_dir_cluster: "/cluster/scratch/ckeusch/euler/dalia_preprocessed"
   data_dir: ${select:${cluster},${data_dir_cluster},${data_dir_local}}
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
