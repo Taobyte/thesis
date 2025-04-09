@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import lightning as L
 
-from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from typing import Tuple
