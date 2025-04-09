@@ -1,11 +1,8 @@
-import pandas as pd
 import numpy as np
 import torch
 import lightning as L
 
 from torch.utils.data import Dataset, DataLoader
-from pathlib import Path
-from scipy.io import loadmat
 
 
 class WildPPGDataset(Dataset):
@@ -35,15 +32,12 @@ class WildPPGDataset(Dataset):
 
         prefix = "WildPPG_Part_"
         for participant in participants:
-            data = loadmat(datadir + prefix + participant + ".mat")
-            acc_x = data["wrist"]["acc_x"][0][0][0]["v"][0].T
-            acc_y = data["wrist"]["acc_y"][0][0][0]["v"][0].T
-            acc_z = data["wrist"]["acc_z"][0][0][0]["v"][0].T
-            activity = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
+            data = np.load(datadir + prefix + participant + ".npz")
+            activity = data["activity"]
             if use_heart_rate:
-                self.arrays.append(data["sternum"]["ecg"][0][0][0]["v"][0].T)
+                self.arrays.append(data["ecg"])
             else:
-                self.arrays.append(data["wrist"]["ppg_g"][0][0][0]["v"][0].T)
+                self.arrays.append(data["ppg"])
 
         self.lengths = [len(arr) - self.window + 1 for arr in self.arrays]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)

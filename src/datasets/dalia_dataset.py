@@ -1,6 +1,4 @@
-import pickle
 import numpy as np
-import pandas as pd
 import torch
 import lightning as L
 
@@ -14,33 +12,22 @@ class DaLiADataset(Dataset):
     def __init__(
         self,
         path: Path,
-        mode: str,
+        participants: list[int],
         use_heart_rate: bool = False,
         look_back_window: int = 32,
         prediction_window: int = 10,
-        train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
-        val_participants: list = [9, 10, 11],
-        test_participants: list = [1, 13, 14],
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-
-        if mode == "train":
-            self.participants = train_participants
-        elif mode == "val":
-            self.participants = val_participants
-        else:
-            self.participants = test_participants
+        self.participants = participants
 
         self.data = []
         self.lengths = []
         for i in self.participants:
             label = "S" + str(i)
-            data_path = Path(path) / label / (label + ".pkl")
-            with open(data_path, "rb") as f:
-                data = pickle.load(f, encoding="latin1")
-
+            data_path = Path(path) / (label + ".npz")
+            data = np.load(data_path)
             if use_heart_rate:
                 data = data["signal"]["chest"]["ECG"]
             else:
@@ -97,28 +84,25 @@ class DaLiADataModule(L.LightningDataModule):
         if stage == "fit":
             self.train_dataset = DaLiADataset(
                 self.data_dir,
-                "train",
+                self.train_participants,
                 self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
-                self.train_participants,
             )
             self.val_dataset = DaLiADataset(
                 self.data_dir,
-                "val",
+                self.val_participants,
                 self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
-                self.val_participants,
             )
         if stage == "test":
             self.test_dataset = DaLiADataset(
                 self.data_dir,
-                "test",
+                self.test_participants,
                 self.use_heart_rate,
                 self.look_back_window,
                 self.prediction_window,
-                self.test_participants,
             )
 
     def train_dataloader(self):
