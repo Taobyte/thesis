@@ -9,7 +9,7 @@ from lightning.pytorch.loggers import WandbLogger
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig):
-    # print(config)
+    print(config)
     L.seed_everything(config.seed)
 
     # wandb_logger = WandbLogger(project="thesis")
