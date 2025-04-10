@@ -19,6 +19,9 @@ import torch.fft
 import lightning as L
 import torchmetrics
 
+from src.models.utils import adjust_learning_rate
+from src.losses import get_loss_fn
+
 
 class PositionalEmbedding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -352,22 +355,22 @@ class TimesNet(L.LightningModule):
         self,
         model: torch.nn.Module,
         learning_rate: float = 1e-3,
-        loss: str = "MSE",
+        loss_fn: str = "MSE",
+        lradj: str = "type1",
         beta_1: float = 0.9,
         beta_2: float = 0.999,
     ):
         super().__init__()
+        self.lradj = lradj
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.model = model
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = get_loss_fn(loss_fn)
         self.learning_rate = learning_rate
 
         # metrics
         self.mse_metric = torchmetrics.MeanSquaredError()
         self.l1_metric = torchmetrics.MeanAbsoluteError()
-
-        self.save_hyperparameters(ignore=["model"])
 
     def _generate_time_tensor(self, x: torch.Tensor) -> torch.Tensor:
         B, L, _ = x.shape
@@ -380,6 +383,15 @@ class TimesNet(L.LightningModule):
         loss = self.criterion(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
+
+    def on_train_epoch_end(self):
+        adjust_learning_rate(
+            optimizer=self.trainer.optimizers[0],
+            epoch=self.current_epoch + 1,
+            lradj=self.lradj,
+            learning_rate=self.learning_rate,
+            train_epochs=self.max_epochs,
+        )
 
     def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
@@ -403,6 +415,7 @@ class TimesNet(L.LightningModule):
         optimizer = torch.optim.Adam(
             self.parameters(), lr=self.learning_rate, betas=(self.beta_1, self.beta_2)
         )
+
         return optimizer
 
 

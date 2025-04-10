@@ -465,7 +465,7 @@ class SimpleTM(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
-        if self.hparams.lradj == "TST":
+        if self.hparams.lradj == "type1":
             steps_per_epoch = (
                 self.trainer.estimated_stepping_batches // self.trainer.max_epochs
             )

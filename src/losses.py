@@ -21,6 +21,25 @@ import torch.nn as nn
 import numpy as np
 
 
+def get_loss_fn(loss_fn: str) -> nn.Module:
+    if loss_fn == "MSE":
+        return nn.MSELoss()
+    elif loss_fn == "MAE":
+        return nn.L1Loss()
+    elif loss_fn == "SMAPE":
+        return SMAPE()
+    else:
+        raise NotImplementedError()
+
+
+class SMAPE(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, pred: t.Tensor, target: t.Tensor) -> t.float:
+        return 200 * t.mean((pred - target).abs() / ((pred + target).abs() + 1e-8))
+
+
 def divide_no_nan(a, b):
     """
     a/b where the resulted NaN or Inf are replaced by 0.
