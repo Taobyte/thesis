@@ -1,5 +1,7 @@
 #!/bin/bash 
 
+
+# ressource specs
 NUM_WORKERS=8
 TIME=04:00:00
 MEM_PER_CPU=8G
