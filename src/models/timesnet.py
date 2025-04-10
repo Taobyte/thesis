@@ -18,9 +18,11 @@ import torch.fft
 
 import lightning as L
 import torchmetrics
+import wandb
 
 from src.models.utils import adjust_learning_rate
 from src.losses import get_loss_fn
+from src.plotting import plot_prediction_wandb
 
 
 class PositionalEmbedding(nn.Module):
@@ -409,12 +411,18 @@ class TimesNet(L.LightningModule):
         self.mse_metric(preds.reshape(-1), y.reshape(-1))
         self.l1_metric(preds.reshape(-1), y.reshape(-1))
 
+        # log metrics
         self.log("mse_metric", self.mse_metric, on_step=True, on_epoch=True)
         self.log("l1_metric", self.l1_metric, on_step=True, on_epoch=True)
 
+        # plot visualizations
+        plot_prediction_wandb(x, y, preds, self.logger)
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.learning_rate, betas=(self.beta_1, self.beta_2)
+            self.parameters(),
+            lr=self.learning_rate,
+            betas=(self.beta_1, self.beta_2),
         )
 
         return optimizer
