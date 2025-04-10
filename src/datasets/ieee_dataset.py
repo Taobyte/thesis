@@ -61,8 +61,8 @@ class IEEEDataset(Dataset):
             window_pos + self.look_back_window : window_pos + self.window
         ]
 
-        look_back_window = torch.from_numpy(look_back_window).float()
-        prediction_window = torch.from_numpy(prediction_window).float()
+        look_back_window = torch.from_numpy(look_back_window[:, np.newaxis]).float()
+        prediction_window = torch.from_numpy(prediction_window[:, np.newaxis]).float()
 
         return look_back_window, prediction_window
 
@@ -72,6 +72,7 @@ class IEEEDataModule(L.LightningDataModule):
         self,
         data_dir: str,
         batch_size: int = 32,
+        num_workers: int = 8,
         look_back_window: int = 128,
         prediction_window: int = 64,
         train_participants: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
@@ -82,6 +83,7 @@ class IEEEDataModule(L.LightningDataModule):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
+        self.num_workers = num_workers
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
 
@@ -117,13 +119,19 @@ class IEEEDataModule(L.LightningDataModule):
             )
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
 
 if __name__ == "__main__":

@@ -7,5 +7,5 @@ datamodule:
   val_participants: [9, 10, 11]
   test_participants: [1, 13, 14]
   use_heart_rate: False
-  use_activity_info: False
+  use_activity_info: ${use_activity_info} 
   batch_size: 32
