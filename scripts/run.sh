@@ -6,6 +6,8 @@
 #SBATCH --time=8:00:00
 #SBATCH --gpus=1
 
+module load eth_proxy # used for logging to wandb
+
 NUM_WORKERS="$1"
 
 conda activate thesis

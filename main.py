@@ -1,6 +1,7 @@
 import hydra
+import yaml
 from hydra.utils import instantiate
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 import lightning as L
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -11,8 +12,14 @@ from lightning.pytorch.loggers import WandbLogger
 def main(config: DictConfig):
     print(config)
     L.seed_everything(config.seed)
-
-    # wandb_logger = WandbLogger(project="thesis")
+    config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
+    wandb_logger = WandbLogger(
+        config=config_dict,
+        project="thesis",
+        log_model=True,
+        save_code=True,
+        reinit=True,
+    )
 
     datamodule = instantiate(
         config.dataset.datamodule,
@@ -33,6 +40,7 @@ def main(config: DictConfig):
         )
 
     trainer = L.Trainer(
+        logger=wandb_logger,
         max_epochs=config.model.trainer.max_epochs,
         enable_progress_bar=True,
         enable_model_summary=True,
