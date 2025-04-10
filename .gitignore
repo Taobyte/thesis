@@ -2,5 +2,5 @@ outputs/
 thesis/
 wandb/
 lightning_logs/
-__pycache__/
+**/__pycache__/
 *.py[cod]

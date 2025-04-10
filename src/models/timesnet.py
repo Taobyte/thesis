@@ -390,7 +390,7 @@ class TimesNet(L.LightningModule):
             epoch=self.current_epoch + 1,
             lradj=self.lradj,
             learning_rate=self.learning_rate,
-            train_epochs=self.max_epochs,
+            train_epochs=self.trainer.max_epochs,
         )
 
     def validation_step(self, batch, batch_idx) -> float:
