@@ -5,5 +5,6 @@
 #SBATCH --time=8:00:00
 #SBATCH --gpus=1
 
+conda activate thesis
 nvidia-smi 
 python main.py path=cluster
