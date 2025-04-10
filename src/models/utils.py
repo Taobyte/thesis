@@ -41,3 +41,5 @@ def adjust_learning_rate(
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
         print("Updating learning rate to {}".format(lr))
+        return lr
+    return optimizer.param_groups[0]["lr"]
