@@ -15,7 +15,9 @@ def main(config: DictConfig):
     # wandb_logger = WandbLogger(project="thesis")
 
     datamodule = instantiate(
-        config.dataset.datamodule, batch_size=config.model.data.batch_size
+        config.dataset.datamodule,
+        batch_size=config.model.data.batch_size,
+        use_activity_info=config.use_activity_info,
     )
 
     model = instantiate(config.model.model)

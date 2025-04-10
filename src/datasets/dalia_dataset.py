@@ -29,17 +29,18 @@ class DaLiADataset(Dataset):
             label = "S" + str(i)
             data_path = Path(path) / (label + ".npz")
             data = np.load(data_path)
-            target = data["ecg"] if use_heart_rate else data["bvp"]
+            series = data["ecg"] if use_heart_rate else data["bvp"]
+            assert len(series) >= self.window
             if use_activity_info:
                 activity = data["wrist_acc"]
                 activity = np.sqrt(
                     activity[:, 0] ** 2 + activity[:, 1] ** 2, activity[:, 2] ** 2
                 )[:, np.newaxis]
-                activity_resampled = signal.resample(activity, len(target))
-                data = np.concatenate((target, activity_resampled), axis=1)
+                activity_resampled = signal.resample(activity, len(series))
+                series = np.concatenate((series, activity_resampled), axis=1)
 
-            self.data.append(data)
-            self.lengths.append(len(data))
+            self.data.append(series)
+            self.lengths.append(len(series))
 
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
@@ -67,6 +68,7 @@ class DaLiADataModule(L.LightningDataModule):
         data_dir: str,
         batch_size: int = 32,
         use_heart_rate: bool = False,
+        use_activity_info: bool = False,
         look_back_window: int = 128,
         prediction_window: int = 64,
         train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
@@ -81,6 +83,7 @@ class DaLiADataModule(L.LightningDataModule):
         self.prediction_window = prediction_window
 
         self.use_heart_rate = use_heart_rate
+        self.use_activity_info = use_activity_info
 
         self.train_participants = train_participants
         self.val_participants = val_participants
@@ -92,6 +95,7 @@ class DaLiADataModule(L.LightningDataModule):
                 self.data_dir,
                 self.train_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
             )
@@ -99,6 +103,7 @@ class DaLiADataModule(L.LightningDataModule):
                 self.data_dir,
                 self.val_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
             )
@@ -107,6 +112,7 @@ class DaLiADataModule(L.LightningDataModule):
                 self.data_dir,
                 self.test_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
             )

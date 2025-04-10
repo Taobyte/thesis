@@ -2,15 +2,11 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
+  - path: local
 
 seed: 123
-overfit: True
-look_back_window: 60
-prediction_window: 10
+overfit: False
+look_back_window: 128
+prediction_window: 64
 use_activity_info: False
 
-# data directories
-cluster: True
-cluster_data_dir: "/cluster/project/holz/ckeusch/euler"
-local_data_dir:  "C:/Users/cleme/ETH/Master/Thesis/data/euler"
-datadir: ${select:${cluster},${cluster_data_dir},${local_data_dir}}

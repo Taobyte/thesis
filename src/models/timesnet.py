@@ -372,27 +372,24 @@ class TimesNet(L.LightningModule):
     def training_step(self, batch, batch_idx) -> float:
         x, y = batch
         B, L, _ = x.shape
-        x = x.float()
         time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        loss = self.criterion(preds, y.float())
+        loss = self.criterion(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
         B, L, _ = x.shape
-        x = x.float()
         time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        val_loss = self.criterion(preds, y.float())
+        val_loss = self.criterion(preds, y)
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
         return val_loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         B, L, _ = x.shape
-        x = x.float()
         time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
         self.mse_metric(preds, y)
