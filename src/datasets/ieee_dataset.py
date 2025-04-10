@@ -23,7 +23,10 @@ class IEEEDataset(Dataset):
         data = loadmat(self.datadir + "IEEE_Big.mat")["whole_dataset"]
 
         self.series_per_participant = [
-            len(data[i][0]) for i in range(len(participants))
+            len(data[i][0])
+            for i in range(len(participants))
+            if len(data[i][0])
+            >= self.window  # ensures that length of the series is at least as long as a window
         ]
         self.n_windows_per_participant = [
             n_series * (200 - self.window + 1)
@@ -31,7 +34,7 @@ class IEEEDataset(Dataset):
         ]
 
         if use_heart_rate:
-            self.data = [data[i][1] for i in range(len(participants))]
+            self.data = [data[i][1].squeeze(-1) for i in range(len(participants))]
             self.cumulative_sum = np.cumsum(
                 [0] + [(l - self.window + 1) for l in self.series_per_participant]
             )

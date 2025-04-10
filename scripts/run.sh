@@ -10,6 +10,5 @@ module load eth_proxy # used for logging to wandb
 
 NUM_WORKERS="$1"
 
-conda activate thesis
 nvidia-smi 
 python main.py path=cluster num_workers=${NUM_WORKERS}

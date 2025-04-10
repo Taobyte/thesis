@@ -5,8 +5,9 @@ defaults:
   - path: local
 
 seed: 123
+use_wandb: False
 overfit: False
-num_workers: 1
+num_workers: 0
 look_back_window: 50
 prediction_window: 25
 use_activity_info: False

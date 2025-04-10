@@ -13,12 +13,16 @@ def main(config: DictConfig):
     print(config)
     L.seed_everything(config.seed)
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
-    wandb_logger = WandbLogger(
-        config=config_dict,
-        project="thesis",
-        log_model=True,
-        save_code=True,
-        reinit=True,
+    wandb_logger = (
+        WandbLogger(
+            config=config_dict,
+            project="thesis",
+            log_model=True,
+            save_code=True,
+            reinit=True,
+        )
+        if config.use_wandb
+        else None
     )
 
     datamodule = instantiate(
