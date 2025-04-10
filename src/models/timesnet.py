@@ -406,8 +406,8 @@ class TimesNet(L.LightningModule):
         x, y = batch
         time = self._generate_time_tensor(x)
         preds = self.model(x, time)
-        self.mse_metric(preds, y)
-        self.l1_metric(preds, y)
+        self.mse_metric(preds.reshape(-1), y.reshape(-1))
+        self.l1_metric(preds.reshape(-1), y.reshape(-1))
 
         self.log("mse_metric", self.mse_metric, on_step=True, on_epoch=True)
         self.log("l1_metric", self.l1_metric, on_step=True, on_epoch=True)
