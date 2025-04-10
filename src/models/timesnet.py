@@ -385,13 +385,14 @@ class TimesNet(L.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        adjust_learning_rate(
+        current_lr = adjust_learning_rate(
             optimizer=self.trainer.optimizers[0],
             epoch=self.current_epoch + 1,
             lradj=self.lradj,
             learning_rate=self.learning_rate,
             train_epochs=self.trainer.max_epochs,
         )
+        self.log("current_lr", current_lr, on_epoch=True)
 
     def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
