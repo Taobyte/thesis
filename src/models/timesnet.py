@@ -369,10 +369,13 @@ class TimesNet(L.LightningModule):
 
         self.save_hyperparameters(ignore=["model"])
 
+    def _generate_time_tensor(self, x: torch.Tensor) -> torch.Tensor:
+        B, L, _ = x.shape
+        return torch.zeros((B, L, 5), device=x.device).float()
+
     def training_step(self, batch, batch_idx) -> float:
         x, y = batch
-        B, L, _ = x.shape
-        time = torch.zeros((B, L, 5)).float()
+        time = self._generate_time_tensor(x)
         preds = self.model(x, time)
         loss = self.criterion(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -380,8 +383,7 @@ class TimesNet(L.LightningModule):
 
     def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
-        B, L, _ = x.shape
-        time = torch.zeros((B, L, 5)).float()
+        time = self._generate_time_tensor(x)
         preds = self.model(x, time)
         val_loss = self.criterion(preds, y)
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -389,8 +391,7 @@ class TimesNet(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        B, L, _ = x.shape
-        time = torch.zeros((B, L, 5)).float()
+        time = self._generate_time_tensor(x)
         preds = self.model(x, time)
         self.mse_metric(preds, y)
         self.l1_metric(preds, y)
