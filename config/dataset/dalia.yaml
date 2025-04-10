@@ -1,14 +1,10 @@
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
-  data_dir_local: "C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed"
-  data_dir_cluster: "/cluster/scratch/ckeusch/euler/dalia_preprocessed"
-  data_dir: ${select:${cluster},${data_dir_cluster},${data_dir_local}}
+  data_dir: "${datadir}/dalia_preprocessed"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  # train_participants: [2, 3, 4, 5, 6, 7, 8, 12, 15]
-  train_participants: [2]
-  # val_participants: [9, 10, 11]
-  val_participants: [9]
+  train_participants: [2, 3, 4, 5, 6, 7, 8, 12, 15]
+  val_participants: [9, 10, 11]
   test_participants: [1, 13, 14]
   use_heart_rate: False
   batch_size: 32

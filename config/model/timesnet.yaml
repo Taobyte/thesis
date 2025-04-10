@@ -19,7 +19,6 @@ pl_model:
   _target_: src.models.timesnet.TimesNet
   learning_rate: 0.0001
   loss: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
-  optimizer: 'Adam'
   beta_1: 0.9
   beta_2: 0.999
   # use_amp: False

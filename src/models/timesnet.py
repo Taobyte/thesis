@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torch.fft
 
 import lightning as L
+import torchmetrics
 
 
 class PositionalEmbedding(nn.Module):
@@ -351,23 +352,20 @@ class TimesNet(L.LightningModule):
         self,
         model: torch.nn.Module,
         learning_rate: float = 1e-3,
-        loss: str = "SMAPE",
-        optimizer: str = "Adam",
+        loss: str = "MSE",
         beta_1: float = 0.9,
         beta_2: float = 0.999,
     ):
         super().__init__()
         self.beta_1 = beta_1
         self.beta_2 = beta_2
-        super().__init__()
         self.model = model
-        if loss == "SMAPE":
-            from ..losses import smape_loss
-
-            self.loss = smape_loss()
-        else:
-            self.loss = torch.nn.MSELoss()
+        self.criterion = torch.nn.MSELoss()
         self.learning_rate = learning_rate
+
+        # metrics
+        self.mse_metric = torchmetrics.MeanSquaredError()
+        self.l1_metric = torchmetrics.MeanAbsoluteError()
 
         self.save_hyperparameters(ignore=["model"])
 
@@ -377,7 +375,7 @@ class TimesNet(L.LightningModule):
         x = x.float()
         time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        loss = self.loss(preds, y.float())
+        loss = self.criterion(preds, y.float())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
@@ -387,12 +385,21 @@ class TimesNet(L.LightningModule):
         x = x.float()
         time = torch.zeros((B, L, 5)).float()
         preds = self.model(x, time)
-        val_loss = self.loss(preds, y.float())
+        val_loss = self.criterion(preds, y.float())
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
         return val_loss
 
     def test_step(self, batch, batch_idx):
-        pass
+        x, y = batch
+        B, L, _ = x.shape
+        x = x.float()
+        time = torch.zeros((B, L, 5)).float()
+        preds = self.model(x, time)
+        self.mse_metric(preds, y)
+        self.l1_metric(preds, y)
+
+        self.log("mse_metric", self.mse_metric, on_step=True, on_epoch=True)
+        self.log("l1_metric", self.l1_metric, on_step=True, on_epoch=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
