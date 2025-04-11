@@ -40,7 +40,7 @@ class DaLiADataset(Dataset):
                 series = np.concatenate((series, activity_resampled), axis=1)
 
             self.data.append(series)
-            self.lengths.append(len(series))
+            self.lengths.append(len(series) - self.window + 1)
 
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
@@ -142,9 +142,6 @@ if __name__ == "__main__":
 
     #  module = DaLiADataModule(str(path))
     # module.setup("fit")
-    import pdb
-
-    pdb.set_trace()
 
     """
     for mode in tqdm(modes):
