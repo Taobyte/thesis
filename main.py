@@ -8,6 +8,9 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 
 
+OmegaConf.register_new_resolver("eval", eval)
+
+
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig):
     print(config)

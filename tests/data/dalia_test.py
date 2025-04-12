@@ -1,14 +1,9 @@
-import sys
-from pathlib import Path
-
-# Add the root directory to Python path
-root_dir = str(Path(__file__).parent.parent.parent)
-sys.path.insert(0, root_dir)
-
 from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
+
+OmegaConf.register_new_resolver("eval", eval)
 
 
 dataset_params = {
