@@ -54,12 +54,10 @@ class DaLiADataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.data[file_idx][index : (index + self.window)]
-        look_back_window = torch.from_numpy(
-            window[: self.look_back_window, :]
-        ).unsqueeze(-1)
+        look_back_window = torch.from_numpy(window[: self.look_back_window, :])
         prediction_window = torch.from_numpy(
             window[self.look_back_window :, : self.target_channel_dim]
-        ).unsqueeze(-1)
+        )
 
         return look_back_window.float(), prediction_window.float()
 
