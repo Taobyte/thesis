@@ -11,7 +11,7 @@ model:
   d_ff: 32
   num_kernels: 6
   enc_in: ${dataset.input_channels}
-  c_out: ${dataset.base_channel_dim}
+  c_out: ${dataset.input_channels}
   dropout: 0.0
 
 

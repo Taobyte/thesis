@@ -331,6 +331,7 @@ class Model(nn.Module):
         for i in range(self.layer):
             enc_out = self.layer_norm(self.model[i](enc_out))
         # project back
+
         dec_out = self.projection(enc_out)
 
         # De-Normalization from Non-stationary Transformer
@@ -339,6 +340,7 @@ class Model(nn.Module):
             .unsqueeze(1)
             .repeat(1, self.prediction_window + self.look_back_window, 1)
         )
+
         dec_out = dec_out + (
             means[:, 0, :]
             .unsqueeze(1)
@@ -381,6 +383,7 @@ class TimesNet(L.LightningModule):
         x, y = batch
         time = self._generate_time_tensor(x)
         preds = self.model(x, time)
+        preds = preds[:, :, : y.shape[2]]  # remove activity channels
         loss = self.criterion(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
@@ -399,6 +402,7 @@ class TimesNet(L.LightningModule):
         x, y = batch
         time = self._generate_time_tensor(x)
         preds = self.model(x, time)
+        preds = preds[:, :, : y.shape[2]]  # remove activity channels
         val_loss = self.criterion(preds, y)
         self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
         return val_loss
@@ -428,8 +432,8 @@ class TimesNet(L.LightningModule):
 
 
 if __name__ == "__main__":
-    model = Model(enc_in=1, c_out=2)
-    input = torch.randn((1, 128, 1))
+    model = Model(enc_in=2, c_out=2)
+    input = torch.randn((1, 128, 2))
     time = torch.randn((1, 128, 5)).abs()
     output = model(input, time).detach()
 
