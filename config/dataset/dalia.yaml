@@ -8,4 +8,9 @@ datamodule:
   test_participants: [1, 13, 14]
   use_heart_rate: False
   use_activity_info: ${use_activity_info} 
+  num_workers: ${num_workers}
   batch_size: 32
+
+base_channel_dim: 1 
+activity_channel_dim: 1
+input_channels: 2

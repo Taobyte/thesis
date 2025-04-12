@@ -22,6 +22,8 @@ class DaLiADataset(Dataset):
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
         self.participants = participants
+        self.use_activity_info = use_activity_info
+        self.target_channel_dim = 1
 
         self.data = []
         self.lengths = []
@@ -53,10 +55,10 @@ class DaLiADataset(Dataset):
         index = idx - self.cumulative_lengths[file_idx]
         window = self.data[file_idx][index : (index + self.window)]
         look_back_window = torch.from_numpy(
-            window[: self.look_back_window, 0]
+            window[: self.look_back_window, :]
         ).unsqueeze(-1)
         prediction_window = torch.from_numpy(
-            window[self.look_back_window :, 0]
+            window[self.look_back_window :, : self.target_channel_dim]
         ).unsqueeze(-1)
 
         return look_back_window.float(), prediction_window.float()
@@ -74,6 +76,7 @@ class DaLiADataModule(L.LightningDataModule):
         train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
         val_participants: list = [9, 10, 11],
         test_participants: list = [1, 13, 14],
+        num_workers: int = 0,
     ):
         super().__init__()
 
@@ -88,6 +91,8 @@ class DaLiADataModule(L.LightningDataModule):
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        self.num_workers = num_workers
 
     def setup(self, stage: str = None):
         if stage == "fit":
@@ -118,43 +123,16 @@ class DaLiADataModule(L.LightningDataModule):
             )
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-if __name__ == "__main__":
-    from tqdm import tqdm
-
-    modes = ["train", "val", "test"]
-    use_heart_rate = [True, False]
-    path = Path("C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed")
-
-    dataset = DaLiADataset(path, [1, 2, 3], False, True)
-    for x, y in dataset:
-        print(x.shape)
-        print(y.shape)
-        break
-
-    #  module = DaLiADataModule(str(path))
-    # module.setup("fit")
-
-    """
-    for mode in tqdm(modes):
-        for b in use_heart_rate:
-            dataset = DaLiADataset(
-                path,
-                "train",
-                use_heart_rate=False,
-                look_back_window=10,
-                prediction_window=5,
-            )
-            indices = np.random.choice(len(dataset), size=100, replace=False)
-            for idx in indices:
-                look_back_window, prediction_window = dataset[idx]
-
-    """
+        return DataLoader(
+            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )

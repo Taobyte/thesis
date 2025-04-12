@@ -135,13 +135,3 @@ class IEEEDataModule(L.LightningDataModule):
         return DataLoader(
             self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
         )
-
-
-if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/IEEEPPG/"
-    datamodule = IEEEDataModule(datadir, 1, 10, 5, use_heart_rate=True)
-    datamodule.setup("fit")
-    dataset = datamodule.train_dataloader().dataset
-    print(len(dataset))
-    for i in range(len(dataset)):
-        x, y = dataset[i]

@@ -18,9 +18,8 @@ import torch.fft
 
 import lightning as L
 import torchmetrics
-import wandb
 
-from src.models.utils import adjust_learning_rate
+from utils import adjust_learning_rate
 from src.losses import get_loss_fn
 from src.plotting import plot_prediction_wandb
 
@@ -429,14 +428,7 @@ class TimesNet(L.LightningModule):
 
 
 if __name__ == "__main__":
-    from omegaconf import OmegaConf
-    from hydra import initialize, compose
-
-    with initialize(config_path="../../config", version_base=None):
-        cfg = compose(config_name="config")
-
-    print(OmegaConf.to_yaml(cfg))
-    model = Model()
+    model = Model(enc_in=1, c_out=2)
     input = torch.randn((1, 128, 1))
     time = torch.randn((1, 128, 5)).abs()
     output = model(input, time).detach()

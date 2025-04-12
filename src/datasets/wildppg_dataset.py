@@ -24,6 +24,7 @@ class WildPPGDataset(Dataset):
             "p5d",
             "p9p",
         ],
+        use_activity: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -34,10 +35,10 @@ class WildPPGDataset(Dataset):
         for participant in participants:
             data = np.load(datadir + prefix + participant + ".npz")
             activity = data["activity"]
-            if use_heart_rate:
-                self.arrays.append(data["ecg"])
-            else:
-                self.arrays.append(data["ppg"])
+            series = data["ecg"] if use_heart_rate else data["ppg"]
+            if use_activity:
+                series = np.concatenate((series, activity), axis=1)
+            self.arrays.append(series)
 
         self.lengths = [len(arr) - self.window + 1 for arr in self.arrays]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
@@ -50,8 +51,8 @@ class WildPPGDataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.arrays[file_idx][index : (index + self.window)]
-        look_back_window = torch.Tensor(window[: self.look_back_window])
-        prediction_window = torch.Tensor(window[self.look_back_window :])
+        look_back_window = torch.from_numpy(window[: self.look_back_window])
+        prediction_window = torch.from_numpy(window[self.look_back_window :])
 
         return look_back_window.float(), prediction_window.float()
 
@@ -128,8 +129,9 @@ class WildPPGDataModule(L.LightningDataModule):
 if __name__ == "__main__":
     from tqdm import tqdm
 
-    path = "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data/"
-    dataset = WildPPGDataset(path)
+    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/wildppg_preprocessed/"
+    dataset = WildPPGDataset(datadir, use_activity=True)
     for i in tqdm(range(len(dataset))):
         look_back_window, prediction_window = dataset[i]
+        print(look_back_window.shape)
         break

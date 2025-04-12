@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ns-forecast"  
+version = "0.1.0"     
+description = "Master Thesis about Non-Stationary Forecasting"
+authors = [
+    {name = "Clemens Keusch", email = "ckeusch@student.ethz.ch"},
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}  
+
+[tool.setuptools]
+packages = ["src"]
+package-dir = {"" = "."}  

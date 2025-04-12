@@ -435,7 +435,6 @@ class SimpleTM(L.LightningModule):
         super().__init__()
         self.model = model
         self.criterion = torch.nn.L1Loss() if data == "PEMS" else torch.nn.MSELoss()
-        self.scheduler = None
         self.save_hyperparameters()
 
     def forward(self, x):

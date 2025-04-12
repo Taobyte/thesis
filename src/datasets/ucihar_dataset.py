@@ -122,27 +122,16 @@ class UCIHARDataset(Dataset):
         mode: str,
         look_back_window: int,
         prediction_window: int,
-        train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
-        val_participants: list = [4, 5, 6],
-        test_participants: list = [1, 2, 3],
-        freq: str = "20L",
-        start_time: str = "2000-01-01 00:00:00",
+        participants: list[int] = [1, 2, 3],
+        use_activity: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
-        if mode == "train" or mode == "val":
-            datadir += "train/"
-            participants = train_participants if mode == "train" else val_participants
-            mode = "train"
-        else:
-            datadir += "test/"
-            participants = test_participants
-
         subject = np.loadtxt(datadir + f"subject_{mode}.txt")[:, np.newaxis]
-        x = np.loadtxt(datadir + f"X_{mode}.txt")
-        y = np.loadtxt(datadir + f"y_{mode}.txt")[:, np.newaxis]
+        x = np.loadtxt(datadir + f"X_{mode}.txt")  # (T, 561)
+        y = np.loadtxt(datadir + f"y_{mode}.txt")[:, np.newaxis]  # (T, 1)
         combined = np.concatenate([subject, y, x], axis=1)
 
         self.data = []
@@ -200,7 +189,7 @@ class UCIHARDataModule(L.LightningDataModule):
             )
             self.val_dataset = UCIHARDataset(
                 self.data_dir,
-                "val",
+                "train",
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,

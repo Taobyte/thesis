@@ -9,3 +9,7 @@ datamodule:
   use_heart_rate: True
   batch_size: 32
   num_workers: ${num_workers}
+
+base_channel_dim: 1
+activity_channel_dim: 0
+input_channels: ${dataset.base_channel_dim}
