@@ -411,6 +411,7 @@ class TimesNet(L.LightningModule):
         x, y = batch
         time = self._generate_time_tensor(x)
         preds = self.model(x, time)
+        preds = preds[:, :, : y.shape[2]]
         self.mse_metric(preds.reshape(-1), y.reshape(-1))
         self.l1_metric(preds.reshape(-1), y.reshape(-1))
 
