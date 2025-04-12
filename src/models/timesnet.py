@@ -19,7 +19,7 @@ import torch.fft
 import lightning as L
 import torchmetrics
 
-from utils import adjust_learning_rate
+from src.models.utils import adjust_learning_rate
 from src.losses import get_loss_fn
 from src.plotting import plot_prediction_wandb
 
