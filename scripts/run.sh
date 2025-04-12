@@ -3,7 +3,7 @@
 
 #SBATCH -n 1 
 #SBATCH --mem-per-cpu=8G
-#SBATCH --time=8:00:00
+#SBATCH --time=24:00:00
 #SBATCH --gpus=1
 
 module load eth_proxy # used for logging to wandb

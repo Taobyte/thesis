@@ -1,14 +1,14 @@
 defaults:
   - _self_
   - model: timesnet
-  - dataset: ieee
+  - dataset: dalia
   - path: local
 
 seed: 123
-use_wandb: False
+use_wandb: True
 overfit: False
 num_workers: 0
-look_back_window: 50
-prediction_window: 25
+look_back_window: 128
+prediction_window: 64
 use_activity_info: False
 
