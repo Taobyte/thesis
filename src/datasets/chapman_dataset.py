@@ -36,7 +36,7 @@ def stratified_split_onehot(
     return (
         (X_train[0].values, y_train_oh),
         (X_val[0].values, y_val_oh),
-        (X_test[0], y_test_oh),
+        (X_test[0].values, y_test_oh),
         encoder,
     )
 
@@ -123,9 +123,9 @@ class ChapmanDataset(Dataset):
             )
             look_back_window = np.concatenate((look_back_window, disease_vec), axis=1)
 
-        return torch.tensor(look_back_window, dtype=torch.float32), torch.tensor(
-            prediction_window, dtype=torch.float32
-        )
+        return torch.from_numpy(look_back_window).float(), torch.from_numpy(
+            prediction_window
+        ).float()
 
 
 class ChapmanDataModule(L.LightningDataModule):
@@ -137,7 +137,7 @@ class ChapmanDataModule(L.LightningDataModule):
 
     Parameters
     ----------
-    datadir : str
+    data_dir : str
         Path to the directory containing `chapman.mat`.
     batch_size : int
         Number of samples per batch.
@@ -151,20 +151,20 @@ class ChapmanDataModule(L.LightningDataModule):
 
     def __init__(
         self,
-        datadir: str,
+        data_dir: str,
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
         use_disease: bool = False,
     ):
         super().__init__()
-        self.data_dir = datadir
+        self.data_dir = data_dir
         self.batch_size = batch_size
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.use_disease = use_disease
 
-        data = loadmat(datadir + "chapman.mat")["whole_data"]
+        data = loadmat(data_dir + "chapman.mat")["whole_data"]
         df = pd.DataFrame(data)
         classes = df[1].apply(lambda x: x[0][0])
 
@@ -210,7 +210,7 @@ class ChapmanDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         """Returns DataLoader for training set."""
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size)
 
     def val_dataloader(self):
         """Returns DataLoader for validation set."""
@@ -222,11 +222,11 @@ class ChapmanDataModule(L.LightningDataModule):
 
 
 if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/Chapman/"
+    data_dir = "C:/Users/cleme/ETH/Master/Thesis/data/Chapman/"
 
     # test if disease is correctly concatentated
     for use_disease in [False, True]:
-        module = ChapmanDataModule(datadir, 1, 10, 5, use_disease)
+        module = ChapmanDataModule(data_dir, 1, 10, 5, use_disease)
         module.setup(stage="fit")
 
         train_dl = module.train_dataloader()
@@ -238,7 +238,7 @@ if __name__ == "__main__":
         print(y)
 
     # test if all windows are loaded
-    module = ChapmanDataModule(datadir, 1, 10, 5, use_disease)
+    module = ChapmanDataModule(data_dir, 1, 10, 5, use_disease)
     module.setup(stage="fit")
 
     from tqdm import tqdm

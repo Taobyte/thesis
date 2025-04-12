@@ -34,6 +34,7 @@ dataset_params = {
         "activity": True,
         "is_categorical": True,
         "n_activities": 4,
+        "activity_flag_name": "use_disease",
     },
     "ucihar": {
         "base_dim": 561,  # gyro + acceleration + derived features
@@ -66,6 +67,7 @@ def _test_specific_dataset(
     activity: bool,
     is_categorical: bool,
     n_activities: int,
+    activity_flag_name: str = None,
 ):
     look_back_windows = [16, 64, 128]
     prediction_windows = [1, 8, 32]
@@ -89,7 +91,10 @@ def _test_specific_dataset(
                     overrides += ["dataset.datamodule.use_heart_rate=True"]
                 activity_channels = 0
                 if activity_flag:
-                    overrides += ["dataset.datamodule.use_activity_info=True"]
+                    if activity_flag_name:
+                        overrides += [f"dataset.datamodule.{activity_flag_name}=True"]
+                    else:
+                        overrides += ["dataset.datamodule.use_activity_info=True"]
                     activity_channels = n_activities if is_categorical else 1
 
                 with initialize(version_base=None, config_path="../../config/"):
@@ -108,8 +113,12 @@ def _test_specific_dataset(
                         t_x, t_y = x.shape[1], y.shape[1]
                         c_x, c_y = x.shape[2], y.shape[2]
 
-                        assert t_x == look_back_window and t_y == prediction_window
-                        assert c_x == base_dim + activity_channels and c_y == base_dim
+                        assert t_x == look_back_window and t_y == prediction_window, (
+                            f"t_x: {t_x}, t_y: {t_y}"
+                        )
+                        assert (
+                            c_x == base_dim + activity_channels and c_y == base_dim
+                        ), f"c_x: {c_x}, c_y: {c_y}"
                         break
 
                 _test_dl(train_dl)
@@ -123,3 +132,11 @@ def test_dalia():
 
 def test_ieee():
     _test_specific_dataset("ieee", **dataset_params["ieee"])
+
+
+def test_chapman():
+    _test_specific_dataset("chapman", **dataset_params["chapman"])
+
+
+def test_usc():
+    _test_specific_dataset("usc", **dataset_params["usc"])

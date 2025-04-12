@@ -1,7 +1,11 @@
 datamodule:
   _target_: src.datasets.chapman_dataset.ChapmanDataModule
-  data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/Chapman/"
+  data_dir: "${path.datadir}/Chapman/"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  use_disease: False
+  use_disease: ${use_activity_info}
   batch_size: 32
+
+base_channel_dim: 4
+activity_channel_dim: 4
+input_channels: ${eval:'8 if ${use_activity_info} else 4'}

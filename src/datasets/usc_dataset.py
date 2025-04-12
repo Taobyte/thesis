@@ -5,6 +5,7 @@ import lightning as L
 from pathlib import Path
 from scipy.io import loadmat
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import OneHotEncoder
 from typing import Tuple
 
 
@@ -12,25 +13,21 @@ class USCDataset(Dataset):
     def __init__(
         self,
         data_dir: str,
-        mode: str,
         look_back_window: int = 10,
         prediction_window: int = 5,
-        train_participants: list = [1, 2, 3, 4, 5, 6, 7, 8],
-        val_participants: list = [9, 10, 11],
-        test_participants: list = [12, 13, 14],
+        participants: list[int] = [1, 2, 3, 4, 5, 6, 7, 8],
+        use_activity_info: bool = False,
     ):
         super().__init__()
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-
+        self.base_channel_dim = 6  # 3 channels for acceleration and 3 channels for gyro
         self.data_dir = Path(data_dir)
-        if mode == "train":
-            self.participants = train_participants
-        elif mode == "val":
-            self.participants = val_participants
-        else:
-            self.participants = test_participants
+
+        self.participants = participants
+
+        encoder = OneHotEncoder(categories=[list(range(1, 13))], sparse_output=False)
 
         self.part_cum_sum = []
         self.participant_data = []
@@ -41,9 +38,31 @@ class USCDataset(Dataset):
             part_data = []
             lengths = []
             for mat_path in participant_mat_paths:
-                mat_file = loadmat(mat_path)["sensor_readings"]
-                mat_length = len(mat_file) - self.window + 1
-                part_data.append(mat_file)
+                data = loadmat(mat_path)
+                sensor_reading = data["sensor_readings"]
+                if use_activity_info:
+                    assert "activity_number" or "activity_numbr" in data, (
+                        f"activity number not in {data.keys()}"
+                    )
+                    key = "activity_number"
+                    if key not in data:
+                        key = "activity_numbr"
+                    activity_oh = encoder.fit_transform(
+                        data[key].astype(int).reshape(-1, 1)
+                    )
+                    sensor_reading = np.concatenate(
+                        (
+                            sensor_reading,
+                            np.repeat(
+                                activity_oh,
+                                repeats=len(sensor_reading),
+                                axis=0,
+                            ),
+                        ),
+                        axis=1,
+                    )
+                mat_length = len(sensor_reading) - self.window + 1
+                part_data.append(sensor_reading)
                 lengths.append(mat_length)
 
             cumsum = np.cumsum([0] + lengths)
@@ -74,7 +93,8 @@ class USCDataset(Dataset):
 
         look_back_window = mat_file[series_pos : series_pos + self.look_back_window, :]
         prediction_window = mat_file[
-            (series_pos + self.look_back_window) : (series_pos + self.window), :
+            (series_pos + self.look_back_window) : (series_pos + self.window),
+            : self.base_channel_dim,
         ]
 
         return look_back_window, prediction_window
@@ -87,16 +107,23 @@ class USCDataModule(L.LightningDataModule):
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
+        train_participants: list[int] = [1, 2, 4, 5, 7, 10, 11, 14],
+        val_participants: list[int] = [3, 6, 8],
+        test_participants: list[int] = [9, 12, 13],
+        use_activity_info: bool = False,
+        num_workers: int = 0,
     ):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
+        self.num_workers = num_workers
+        self.use_activity_info = use_activity_info
 
-        self.train_participants = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        self.val_participants = [10, 11, 12]
-        self.test_participants = [13, 14, 15]
+        self.train_participants = train_participants
+        self.val_participants = val_participants
+        self.test_participants = test_participants
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -105,12 +132,14 @@ class USCDataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
+                self.use_activity_info,
             )
             self.val_dataset = USCDataset(
                 self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
+                self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = USCDataset(
@@ -118,16 +147,23 @@ class USCDataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
+                self.use_activity_info,
             )
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+        return DataLoader(
+            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
 
 if __name__ == "__main__":
