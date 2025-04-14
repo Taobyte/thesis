@@ -9,6 +9,44 @@ from sklearn.preprocessing import OneHotEncoder
 from typing import Tuple
 
 
+def usc_load_data(datadir: str, participants: list[int], use_activity_info: bool):
+    encoder = OneHotEncoder(categories=[list(range(1, 13))], sparse_output=False)
+    participant_data = []
+    for participant in participants:
+        participant_dir = Path(datadir) / f"Subject{participant}"
+        participant_mat_paths = participant_dir.glob("*.mat")
+        part_data = []
+        for mat_path in participant_mat_paths:
+            data = loadmat(mat_path)
+            sensor_reading = data["sensor_readings"]
+            if use_activity_info:
+                assert "activity_number" or "activity_numbr" in data, (
+                    f"activity number not in {data.keys()}"
+                )
+                key = "activity_number"
+                if key not in data:
+                    key = "activity_numbr"
+                activity_oh = encoder.fit_transform(
+                    data[key].astype(int).reshape(-1, 1)
+                )
+                sensor_reading = np.concatenate(
+                    (
+                        sensor_reading,
+                        np.repeat(
+                            activity_oh,
+                            repeats=len(sensor_reading),
+                            axis=0,
+                        ),
+                    ),
+                    axis=1,
+                )
+            part_data.append(sensor_reading)
+
+        participant_data.append(part_data)
+
+    return participant_data
+
+
 class USCDataset(Dataset):
     def __init__(
         self,
@@ -21,56 +59,19 @@ class USCDataset(Dataset):
         super().__init__()
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
-        self.window = look_back_window + prediction_window
+        self.window_length = look_back_window + prediction_window
         self.base_channel_dim = 6  # 3 channels for acceleration and 3 channels for gyro
-        self.data_dir = Path(data_dir)
-
         self.participants = participants
 
-        encoder = OneHotEncoder(categories=[list(range(1, 13))], sparse_output=False)
-
         self.part_cum_sum = []
-        self.participant_data = []
-        outer_lengths = []
-        for participant in self.participants:
-            participant_dir = self.data_dir / f"Subject{participant}"
-            participant_mat_paths = participant_dir.glob("*.mat")
-            part_data = []
-            lengths = []
-            for mat_path in participant_mat_paths:
-                data = loadmat(mat_path)
-                sensor_reading = data["sensor_readings"]
-                if use_activity_info:
-                    assert "activity_number" or "activity_numbr" in data, (
-                        f"activity number not in {data.keys()}"
-                    )
-                    key = "activity_number"
-                    if key not in data:
-                        key = "activity_numbr"
-                    activity_oh = encoder.fit_transform(
-                        data[key].astype(int).reshape(-1, 1)
-                    )
-                    sensor_reading = np.concatenate(
-                        (
-                            sensor_reading,
-                            np.repeat(
-                                activity_oh,
-                                repeats=len(sensor_reading),
-                                axis=0,
-                            ),
-                        ),
-                        axis=1,
-                    )
-                mat_length = len(sensor_reading) - self.window + 1
-                part_data.append(sensor_reading)
-                lengths.append(mat_length)
-
-            cumsum = np.cumsum([0] + lengths)
-            self.part_cum_sum.append(cumsum)
-            total_length = cumsum[-1]
-            outer_lengths.append(total_length)
-            self.participant_data.append(part_data)
-
+        self.participant_data = usc_load_data(data_dir, participants, use_activity_info)
+        for participant_idx in range(len(self.participant_data)):
+            lengths = [
+                len(series) - self.window_length + 1
+                for series in self.participant_data[participant_idx]
+            ]
+            self.part_cum_sum.append(np.cumsum([0] + lengths))
+        outer_lengths = [cumsum[-1] for cumsum in self.part_cum_sum]
         self.cumulative_lengths = np.cumsum([0] + outer_lengths)
         self.total_length = self.cumulative_lengths[-1]
 
@@ -93,7 +94,7 @@ class USCDataset(Dataset):
 
         look_back_window = mat_file[series_pos : series_pos + self.look_back_window, :]
         prediction_window = mat_file[
-            (series_pos + self.look_back_window) : (series_pos + self.window),
+            (series_pos + self.look_back_window) : (series_pos + self.window_length),
             : self.base_channel_dim,
         ]
 

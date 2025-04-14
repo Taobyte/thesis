@@ -81,6 +81,10 @@ def _test_specific_dataset(
     ):
         for hr_flag in tqdm(hr_flags, total=len(hr_flags)):
             for activity_flag in tqdm(activity_flags, total=len(activity_flags)):
+                print(
+                    f"[INFO] Test config → lbw={look_back_window}, pw={prediction_window}, hr={hr_flag}, act={activity_flag}"
+                )
+
                 overrides = [f"dataset={name}"]
                 overrides += [
                     f"look_back_window={look_back_window}",

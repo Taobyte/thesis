@@ -1,12 +1,24 @@
+# Adapted from Microsoft's ProbTS project:
+# https://github.com/microsoft/ProbTS
+# Original license: MIT License
+# Modifications made by Clemens Keusch, 14.04.2025
+
+
 import re
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning as L
+from torch import optim
 from torch import Tensor
 from einops import rearrange, repeat
 from typing import List, Union, Optional, Callable, Tuple
+
+import lightning.pytorch as pl
+import sys
+
+from src.datasets.elastst.data_wrapper import ProbTSBatchData
+from src.datasets.elastst.data_utils.data_scaler import Scaler, IdentityScaler
 
 
 class Time_Encoder(nn.Module):
@@ -753,9 +765,6 @@ class InstanceNorm(nn.Module):
         x = x * self.stdev
         x = x + self.mean
         return x
-
-
-__all__ = ["PatchTST_backbone"]
 
 
 # Cell
@@ -1588,23 +1597,110 @@ class Model(Forecaster):
         return loss
 
 
-class ElasTST(L.LightningModule):
-    def __init__(self):
-        pass
+def get_weights(sampling_weight_scheme, max_hor):
+    """
+    return: w [max_hor]
+    """
+    if sampling_weight_scheme == "random":
+        i_array = np.linspace(1 + 1e-5, max_hor - 1e-3, max_hor)
+        w = (1 / max_hor) * (np.log(max_hor) - np.log(i_array))
+    elif sampling_weight_scheme == "const":
+        w = np.array([1 / max_hor] * max_hor)
+    elif sampling_weight_scheme == "none":
+        return None
+    else:
+        raise ValueError(f"Invalid sampling scheme {sampling_weight_scheme}.")
+
+    return torch.tensor(w)
+
+
+class ElasTST(pl.LightningModule):
+    def __init__(
+        self,
+        model: Forecaster,
+        scaler: Scaler = None,
+        train_pred_len_list: list = None,
+        num_samples: int = 100,
+        learning_rate: float = 1e-3,
+        load_from_ckpt: str = None,
+        sampling_weight_scheme: str = "none",
+        **kwargs,
+    ):
+        super().__init__()
+        self.num_samples = num_samples
+        self.learning_rate = learning_rate
+        self.load_from_ckpt = load_from_ckpt
+        self.train_pred_len_list = train_pred_len_list
+        self.forecaster = model
+
+        self.scaler = IdentityScaler()
+
+        # init the parapemetr for sampling
+        self.sampling_weight_scheme = sampling_weight_scheme
+        print(f"sampling_weight_scheme: {sampling_weight_scheme}")
+        # self.save_hyperparameters()
+
+    def training_forward(self, batch_data):
+        batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
+        batch_data.future_target_cdf = self.scaler.transform(
+            batch_data.future_target_cdf
+        )
+        loss = self.forecaster.loss(batch_data)
+
+        if len(loss.shape) > 1:
+            loss_weights = get_weights(self.sampling_weight_scheme, loss.shape[1])
+            loss = (
+                loss_weights.detach().to(loss.device).unsqueeze(0).unsqueeze(-1) * loss
+            ).sum(dim=1)
+            loss = loss.mean()
+
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        batch_data = ProbTSBatchData(batch, self.device)
+        loss = self.training_forward(batch_data)
+        self.log("train_loss", loss, on_step=True, prog_bar=True, logger=True)
+        return loss
+
+    def evaluate(self, batch, stage="", dataloader_idx=None):
+        batch_data = ProbTSBatchData(batch, self.device)
+        pred_len = batch_data.future_target_cdf.shape[1]
+        orin_past_data = batch_data.past_target_cdf[:]
+        orin_future_data = batch_data.future_target_cdf[:]
+
+        norm_past_data = self.scaler.transform(batch_data.past_target_cdf)
+        norm_future_data = self.scaler.transform(batch_data.future_target_cdf)
+        self.batch_size.append(orin_past_data.shape[0])
+
+        batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
+        forecasts = self.forecaster.forecast(batch_data, self.num_samples)[
+            :, :, :pred_len
+        ]
+
+        # Calculate denorm metrics
+        denorm_forecasts = self.scaler.inverse_transform(forecasts)
+        # TODO: calculate MSE, L1 and cross correlation metric
+        return None
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=None):
+        # metrics = self.evaluate(batch, stage="val", dataloader_idx=dataloader_idx)
+        return 1  # TODO
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 
 if __name__ == "__main__":
-    model = ElasTST(
+    model = Model(
         target_dim=96,
         context_length=96,
         prediction_length=720,
         freq="h",
         lags_list=[64],
     )
+
+    module = ElasTST(model)
     input = torch.randn((1, 96, 1))
-    output = model(input)
+    output = model(input, 720)
     print(output.shape)

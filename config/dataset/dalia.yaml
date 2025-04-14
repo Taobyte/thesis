@@ -1,3 +1,4 @@
+name: "dalia"
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
   data_dir: "${path.datadir}/dalia_preprocessed"

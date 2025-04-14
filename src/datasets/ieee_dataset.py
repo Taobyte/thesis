@@ -5,6 +5,44 @@ from torch.utils.data import DataLoader, Dataset
 from scipy.io import loadmat
 
 
+def ieee_load_data(datadir: str, participants: list[int], use_heart_rate: bool):
+    """
+    Load time series data from the IEEE_Big.mat dataset for selected participants.
+
+    Parameters
+    ----------
+    datadir : str
+        Path to the directory containing the "IEEE_Big.mat" file.
+    participants : list[int]
+        List of participant IDs (1-based indices) to load data for.
+    use_heart_rate : bool
+        If True, loads heart rate time series directly for each participant.
+        If False, loads multichannel data (e.g., multiple signals per participant).
+
+    Returns
+    -------
+    list
+        - If `use_heart_rate` is True:
+            A list of NumPy arrays, one per participant, each of shape (T,), where T is the time series length.
+        - If `use_heart_rate` is False:
+            A list of lists of NumPy arrays. Each inner list corresponds to one participant and contains multiple time series arrays
+            (each of shape (T,)) representing different channels/signals.
+    """
+
+    data = loadmat(datadir + "IEEE_Big.mat")["whole_dataset"]
+    if use_heart_rate:
+        return [data[i - 1][1].squeeze(-1) for i in participants]
+    else:
+        loaded_series = []
+        for i in participants:
+            arr = data[i - 1][0]
+            participant_series = []
+            for j in range(len(arr)):
+                participant_series.append(arr[j, :])  # (200,)
+            loaded_series.append(participant_series)
+        return loaded_series
+
+
 class IEEEDataset(Dataset):
     def __init__(
         self,
@@ -17,32 +55,35 @@ class IEEEDataset(Dataset):
         self.datadir = datadir
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
-        self.window = self.look_back_window + self.predicition_window
+        self.window_length = look_back_window + prediction_window
         self.use_heart_rate = use_heart_rate
 
-        data = loadmat(self.datadir + "IEEE_Big.mat")["whole_dataset"]
+        self.data = ieee_load_data(datadir, participants, use_heart_rate)
 
-        self.series_per_participant = [
-            len(data[i][0])
-            for i in range(len(participants))
-            if len(data[i][0])
-            >= self.window  # ensures that length of the series is at least as long as a window
-        ]
+        assert self.window_length <= 200, (
+            f"window_length: {self.window_length}: IEEE for PPG contains only time series of length 200!"
+        )
+
+        self.series_per_participant = [len(series) for series in self.data]
         self.n_windows_per_participant = [
-            n_series * (200 - self.window + 1)
+            n_series * (200 - self.window_length + 1)
             for n_series in self.series_per_participant
         ]
 
         if use_heart_rate:
-            self.data = [data[i][1].squeeze(-1) for i in range(len(participants))]
             self.cumulative_sum = np.cumsum(
-                [0] + [(l - self.window + 1) for l in self.series_per_participant]
+                [0]
+                + [
+                    (l - self.window_length + 1)
+                    for l in self.series_per_participant
+                    if l >= self.window_length
+                ]
             )
-            self.total_length = self.cumulative_sum[-1]
+            self.data = [d for d in self.data if len(d) >= self.window_length]
+
         else:
-            self.data = [data[i][0] for i in range(len(participants))]
             self.cumulative_sum = np.cumsum([0] + self.n_windows_per_participant)
-            self.total_length = self.cumulative_sum[-1]
+        self.total_length = self.cumulative_sum[-1]
 
     def __len__(self) -> int:
         return self.total_length
@@ -55,13 +96,13 @@ class IEEEDataset(Dataset):
             data = self.data[participant_idx]
             window_pos = index
         else:
-            serie_idx = index // (200 - self.window + 1)
-            window_pos = index % (200 - self.window + 1)
+            serie_idx = index // (200 - self.window_length + 1)
+            window_pos = index % (200 - self.window_length + 1)
             data = self.data[participant_idx][serie_idx]
 
         look_back_window = data[window_pos : window_pos + self.look_back_window]
         prediction_window = data[
-            window_pos + self.look_back_window : window_pos + self.window
+            window_pos + self.look_back_window : window_pos + self.window_length
         ]
 
         look_back_window = torch.from_numpy(look_back_window[:, np.newaxis]).float()
@@ -135,3 +176,9 @@ class IEEEDataModule(L.LightningDataModule):
         return DataLoader(
             self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
         )
+
+
+if __name__ == "__main__":
+    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/"
+    data = ieee_load_data(datadir, [1, 2, 3], False)
+    print(data[0][0].shape)

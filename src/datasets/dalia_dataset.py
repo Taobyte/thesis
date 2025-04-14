@@ -8,6 +8,32 @@ from typing import Tuple
 from scipy import signal
 
 
+def dalia_load_data(
+    path: str,
+    participants: list[int],
+    window_length: int,
+    use_heart_rate: bool,
+    use_activity_info: bool,
+):
+    loaded_series = []
+    for i in participants:
+        label = "S" + str(i)
+        data_path = Path(path) / (label + ".npz")
+        data = np.load(data_path)
+        series = data["ecg"] if use_heart_rate else data["bvp"]
+        assert len(series) >= window_length
+        if use_activity_info:
+            activity = data["wrist_acc"]
+            activity = np.sqrt(
+                activity[:, 0] ** 2 + activity[:, 1] ** 2, activity[:, 2] ** 2
+            )[:, np.newaxis]
+            activity_resampled = signal.resample(activity, len(series))
+            series = np.concatenate((series, activity_resampled), axis=1)
+
+        loaded_series.append(series)
+    return loaded_series
+
+
 class DaLiADataset(Dataset):
     def __init__(
         self,
@@ -20,30 +46,15 @@ class DaLiADataset(Dataset):
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
-        self.window = look_back_window + prediction_window
+        self.window_length = look_back_window + prediction_window
         self.participants = participants
         self.use_activity_info = use_activity_info
         self.target_channel_dim = 1
 
-        self.data = []
-        self.lengths = []
-        for i in self.participants:
-            label = "S" + str(i)
-            data_path = Path(path) / (label + ".npz")
-            data = np.load(data_path)
-            series = data["ecg"] if use_heart_rate else data["bvp"]
-            assert len(series) >= self.window
-            if use_activity_info:
-                activity = data["wrist_acc"]
-                activity = np.sqrt(
-                    activity[:, 0] ** 2 + activity[:, 1] ** 2, activity[:, 2] ** 2
-                )[:, np.newaxis]
-                activity_resampled = signal.resample(activity, len(series))
-                series = np.concatenate((series, activity_resampled), axis=1)
-
-            self.data.append(series)
-            self.lengths.append(len(series) - self.window + 1)
-
+        self.data = dalia_load_data(
+            path, participants, self.window_length, use_heart_rate, use_activity_info
+        )
+        self.lengths = [len(series) - self.window_length + 1 for series in self.data]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
 
@@ -53,7 +64,7 @@ class DaLiADataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
-        window = self.data[file_idx][index : (index + self.window)]
+        window = self.data[file_idx][index : (index + self.window_length)]
         look_back_window = torch.from_numpy(window[: self.look_back_window, :])
         prediction_window = torch.from_numpy(
             window[self.look_back_window :, : self.target_channel_dim]
@@ -134,3 +145,9 @@ class DaLiADataModule(L.LightningDataModule):
         return DataLoader(
             self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
         )
+
+
+if __name__ == "__main__":
+    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed/"
+    data = dalia_load_data(datadir, [1, 2, 3], 100, False, True)
+    print(data)

@@ -1,5 +1,5 @@
 
-model_name: "TimesNet"
+name: "timesnet"
 
 model:
   _target_: src.models.timesnet.Model

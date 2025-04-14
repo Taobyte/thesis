@@ -9,6 +9,18 @@ from sklearn.preprocessing import OneHotEncoder
 from scipy.io import loadmat
 
 
+def chapman_load_data(datadir: str):
+    data = loadmat(datadir + "chapman.mat")["whole_data"]
+    df = pd.DataFrame(data)
+    classes = df[1].apply(lambda x: x[0][0])
+
+    (X_train, y_train), (X_val, y_val), (X_test, y_test), _ = stratified_split_onehot(
+        df, classes
+    )
+
+    return X_train, y_train, X_val, y_val, X_test, y_test
+
+
 def stratified_split_onehot(
     data: pd.DataFrame,
     labels: pd.Series,
@@ -164,16 +176,14 @@ class ChapmanDataModule(L.LightningDataModule):
         self.prediction_window = prediction_window
         self.use_disease = use_disease
 
-        data = loadmat(data_dir + "chapman.mat")["whole_data"]
-        df = pd.DataFrame(data)
-        classes = df[1].apply(lambda x: x[0][0])
-
-        (X_train, y_train), (X_val, y_val), (X_test, y_test), _ = (
-            stratified_split_onehot(df, classes)
-        )
-        self.X_train, self.y_train = X_train, y_train
-        self.X_val, self.y_val = X_val, y_val
-        self.X_test, self.y_test = X_test, y_test
+        (
+            self.X_train,
+            self.y_train,
+            self.X_val,
+            self.y_val,
+            self.X_test,
+            self.y_test,
+        ) = chapman_load_data(data_dir)
 
     def setup(self, stage: str):
         """
@@ -222,29 +232,6 @@ class ChapmanDataModule(L.LightningDataModule):
 
 
 if __name__ == "__main__":
-    data_dir = "C:/Users/cleme/ETH/Master/Thesis/data/Chapman/"
-
-    # test if disease is correctly concatentated
-    for use_disease in [False, True]:
-        module = ChapmanDataModule(data_dir, 1, 10, 5, use_disease)
-        module.setup(stage="fit")
-
-        train_dl = module.train_dataloader()
-
-        x, y = next(iter(train_dl))
-
-        print(x.shape)
-        print(y.shape)
-        print(y)
-
-    # test if all windows are loaded
-    module = ChapmanDataModule(data_dir, 1, 10, 5, use_disease)
-    module.setup(stage="fit")
-
-    from tqdm import tqdm
-
-    train_dl = module.train_dataloader()
-    dataset = train_dl.dataset
-    print(len(dataset))
-    for i in tqdm(range(len(dataset)), total=len(dataset)):
-        x, y = dataset[i]
+    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/Chapman/"
+    X_train, y_train, X_val, y_val, X_test, y_test = chapman_load_data(datadir)
+    print(X_train[0].shape)

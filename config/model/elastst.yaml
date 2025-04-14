@@ -1,16 +1,6 @@
-seed_everything: 1
-pl_model:
-  accelerator: gpu
-  devices: 1
-  strategy: auto
-  max_epochs: 50
-  use_distributed_sampler: false
-  limit_train_batches: 100
-  log_every_n_steps: 1
-  default_root_dir: ./results
-  accumulate_grad_batches: 1
+model_name: "elastst"
 model:
-  _target_: probts.model.forecaster.point_forecaster.ElasTST
+  _target_: src.models.elastst.Model
   l_patch_size: '8_16_32'
   dropout: 0.0
   f_hidden_size: 256
@@ -29,22 +19,39 @@ model:
   addv: false
   bin_att: false
   learn_tem_emb: false
+
+pl_model:
+  _target_: src.models.elastst.ElasTST
   learning_rate: 0.001
   quantiles_num: 20
   sampling_weight_scheme: random
+
+trainer:
+  use_early_stopping: False
+  accelerator: cpu
+  devices: 1
+  strategy: auto
+  max_epochs: 50
+  use_distributed_sampler: false
+  limit_train_batches: 100
+  log_every_n_steps: 1
+  default_root_dir: ./results
+  accumulate_grad_batches: 1
+
 data:
   data_manager:
-    class_path: probts.data.data_manager.DataManager
-    init_args:
-      dataset: etth1
-      split_val: true
-      scaler: standard # identity, standard, temporal
-      context_length: 96
-      prediction_length: 24-96-192-336-720-1024
-      train_ctx_len_list: 96
-      train_pred_len_list: 720
-      val_pred_len_list: 720
-      continous_sample: false 
-  batch_size: 32
-  test_batch_size: 32
-  num_workers: 8
+    _target_: src.datasets.elastst.data_manager.DataManager
+    dataset_cfg: ${dataset}
+    scaler: standard # identity, standard, temporal
+    context_length: 50
+    prediction_length: [1, 2, 5, 8, 9, 10]
+    train_ctx_len: 50
+    train_pred_len_list: 10
+    val_ctx_len: 50
+    val_pred_len_list: 10
+    continuous_sample: false
+  datamodule:
+    _target_: src.datasets.elastst.data_module.ProbTSDataModule
+    batch_size: 32
+    test_batch_size: 32
+    num_workers: 8
