@@ -285,11 +285,30 @@ class DataManager:
                 self.test_rolling_length = 24
 
     def _dalia_prepare_dataset(self):
-        dalia_data = dalia_load_data(
-            self.datadir,
-            [1, 2, 3],
+        def _create_dataset(series: list):
+            x = 0
+            # TODO: implement dataset loading
+
+        train_dalia_series = dalia_load_data(
+            self.dataset_cfg.datamodule.data_dir,
+            self.dataset_cfg.datamodule.train_participants,
+            self.dataset_cfg.datamodule.use_heart_rate,
         )
-        return dalia_data
+        val_dalia_series = dalia_load_data(
+            self.dataset_cfg.datamodule.data_dir,
+            self.dataset_cfg.datamodule.val_participants,
+            self.dataset_cfg.datamodule.use_heart_rate,
+        )
+        test_dalia_series = dalia_load_data(
+            self.dataset_cfg.datamodule.data_dir,
+            self.dataset_cfg.datamodule.test_participants,
+            self.dataset_cfg.datamodule.use_heart_rate,
+        )
+        train_dataset = _create_dataset(train_dalia_series)
+        val_dataset = _create_dataset(val_dalia_series)
+        test_dataset = _create_dataset(test_dalia_series)
+
+        return train_dataset, val_dataset, test_dataset
 
     def _ieee_prepare_dataset(self):
         def _create_dataset(series: list):
@@ -314,8 +333,6 @@ class DataManager:
                                 "start": start,
                             }
                         )
-                        print(series[participant][serie].T.shape)
-                        break
 
             return ListDataset(processed_series, freq="20ms", one_dim_target=False)
 

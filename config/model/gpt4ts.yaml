@@ -25,6 +25,7 @@ pl_model:
 
 trainer: 
   max_epochs: 100
+  use_early_stopping: False
 
 data:
   batch_size: 1

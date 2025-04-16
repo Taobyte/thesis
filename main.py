@@ -29,25 +29,11 @@ def main(config: DictConfig):
         else DummyLogger()
     )
 
-    if config.model.model_name == "elastst":
-        data_manager = instantiate(config.model.data.data_manager)
-        datamodule = instantiate(
-            config.model.data.datamodule, data_manager=data_manager
-        )
-        model = instantiate(
-            config.model.model,
-            target_dim=data_manager.target_dim,
-            context_length=data_manager.context_length,
-            prediction_length=data_manager.prediction_length,
-            freq=data_manager.freq,
-            lags_list=data_manager.lags_list,
-        )
-    else:
-        datamodule = instantiate(
-            config.dataset.datamodule,
-            batch_size=config.model.data.batch_size,
-        )
-        model = instantiate(config.model.model)
+    datamodule = instantiate(
+        config.dataset.datamodule,
+        batch_size=config.model.data.batch_size,
+    )
+    model = instantiate(config.model.model)
 
     pl_model = instantiate(config.model.pl_model, model=model)
 

@@ -30,6 +30,7 @@ pl_model:
 
 trainer: 
   max_epochs: 1000
+  use_early_stopping: True
   patience: 3
   pct_start: 0.2
 

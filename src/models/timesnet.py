@@ -389,14 +389,16 @@ class TimesNet(L.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        current_lr = adjust_learning_rate(
-            optimizer=self.trainer.optimizers[0],
-            epoch=self.current_epoch + 1,
-            lradj=self.lradj,
-            learning_rate=self.learning_rate,
-            train_epochs=self.trainer.max_epochs,
-        )
-        self.log("current_lr", current_lr, on_epoch=True)
+        # only update learning rate if we are not testing overfitting on a single batch
+        if self.trainer.overfit_batches > 1:
+            current_lr = adjust_learning_rate(
+                optimizer=self.trainer.optimizers[0],
+                epoch=self.current_epoch + 1,
+                lradj=self.lradj,
+                learning_rate=self.learning_rate,
+                train_epochs=self.trainer.max_epochs,
+            )
+            self.log("current_lr", current_lr, on_epoch=True)
 
     def validation_step(self, batch, batch_idx) -> float:
         x, y = batch
@@ -430,17 +432,3 @@ class TimesNet(L.LightningModule):
         )
 
         return optimizer
-
-
-if __name__ == "__main__":
-    model = Model(enc_in=2, c_out=2)
-    input = torch.randn((1, 128, 2))
-    time = torch.randn((1, 128, 5)).abs()
-    output = model(input, time).detach()
-
-    import matplotlib.pyplot as plt
-
-    print(output.shape)
-    combined = torch.concat([input, output], dim=1)
-    plt.plot(combined.squeeze(0).squeeze(1))
-    plt.show()

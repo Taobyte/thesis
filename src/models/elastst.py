@@ -3,7 +3,6 @@
 # Original license: MIT License
 # Modifications made by Clemens Keusch, 14.04.2025
 
-
 import re
 import numpy as np
 import torch
@@ -639,23 +638,6 @@ def weighted_average(
         return x.mean(dim=dim) if dim else x
 
 
-class Scaler:
-    def __init__(self):
-        super().__init__()
-
-    def fit(self, values):
-        raise NotImplementedError
-
-    def transform(self, values):
-        raise NotImplementedError
-
-    def fit_transform(self, values):
-        raise NotImplementedError
-
-    def inverse_transform(self, values):
-        raise NotImplementedError
-
-
 class TemporalScaler(Scaler):
     def __init__(self, minimum_scale: float = 1e-10, time_first: bool = True):
         """
@@ -1225,13 +1207,13 @@ class Forecaster(nn.Module):
         use_lags: bool = False,
         use_feat_idx_emb: bool = False,
         use_time_feat: bool = False,
-        lags_list: List[int] = None,
         feat_idx_emb_dim: int = 1,
         time_feat_dim: int = 1,
         use_scaling: bool = False,
         autoregressive: bool = False,
         no_training: bool = False,
         dataset: str = None,
+        lags_list: List[int] = [64],  # TODO CHANGE THIS TO DYNAMICALLY ADD LAGS
         **kwargs,
     ):
         super().__init__()
@@ -1519,24 +1501,28 @@ class Model(Forecaster):
         for p in self.l_patch_size:
             new_pred_len = self.check_divisibility(new_pred_len, p)
 
-        B, _, K = batch_data.past_target_cdf.shape
-        past_target = batch_data.past_target_cdf
-        past_observed_values = batch_data.past_observed_values
+        look_back_window, prediction_window = batch_data
+        past_target = look_back_window
+        B, _, K = look_back_window.shape
+        # B, _, K = batch_data.past_target_cdf.shape
+        # past_target = batch_data.past_target_cdf
+        # past_observed_values = batch_data.past_observed_values
+        past_observed_values = torch.ones_like(look_back_window)
 
         if self.use_norm:
             past_target = self.instance_norm(past_target, "norm")
 
         # future_observed_values is the mask indicate whether there is a value in a position
         future_observed_values = torch.zeros([B, new_pred_len, K]).to(
-            batch_data.future_observed_values.device
+            prediction_window.device
         )
 
-        pred_len = batch_data.future_observed_values.shape[1]
-        future_observed_values[:, :pred_len] = batch_data.future_observed_values
+        # pred_len = batch_data.future_observed_values.shape[1]
+        # future_observed_values[:, :new_pred_len] = batch_data.future_observed_values
 
         # target placeholder
         future_placeholder = torch.zeros([B, new_pred_len, K]).to(
-            batch_data.past_target_cdf.device
+            prediction_window.device
         )
 
         x, pred_list = self.model(
@@ -1553,20 +1539,18 @@ class Model(Forecaster):
         return dec_out  # [b l k], [b l k #patch_size]
 
     def loss(self, batch_data, reduce="none"):
-        max_pred_len = (
-            batch_data.max_prediction_length
-            if batch_data.max_prediction_length is not None
-            else max(self.train_prediction_length)
-        )
-
+        max_pred_len = self.prediction_length
         predict = self(
             batch_data,
             max_pred_len,
             dataset_name=None,
         )
-        target = batch_data.future_target_cdf
+        _, prediction_window = batch_data
+        target = prediction_window
 
-        observed_values = batch_data.future_observed_values
+        # observed_values = batch_data.future_observed_values
+        observed_values = torch.ones_like(prediction_window)
+
         loss = self.loss_fn(target, predict)
 
         loss = self.get_weighted_loss(observed_values, loss, reduce=reduce)
@@ -1577,7 +1561,8 @@ class Model(Forecaster):
 
     def forecast(self, batch_data, num_samples=None):
         # max_pred_len = batch_data.max_prediction_length if batch_data.max_prediction_length is not None else max(self.prediction_length)
-        max_pred_len = batch_data.future_target_cdf.shape[1]
+        # max_pred_len = batch_data.future_target_cdf.shape[1]
+        max_pred_len = self.prediction_length
         outputs = self(
             batch_data,
             max_pred_len,
@@ -1641,10 +1626,10 @@ class ElasTST(pl.LightningModule):
         # self.save_hyperparameters()
 
     def training_forward(self, batch_data):
-        batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
-        batch_data.future_target_cdf = self.scaler.transform(
-            batch_data.future_target_cdf
-        )
+        # batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
+        # batch_data.future_target_cdf = self.scaler.transform(
+        #     batch_data.future_target_cdf
+        # )
         loss = self.forecaster.loss(batch_data)
 
         if len(loss.shape) > 1:
@@ -1657,13 +1642,15 @@ class ElasTST(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        batch_data = ProbTSBatchData(batch, self.device)
+        # batch_data = ProbTSBatchData(batch, self.device)
+        batch_data = batch
         loss = self.training_forward(batch_data)
         self.log("train_loss", loss, on_step=True, prog_bar=True, logger=True)
         return loss
 
     def evaluate(self, batch, stage="", dataloader_idx=None):
-        batch_data = ProbTSBatchData(batch, self.device)
+        # batch_data = ProbTSBatchData(batch, self.device)
+        batch_data = batch
         pred_len = batch_data.future_target_cdf.shape[1]
         orin_past_data = batch_data.past_target_cdf[:]
         orin_future_data = batch_data.future_target_cdf[:]
@@ -1703,4 +1690,5 @@ if __name__ == "__main__":
     module = ElasTST(model)
     input = torch.randn((1, 96, 1))
     output = model(input, 720)
-    print(output.shape)
+
+    (output.shape)

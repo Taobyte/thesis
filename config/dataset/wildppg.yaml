@@ -1,10 +1,20 @@
+name: "wildppg"
+freq_ecg: 128
+freq_acc: 200
+freq_ppg: 128 
+
 datamodule:
   _target_: src.datasets.wildppg_dataset.WildPPGDataModule
-  data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data/"
+  data_dir: "${path.datadir}/wildppg_preprocessed/"
+
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  batch_size: 1
+
   train_participants: ['an0', 'e61', 'fex', 'k2s', 'kjd', 'l38', 'n31', 'ngh', 'p5d', 'p9p']
   val_participants: ['qm9', 'ssx', 'trh']
   test_participants: ['tz8', 'u7y', 'w4p']
+
   use_heart_rate: False
+  use_activity_info: False
+
+  batch_size: 1

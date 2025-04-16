@@ -20,6 +20,11 @@ model:
   bin_att: false
   learn_tem_emb: false
 
+  target_dim: ${dataset.base_channel_dim}
+  context_length: ${look_back_window}
+  prediction_length: ${prediction_window}
+  freq: ${dataset.freq}
+
 pl_model:
   _target_: src.models.elastst.ElasTST
   learning_rate: 0.001
@@ -50,8 +55,4 @@ data:
     val_ctx_len: 50
     val_pred_len_list: 10
     continuous_sample: false
-  datamodule:
-    _target_: src.datasets.elastst.data_module.ProbTSDataModule
-    batch_size: 32
-    test_batch_size: 32
-    num_workers: 8
+  batch_size: 32

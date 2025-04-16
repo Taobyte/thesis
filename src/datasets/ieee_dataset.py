@@ -5,7 +5,9 @@ from torch.utils.data import DataLoader, Dataset
 from scipy.io import loadmat
 
 
-def ieee_load_data(datadir: str, participants: list[int], use_heart_rate: bool):
+def ieee_load_data(
+    datadir: str, participants: list[int], use_heart_rate: bool, use_activity_info: bool
+):
     """
     Load time series data from the IEEE_Big.mat dataset for selected participants.
 
@@ -51,12 +53,14 @@ class IEEEDataset(Dataset):
         prediction_window: int,
         participants: list[int],
         use_heart_rate: bool = False,
+        use_activity_info: bool = False,
     ):
         self.datadir = datadir
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
         self.window_length = look_back_window + prediction_window
         self.use_heart_rate = use_heart_rate
+        self.use_activity_info = use_activity_info
 
         self.data = ieee_load_data(datadir, participants, use_heart_rate)
 
@@ -123,6 +127,7 @@ class IEEEDataModule(L.LightningDataModule):
         val_participants: list[int] = [15, 16, 17, 18],
         test_participants: list[int] = [19, 20, 21, 22],
         use_heart_rate: bool = False,
+        use_activity_info: bool = False,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -136,6 +141,7 @@ class IEEEDataModule(L.LightningDataModule):
         self.test_participants = test_participants
 
         self.use_heart_rate = use_heart_rate
+        self.use_activity_info = use_activity_info
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -145,6 +151,7 @@ class IEEEDataModule(L.LightningDataModule):
                 self.prediction_window,
                 self.train_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
             )
             self.val_dataset = IEEEDataset(
                 self.data_dir,
@@ -152,6 +159,7 @@ class IEEEDataModule(L.LightningDataModule):
                 self.prediction_window,
                 self.val_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = IEEEDataset(
@@ -160,6 +168,7 @@ class IEEEDataModule(L.LightningDataModule):
                 self.prediction_window,
                 self.test_participants,
                 self.use_heart_rate,
+                self.use_activity_info,
             )
 
     def train_dataloader(self):

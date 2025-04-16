@@ -1,3 +1,5 @@
+name: "usc"
+freq: 100
 datamodule:
   _target_: src.datasets.usc_dataset.USCDataModule
   data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD/"

@@ -1350,7 +1350,7 @@ class AdaMSHyper(L.LightningModule):
         opt_2.step()
         self.log_dict(
             {
-                "mse_loss": mse_loss,
+                "train_loss": mse_loss,
                 "constraint_loss": constraint_loss,
                 "total_loss": mse_loss + constraint_loss,
             },
@@ -1366,7 +1366,7 @@ class AdaMSHyper(L.LightningModule):
         mse_loss = self.loss(preds, y)
         self.log_dict(
             {
-                "mse_loss": mse_loss,
+                "val_loss": mse_loss,
                 "constraint_loss": constraint_loss,
                 "total_loss": mse_loss + constraint_loss,
             },
@@ -1377,10 +1377,3 @@ class AdaMSHyper(L.LightningModule):
         optimizer_1 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         optimizer_2 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer_1, optimizer_2
-
-
-if __name__ == "__main__":
-    model = Model()
-    input = torch.randn((1, 96, 1))
-    output, loss = model(input)
-    print(output.shape)

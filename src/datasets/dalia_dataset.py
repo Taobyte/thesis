@@ -5,13 +5,11 @@ import lightning as L
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from typing import Tuple
-from scipy import signal
 
 
 def dalia_load_data(
     path: str,
     participants: list[int],
-    window_length: int,
     use_heart_rate: bool,
     use_activity_info: bool,
 ):
@@ -20,15 +18,14 @@ def dalia_load_data(
         label = "S" + str(i)
         data_path = Path(path) / (label + ".npz")
         data = np.load(data_path)
-        series = data["ecg"] if use_heart_rate else data["bvp"]
-        assert len(series) >= window_length
+        series = data["heart_rate"][:, np.newaxis] if use_heart_rate else data["bvp"]
+
         if use_activity_info:
-            activity = data["wrist_acc"]
-            activity = np.sqrt(
-                activity[:, 0] ** 2 + activity[:, 1] ** 2, activity[:, 2] ** 2
-            )[:, np.newaxis]
-            activity_resampled = signal.resample(activity, len(series))
-            series = np.concatenate((series, activity_resampled), axis=1)
+            activity = data["acc_norm_ppg"][:, np.newaxis]
+            print(activity.shape)
+            if use_heart_rate:
+                activity = data["acc_norm_heart_rate"][:, np.newaxis]
+            series = np.concatenate((series, activity), axis=1)
 
         loaded_series.append(series)
     return loaded_series
@@ -52,7 +49,7 @@ class DaLiADataset(Dataset):
         self.target_channel_dim = 1
 
         self.data = dalia_load_data(
-            path, participants, self.window_length, use_heart_rate, use_activity_info
+            path, participants, use_heart_rate, use_activity_info
         )
         self.lengths = [len(series) - self.window_length + 1 for series in self.data]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
@@ -145,9 +142,3 @@ class DaLiADataModule(L.LightningDataModule):
         return DataLoader(
             self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
         )
-
-
-if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/dalia_preprocessed/"
-    data = dalia_load_data(datadir, [1, 2, 3], 100, False, True)
-    print(data)

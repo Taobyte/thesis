@@ -5,6 +5,22 @@ import lightning as L
 from torch.utils.data import Dataset, DataLoader
 
 
+def wildppg_load_data(
+    datadir: str, participants: list[str], use_heart_rate: bool, use_activity_info: bool
+):
+    arrays = []
+    prefix = "WildPPG_Part_"
+    for participant in participants:
+        data = np.load(datadir + prefix + participant + ".npz")
+        activity = data["activity"]
+        series = data["ecg"] if use_heart_rate else data["ppg"]
+        if use_activity_info:
+            series = np.concatenate((series, activity), axis=1)
+        arrays.append(series)
+
+    return arrays
+
+
 class WildPPGDataset(Dataset):
     def __init__(
         self,
@@ -24,25 +40,20 @@ class WildPPGDataset(Dataset):
             "p5d",
             "p9p",
         ],
-        use_activity: bool = False,
+        use_activity_info: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.arrays = []
-
-        prefix = "WildPPG_Part_"
-        for participant in participants:
-            data = np.load(datadir + prefix + participant + ".npz")
-            activity = data["activity"]
-            series = data["ecg"] if use_heart_rate else data["ppg"]
-            if use_activity:
-                series = np.concatenate((series, activity), axis=1)
-            self.arrays.append(series)
+        self.arrays = wildppg_load_data(
+            datadir, participants, use_heart_rate, use_activity_info
+        )
 
         self.lengths = [len(arr) - self.window + 1 for arr in self.arrays]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
+
+        self.base_channel_dim = 1
 
     def __len__(self) -> int:
         return self.total_length
@@ -52,7 +63,9 @@ class WildPPGDataset(Dataset):
         index = idx - self.cumulative_lengths[file_idx]
         window = self.arrays[file_idx][index : (index + self.window)]
         look_back_window = torch.from_numpy(window[: self.look_back_window])
-        prediction_window = torch.from_numpy(window[self.look_back_window :])
+        prediction_window = torch.from_numpy(
+            window[self.look_back_window :, : self.base_channel_dim]
+        )
 
         return look_back_window.float(), prediction_window.float()
 
@@ -62,6 +75,7 @@ class WildPPGDataModule(L.LightningDataModule):
         self,
         data_dir: str,
         use_heart_rate: bool = False,
+        use_activity_info: bool = False,
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
@@ -83,6 +97,7 @@ class WildPPGDataModule(L.LightningDataModule):
         super().__init__()
         self.data_dir = data_dir
         self.use_heart_rate = use_heart_rate
+        self.use_activity_info = use_activity_info
         self.batch_size = batch_size
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -99,6 +114,7 @@ class WildPPGDataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
+                self.use_activity_info,
             )
             self.val_dataset = WildPPGDataset(
                 self.data_dir,
@@ -106,6 +122,7 @@ class WildPPGDataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
+                self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = WildPPGDataset(
@@ -114,6 +131,7 @@ class WildPPGDataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
+                self.use_activity_info,
             )
 
     def train_dataloader(self):
@@ -130,7 +148,7 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/wildppg_preprocessed/"
-    dataset = WildPPGDataset(datadir, use_activity=True)
+    dataset = WildPPGDataset(datadir, use_activity_info=True)
     for i in tqdm(range(len(dataset))):
         look_back_window, prediction_window = dataset[i]
         print(look_back_window.shape)

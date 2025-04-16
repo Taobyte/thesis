@@ -1,3 +1,6 @@
+name: "chapman"
+freq: 10 # TODO
+
 datamodule:
   _target_: src.datasets.chapman_dataset.ChapmanDataModule
   data_dir: "${path.datadir}/Chapman/"

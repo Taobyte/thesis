@@ -442,8 +442,6 @@ class MultiHorizonSplitter(FlatMapTransformation):
                 pred_len = random.randint(
                     min(self.future_length), max(self.future_length)
                 )
-                print("Randomly sample past_len")
-                print(past_len)
             else:
                 past_len = random.choice(self.past_length)
                 pred_len = random.choice(self.future_length)

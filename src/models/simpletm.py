@@ -434,7 +434,7 @@ class SimpleTM(L.LightningModule):
     ):
         super().__init__()
         self.model = model
-        self.criterion = torch.nn.L1Loss() if data == "PEMS" else torch.nn.MSELoss()
+        self.criterion = torch.nn.MSELoss()
         self.save_hyperparameters()
 
     def forward(self, x):
@@ -451,20 +451,20 @@ class SimpleTM(L.LightningModule):
         loss = self.criterion(preds, y)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_step=True, on_epoch=True)
-        self.log_dict({"train_mse_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log_dict({"train_loss": loss}, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         preds = self(x)
         loss = self.criterion(preds, y)
-        self.log_dict({"val_mse_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log_dict({"val_loss": loss}, on_epoch=True, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
-        if self.hparams.lradj == "type1":
+        if self.hparams.lradj == "type1" and self.trainer.overfit_batches != 1:
             steps_per_epoch = (
                 self.trainer.estimated_stepping_batches // self.trainer.max_epochs
             )
