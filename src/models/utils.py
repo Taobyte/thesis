@@ -42,18 +42,24 @@ class BaseLightningModule(L.LightningModule):
         self.global_std = global_std
         self.evaluator = Evaluator()
 
-    def model_forward(look_back_window: torch.Tensor):
+    def model_forward(self, look_back_window: torch.Tensor):
         raise NotImplementedError
 
     def model_specific_train_step(
-        look_back_window: torch.Tensor, prediction_window: torch.Tensor
+        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> float:
         raise NotImplementedError
 
     def model_specific_val_step(
-        look_back_window: torch.Tensor, prediction_window: torch.Tensor
+        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> float:
         raise NotImplementedError
+
+    def on_fit_start(
+        self,
+    ):
+        self.global_mean = torch.Tensor(self.global_mean).to(self.device)
+        self.global_std = torch.Tensor(self.global_std).to(self.device)
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
