@@ -59,10 +59,6 @@ class BaseLightningModule(L.LightningModule):
         self.global_mean = torch.Tensor(self.global_mean).to(self.device)
         self.global_std = torch.Tensor(self.global_std).to(self.device)
 
-    def on_fit_end(self):
-        self.global_mean = self.global_mean.detach().cpu().numpy()
-        self.global_std = self.global_std.detach().cpu().numpy()
-
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
