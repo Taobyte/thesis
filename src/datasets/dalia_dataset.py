@@ -12,7 +12,7 @@ def dalia_load_data(
     participants: list[int],
     use_heart_rate: bool,
     use_activity_info: bool,
-):
+) -> Tuple[list[np.ndarray], float, float]:
     loaded_series = []
     for i in participants:
         label = "S" + str(i)
@@ -28,7 +28,12 @@ def dalia_load_data(
             series = np.concatenate((series, activity), axis=1)
 
         loaded_series.append(series)
-    return loaded_series
+
+    combined_series = np.concatenate(loaded_series, axis=0)
+    global_mean = np.mean(combined_series, axis=0)
+    global_std = np.std(combined_series, axis=0)
+
+    return loaded_series, global_mean, global_std
 
 
 class DaLiADataset(Dataset):
@@ -48,7 +53,7 @@ class DaLiADataset(Dataset):
         self.use_activity_info = use_activity_info
         self.target_channel_dim = 1
 
-        self.data = dalia_load_data(
+        self.data, self.global_mean, self.global_std = dalia_load_data(
             path, participants, use_heart_rate, use_activity_info
         )
         self.lengths = [len(series) - self.window_length + 1 for series in self.data]

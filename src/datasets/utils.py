@@ -4,30 +4,9 @@ import pickle
 import os
 
 from numpy.lib.stride_tricks import sliding_window_view
-from scipy.io import loadmat
 from scipy import signal
 from pathlib import Path
 from tqdm import tqdm
-
-
-def create_wildppg_npy_files(datadir: str):
-    wildppg_preprocessed = os.path.join(datadir, "wildppg_preprocessed")
-    os.makedirs(wildppg_preprocessed, exist_ok=True)
-
-    for mat_file in tqdm(Path(datadir).glob("*.mat")):
-        data = loadmat(mat_file)
-        acc_x = data["wrist"]["acc_x"][0][0][0]["v"][0].T
-        acc_y = data["wrist"]["acc_y"][0][0][0]["v"][0].T
-        acc_z = data["wrist"]["acc_z"][0][0][0]["v"][0].T
-        activity = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
-        ecg = data["sternum"]["ecg"][0][0][0]["v"][0].T
-        ppg = data["wrist"]["ppg_g"][0][0][0]["v"][0].T
-        np.savez(
-            wildppg_preprocessed + "/" + str(mat_file).split("\\")[-1].split(".")[0],
-            ecg=ecg,
-            ppg=ppg,
-            activity=activity,
-        )
 
 
 def create_capture24_npy_files(datadir: str):

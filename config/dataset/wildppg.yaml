@@ -5,14 +5,14 @@ freq_ppg: 128
 
 datamodule:
   _target_: src.datasets.wildppg_dataset.WildPPGDataModule
-  data_dir: "${path.datadir}/wildppg_preprocessed/"
+  data_dir: "${path.datadir}/WildPPG/"
 
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
 
-  train_participants: ['an0', 'e61', 'fex', 'k2s', 'kjd', 'l38', 'n31', 'ngh', 'p5d', 'p9p']
-  val_participants: ['qm9', 'ssx', 'trh']
-  test_participants: ['tz8', 'u7y', 'w4p']
+  train_participants: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  val_participants: [10, 11, 12]
+  test_participants: [13, 14, 15]
 
   use_heart_rate: False
   use_activity_info: False

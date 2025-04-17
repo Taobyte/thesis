@@ -33,9 +33,18 @@ def main(config: DictConfig):
         config.dataset.datamodule,
         batch_size=config.model.data.batch_size,
     )
-    model = instantiate(config.model.model)
+    datamodule.setup("fit")  # already setup for mean and std info
 
-    pl_model = instantiate(config.model.pl_model, model=model)
+    global_mean = datamodule.train_dataset.global_mean
+    global_std = datamodule.train_dataset.global_std
+
+    model = instantiate(config.model.model)
+    pl_model = instantiate(
+        config.model.pl_model,
+        model=model,
+        global_mean=global_mean,
+        global_std=global_std,
+    )
 
     callbacks = []
     if config.model.trainer.use_early_stopping:

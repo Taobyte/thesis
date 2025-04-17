@@ -17,11 +17,9 @@ import torch.nn.functional as F
 import torch.fft
 
 import lightning as L
-import torchmetrics
 
-from src.models.utils import adjust_learning_rate
+from src.models.utils import adjust_learning_rate, BaseLightningModule
 from src.losses import get_loss_fn
-from src.plotting import plot_prediction_wandb
 
 
 class PositionalEmbedding(nn.Module):
@@ -353,7 +351,7 @@ class Model(nn.Module):
         return dec_out[:, -self.prediction_window :, :]  # [B, L, D]
 
 
-class TimesNet(L.LightningModule):
+class TimesNet(BaseLightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
@@ -362,8 +360,9 @@ class TimesNet(L.LightningModule):
         lradj: str = "type1",
         beta_1: float = 0.9,
         beta_2: float = 0.999,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.lradj = lradj
         self.beta_1 = beta_1
         self.beta_2 = beta_2
@@ -371,26 +370,34 @@ class TimesNet(L.LightningModule):
         self.criterion = get_loss_fn(loss_fn)
         self.learning_rate = learning_rate
 
-        # metrics
-        self.mse_metric = torchmetrics.MeanSquaredError()
-        self.l1_metric = torchmetrics.MeanAbsoluteError()
-
     def _generate_time_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        B, L, _ = x.shape
-        return torch.zeros((B, L, 5), device=x.device).float()
+        B, T, _ = x.shape
+        return torch.zeros((B, T, 5), device=x.device).float()
 
-    def training_step(self, batch, batch_idx) -> float:
-        x, y = batch
-        time = self._generate_time_tensor(x)
-        preds = self.model(x, time)
-        preds = preds[:, :, : y.shape[2]]  # remove activity channels
-        loss = self.criterion(preds, y)
+    def model_forward(self, look_back_window):
+        time = self._generate_time_tensor(look_back_window)
+        preds = self.model(look_back_window, time)
+        return preds
+
+    def _shared_step(self, look_back_window, prediction_window) -> float:
+        preds = self.model_forward(look_back_window)
+        preds = preds[:, :, : prediction_window.shape[2]]  # remove activity channels
+        loss = self.criterion(preds, prediction_window)
+        return loss
+
+    def model_specific_train_step(self, look_back_window, prediction_window) -> float:
+        loss = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
+    def model_specific_val_step(self, look_back_window, prediction_window) -> float:
+        val_loss = self._shared_step(look_back_window, prediction_window)
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        return val_loss
+
     def on_train_epoch_end(self):
         # only update learning rate if we are not testing overfitting on a single batch
-        if self.trainer.overfit_batches > 1:
+        if self.trainer.overfit_batches != 1:
             current_lr = adjust_learning_rate(
                 optimizer=self.trainer.optimizers[0],
                 epoch=self.current_epoch + 1,
@@ -399,30 +406,6 @@ class TimesNet(L.LightningModule):
                 train_epochs=self.trainer.max_epochs,
             )
             self.log("current_lr", current_lr, on_epoch=True)
-
-    def validation_step(self, batch, batch_idx) -> float:
-        x, y = batch
-        time = self._generate_time_tensor(x)
-        preds = self.model(x, time)
-        preds = preds[:, :, : y.shape[2]]  # remove activity channels
-        val_loss = self.criterion(preds, y)
-        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        return val_loss
-
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        time = self._generate_time_tensor(x)
-        preds = self.model(x, time)
-        preds = preds[:, :, : y.shape[2]]
-        self.mse_metric(preds.reshape(-1), y.reshape(-1))
-        self.l1_metric(preds.reshape(-1), y.reshape(-1))
-
-        # log metrics
-        self.log("mse_metric", self.mse_metric, on_step=True, on_epoch=True)
-        self.log("l1_metric", self.l1_metric, on_step=True, on_epoch=True)
-
-        # plot visualizations
-        plot_prediction_wandb(x, y, preds, self.logger)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(

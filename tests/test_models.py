@@ -24,7 +24,6 @@ def _test_model(model_name: str, look_back_window: int, prediction_window: int):
     ]
     overrides += ["dataset.datamodule.use_heart_rate=True"]
     overrides += [f"model={model_name}"]
-    overrides += ["model.pl_model.learning_rate=0.0001"]
     with initialize(version_base=None, config_path="../config/"):
         config = compose(config_name="config", overrides=overrides)
     datamodule = instantiate(

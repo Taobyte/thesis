@@ -464,7 +464,7 @@ class SimpleTM(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
-        if self.hparams.lradj == "type1" and self.trainer.overfit_batches != 1:
+        if self.hparams.lradj == "type1":
             steps_per_epoch = (
                 self.trainer.estimated_stepping_batches // self.trainer.max_epochs
             )
@@ -489,11 +489,3 @@ class SimpleTM(L.LightningModule):
             return {"optimizer": optimizer, "lr_scheduler": scheduler_dict}
 
         return optimizer
-
-
-if __name__ == "__main__":
-    model = Model()
-    input = torch.randn((1, 96, 7))
-    time = torch.zeros((1, 96, 5))
-    dec_out, attns = model(input, None)
-    print(dec_out.shape)

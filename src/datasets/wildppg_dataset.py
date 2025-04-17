@@ -1,24 +1,79 @@
 import numpy as np
+import pandas as pd
 import torch
 import lightning as L
 
+from typing import Tuple
+from scipy.io import loadmat
 from torch.utils.data import Dataset, DataLoader
+
+
+def nan_helper(y):
+    """Helper to handle indices and logical indices of NaNs.
+
+    Input:
+        - y, 1d numpy array with possible NaNs
+    Output:
+        - nans, logical indices of NaNs
+        - index, a function, with signature indices= index(logical_indices),
+          to convert logical indices of NaNs to 'equivalent' indices
+    Example:
+        >>> # linear interpolation of NaNs
+        >>> nans, x= nan_helper(y)
+        >>> y[nans]= np.interp(x(nans), x(~nans), y[~nans])
+    """
+
+    return np.isnan(y), lambda z: z.nonzero()[0]
 
 
 def wildppg_load_data(
     datadir: str, participants: list[str], use_heart_rate: bool, use_activity_info: bool
-):
+) -> Tuple[list[np.ndarray], float, float]:
+    data_all = loadmat(datadir + "WildPPG.mat")
+
     arrays = []
-    prefix = "WildPPG_Part_"
     for participant in participants:
-        data = np.load(datadir + prefix + participant + ".npz")
-        activity = data["activity"]
-        series = data["ecg"] if use_heart_rate else data["ppg"]
-        if use_activity_info:
-            series = np.concatenate((series, activity), axis=1)
+        # Load PPG signal and heart rate values
+        ppg = data_all["data_ppg_wrist"][participant, 0]
+        hr = data_all["data_bpm_values"][participant][0].astype(float)
+        activity = data_all["data_imu_wrist"][participant][0]
+
+        # impute the values for hr and activity
+        hr[hr < 30] = np.nan
+        nans, x = nan_helper(hr)
+        hr[nans] = np.interp(x(nans), x(~nans), hr[~nans])
+
+        mask_activity = np.isnan(activity) | np.isinf(activity)
+        activity[mask_activity] = np.nan
+        nans, x = nan_helper(activity)
+        activity[nans] = np.interp(x(nans), x(~nans), hr[~nans])
+
+        # impute the activity values
+
+        mask_ppg = ~np.isnan(ppg).any(axis=1) & ~np.isinf(ppg).any(axis=1)
+        ppg = ppg[mask_ppg]
+        if use_heart_rate:
+            series = hr  # (W, 1)
+            if use_activity_info:
+                series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
+        else:
+            series = ppg[:, :, np.newaxis]  # shape (W, 200, 1)
+            if use_activity_info:
+                repeated_activity = np.repeat(activity, repeats=200, axis=1)[
+                    :, :, np.newaxis
+                ]  # shape (W, 200, 1)
+
+                series = np.concatenate((series, repeated_activity[mask_ppg]), axis=-1)
+
         arrays.append(series)
 
-    return arrays
+    combined_series = np.concatenate(
+        [arr.reshape(-1, arr.shape[-1]) for arr in arrays], axis=0
+    )
+    global_mean = np.mean(combined_series, axis=0)
+    global_std = np.std(combined_series, axis=0)
+
+    return arrays, global_mean, global_std
 
 
 class WildPPGDataset(Dataset):
@@ -28,40 +83,44 @@ class WildPPGDataset(Dataset):
         use_heart_rate: bool = False,
         look_back_window: int = 320,
         prediction_window: int = 128,
-        participants: list[str] = [
-            "an0",
-            "e61",
-            "fex",
-            "k2s",
-            "kjd",
-            "l38",
-            "n31",
-            "ngh",
-            "p5d",
-            "p9p",
-        ],
+        participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
         use_activity_info: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.arrays = wildppg_load_data(
+        self.arrays, self.global_mean, self.global_std = wildppg_load_data(
             datadir, participants, use_heart_rate, use_activity_info
         )
 
-        self.lengths = [len(arr) - self.window + 1 for arr in self.arrays]
+        self.base_channel_dim = 1
+        self.use_heart_rate = use_heart_rate
+        self.use_activity_info = use_activity_info
+
+        assert self.window <= 200  # window lengths of WildPPG is 200
+        if use_heart_rate:
+            self.lengths = [(len(arr) - self.window + 1) for arr in self.arrays]
+        else:
+            self.lengths = [len(arr) * (200 - self.window + 1) for arr in self.arrays]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
-
-        self.base_channel_dim = 1
 
     def __len__(self) -> int:
         return self.total_length
 
     def __getitem__(self, idx: int) -> torch.Tensor:
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
-        index = idx - self.cumulative_lengths[file_idx]
-        window = self.arrays[file_idx][index : (index + self.window)]
+        if self.use_heart_rate:
+            index = idx - self.cumulative_lengths[file_idx]
+            window = self.arrays[file_idx][index : (index + self.window)]
+        else:
+            participant_pos = idx - self.cumulative_lengths[file_idx]
+            row_index = participant_pos // (200 - self.window + 1)
+            window_pos = participant_pos % (200 - self.window + 1)
+            window = self.arrays[file_idx][row_index][
+                window_pos : window_pos + self.window
+            ]
+
         look_back_window = torch.from_numpy(window[: self.look_back_window])
         prediction_window = torch.from_numpy(
             window[self.look_back_window :, : self.base_channel_dim]

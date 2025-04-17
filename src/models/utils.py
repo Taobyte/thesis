@@ -12,6 +12,134 @@
 
 import math
 import torch
+import lightning as L
+import numpy as np
+
+
+from typing import Dict, Tuple
+
+from src.metrics import Evaluator
+from src.plotting import plot_prediction_wandb
+
+
+def z_normalization(x, global_mean: np.ndarray, global_std: np.ndarray):
+    eps = 1e-8
+    x_norm = (x - global_mean[None, None, :]) / (global_std[None, None, :] + eps)
+
+    return x_norm.float()
+
+
+def z_denormalization(x_norm, global_mean: np.ndarray, global_std: np.ndarray):
+    x_denorm = x_norm * global_std[None, None, :] + global_mean
+    return x_denorm.float()
+
+
+class BaseLightningModule(L.LightningModule):
+    def __init__(self, global_mean: np.ndarray, global_std: np.ndarray):
+        super().__init__()
+
+        self.global_mean = global_mean
+        self.global_std = global_std
+        self.evaluator = Evaluator()
+
+    def model_forward(look_back_window: torch.Tensor):
+        raise NotImplementedError
+
+    def model_specific_train_step(
+        look_back_window: torch.Tensor, prediction_window: torch.Tensor
+    ) -> float:
+        raise NotImplementedError
+
+    def model_specific_val_step(
+        look_back_window: torch.Tensor, prediction_window: torch.Tensor
+    ) -> float:
+        raise NotImplementedError
+
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+        # normalize data
+        look_back_window, prediction_window = batch
+        look_back_window_norm = z_normalization(
+            look_back_window, self.global_mean, self.global_std
+        )
+        prediction_window_norm = z_normalization(
+            prediction_window, self.global_mean, self.global_std
+        )
+
+        loss = self.model_specific_train_step(
+            look_back_window_norm, prediction_window_norm
+        )
+        return loss
+
+    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+        # normalize data
+        look_back_window, prediction_window = batch
+        look_back_window_norm = z_normalization(
+            look_back_window, self.global_mean, self.global_std
+        )
+        prediction_window_norm = z_normalization(
+            prediction_window, self.global_mean, self.global_std
+        )
+
+        loss = self.model_specific_val_step(
+            look_back_window_norm, prediction_window_norm
+        )
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        metrics = self.evaluate(batch)
+        return metrics
+
+    def on_test_epoch_start(self):
+        self.metrics_dict = {}
+        self.batch_size = []
+
+    def on_test_epoch_end(self):
+        avg_metrics = self.calculate_weighted_average(
+            self.metrics_dict, self.batch_size
+        )
+
+        import pdb
+
+        pdb.set_trace()
+
+        self.log_dict(avg_metrics, logger=True)
+
+    def evaluate(self, batch):
+        look_back_window, prediction_window = batch
+        self.batch_size.append(look_back_window.shape[0])
+
+        # Normalization
+        look_back_window_norm = z_normalization(
+            look_back_window, self.global_mean, self.global_std
+        )
+
+        # Prediction
+        preds = self.model_forward(look_back_window_norm)
+
+        # Metric Calculation
+        denormalized_preds = z_denormalization(preds, self.global_mean, self.global_std)
+        metrics = self.evaluator(prediction_window, denormalized_preds)
+        self.update_metrics(metrics)
+
+        plot_prediction_wandb(
+            look_back_window, prediction_window, denormalized_preds, self.logger
+        )
+
+        return metrics
+
+    def update_metrics(self, new_metrics: Dict):
+        prefix = "test"
+        for metric_name, metric_value in new_metrics.items():
+            metric_key = f"{prefix}_{metric_name}"
+            if metric_key not in self.metrics_dict:
+                self.metrics_dict[metric_key] = []
+            self.metrics_dict[metric_key].append(metric_value)
+
+    def calculate_weighted_average(self, metrics_dict: Dict, batch_size: list):
+        metrics = {}
+        for key, value in metrics_dict.items():
+            metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
+        return metrics
 
 
 def adjust_learning_rate(
