@@ -17,13 +17,23 @@ def main(config: DictConfig):
     # print(config)
     L.seed_everything(config.seed)
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
+
+    signal_type = "hr" if config.dataset.datamodule.use_heart_rate else "ppg"
+    activity = (
+        "activity" if config.dataset.datamodule.use_activity_info else "no_activity"
+    )
+
+    name = f"{config.dataset.name}_{config.model.name}_{signal_type}_{activity}_{config.look_back_window}_{config.prediction_window}"
+    tags = [config.dataset.name, config.model.name, signal_type, activity]
     wandb_logger = (
         WandbLogger(
+            name=name,
             config=config_dict,
             project="thesis",
             log_model=True,
             save_code=True,
             reinit=True,
+            tags=tags,
         )
         if config.use_wandb
         else DummyLogger()
