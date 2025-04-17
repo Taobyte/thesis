@@ -55,11 +55,13 @@ class BaseLightningModule(L.LightningModule):
     ) -> float:
         raise NotImplementedError
 
-    def on_fit_start(
-        self,
-    ):
+    def on_fit_start(self):
         self.global_mean = torch.Tensor(self.global_mean).to(self.device)
         self.global_std = torch.Tensor(self.global_std).to(self.device)
+
+    def on_fit_end(self):
+        self.global_mean = self.global_mean.detach().cpu().numpy()
+        self.global_std = self.global_std.detach().cpu().numpy()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
@@ -103,10 +105,6 @@ class BaseLightningModule(L.LightningModule):
         avg_metrics = self.calculate_weighted_average(
             self.metrics_dict, self.batch_size
         )
-
-        import pdb
-
-        pdb.set_trace()
 
         self.log_dict(avg_metrics, logger=True)
 

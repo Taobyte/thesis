@@ -1,4 +1,4 @@
-model_name: "GPT4TS"
+name: "GPT4TS"
 
 model:
   _target_: src.models.gpt4ts.Model

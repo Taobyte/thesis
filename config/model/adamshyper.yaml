@@ -1,5 +1,5 @@
 
-model_name: "AdaMSHyper"
+name: "AdaMSHyper"
 
 model:
   _target_: src.models.adamshyper.Model

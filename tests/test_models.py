@@ -12,8 +12,6 @@ p_w_ppg = [1 * freq, 2 * freq, 3 * freq]
 
 l_b_w_hr = [10, 15, 20]
 p_w_hr = [1, 2, 3]
-# l_b_w_hr = [10]
-# p_w_hr = [1]
 
 
 def _test_model(model_name: str, look_back_window: int, prediction_window: int):

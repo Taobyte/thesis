@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import lightning as L
 import pywt
 
+from src.models.utils import BaseLightningModule
 from math import sqrt
 from typing import Tuple
 
@@ -424,20 +425,21 @@ class Model(nn.Module):
         return dec_out, attns
 
 
-class SimpleTM(L.LightningModule):
+class SimpleTM(BaseLightningModule):
     def __init__(
         self,
         model: nn.Module,
         learning_rate: float = 0.02,
         lradj: str = "TST",
         data: str = "custom",
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
         self.criterion = torch.nn.MSELoss()
         self.save_hyperparameters()
 
-    def forward(self, x):
+    def model_forward(self, x):
         # B, T, C = x.shape
         # time = torch.zeros((B, T, 5), dtype=float)
         preds, attn = self.model(
@@ -445,19 +447,20 @@ class SimpleTM(L.LightningModule):
         )  # None works for the time embedding (see DataEmbedding_inverted)
         return preds
 
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        preds = self(x)
-        loss = self.criterion(preds, y)
+    def _shared_step(self, look_back_window, prediction_window):
+        preds = self.model_forward(look_back_window)
+        loss = self.criterion(preds, prediction_window)
+        return loss
+
+    def model_specific_train_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_step=True, on_epoch=True)
         self.log_dict({"train_loss": loss}, on_epoch=True, prog_bar=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        preds = self(x)
-        loss = self.criterion(preds, y)
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
         self.log_dict({"val_loss": loss}, on_epoch=True, prog_bar=True)
         return loss
 

@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: elastst
+  - model: timesnet
   - dataset: dalia
   - path: local
 
