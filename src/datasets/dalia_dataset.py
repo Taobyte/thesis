@@ -22,7 +22,6 @@ def dalia_load_data(
 
         if use_activity_info:
             activity = data["acc_norm_ppg"][:, np.newaxis]
-            print(activity.shape)
             if use_heart_rate:
                 activity = data["acc_norm_heart_rate"][:, np.newaxis]
             series = np.concatenate((series, activity), axis=1)
