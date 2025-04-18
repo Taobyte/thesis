@@ -1,5 +1,5 @@
 
-name: "AdaMSHyper"
+name: "adamshyper"
 
 model:
   _target_: src.models.adamshyper.Model
@@ -17,7 +17,8 @@ model:
   # dim: 10
   hyper_num: [50, 20, 10]
   inner_size: 5
-  window_size: [4,4]
+  # window_size: [4,4] does not work if look_back_window < 4
+  window_size: ${compute_square_window:${look_back_window}}
   CSCM: 'Bottleneck_Construct'
   k: 1
   # activation: 'gelu'
@@ -37,5 +38,5 @@ trainer:
   patience: 3
 
 data:
-  batch_size: 1
+  batch_size: 32
   num_workers: ${num_workers}

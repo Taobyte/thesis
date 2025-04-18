@@ -14,6 +14,8 @@ from torch_geometric.nn.inits import glorot, zeros
 from torch_geometric.utils import degree, softmax
 from torch.nn import Linear
 
+from src.models.utils import BaseLightningModule
+
 
 class ScaledDotProductAttention(nn.Module):
     """Scaled Dot-Product Attention"""
@@ -1236,7 +1238,7 @@ class multi_adaptive_hypergraoh(nn.Module):
                 self.embednod.append(nn.Embedding(self.seq_len, self.dim))
             else:
                 product = math.prod(self.window_size[:i])
-                layer_size = math.floor(self.seq_len / product)
+                layer_size = max(math.floor(self.seq_len / product), 1)
                 self.embednod.append(nn.Embedding(int(layer_size), self.dim))
 
         self.dropout = nn.Dropout(p=0.1)
@@ -1245,7 +1247,9 @@ class multi_adaptive_hypergraoh(nn.Module):
         node_num = []
         node_num.append(self.seq_len)
         for i in range(len(self.window_size)):
-            layer_size = math.floor(node_num[i] / self.window_size[i])
+            layer_size = max(
+                math.floor(node_num[i] / self.window_size[i]), 1
+            )  # added min that we have at least value 1 and not 0
             node_num.append(layer_size)
         hyperedge_all = []
 
@@ -1253,6 +1257,7 @@ class multi_adaptive_hypergraoh(nn.Module):
             hypidxc = torch.arange(self.hyper_num[i]).to(x.device)
             nodeidx = torch.arange(node_num[i]).to(x.device)
             hyperen = self.embedhy[i](hypidxc)
+
             nodeec = self.embednod[i](nodeidx)
 
             a = torch.mm(nodeec, hyperen.transpose(1, 0))
@@ -1319,7 +1324,7 @@ def get_mask(input_size, window_size):
     return all_size
 
 
-class AdaMSHyper(L.LightningModule):
+class AdaMSHyper(BaseLightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
@@ -1327,22 +1332,25 @@ class AdaMSHyper(L.LightningModule):
         loss: str = "MSE",
         lradj: str = "type1",
         use_amp: bool = False,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
 
-        self.loss = torch.nn.MSELoss()
+        self.criterion = torch.nn.MSELoss()
         self.learning_rate = learning_rate
         self.automatic_optimization = False
-        self.save_hyperparameters(ignore=["model"])
 
-    def training_step(self, batch, batch_idx) -> float:
+    def model_forward(self, look_back_window):
+        preds = self.model(look_back_window)
+        return preds
+
+    def model_specific_train_step(self, look_back_window, prediction_window):
         opt_1, opt_2 = self.configure_optimizers()
         opt_1.zero_grad()
         opt_2.zero_grad()
-        x, y = batch
-        preds, constraint_loss = self.model(x)
-        mse_loss = self.loss(preds, y)
+        preds, constraint_loss = self.model(look_back_window)
+        mse_loss = self.criterion(preds, prediction_window)
         constraint_loss = constraint_loss.abs()
         self.manual_backward(mse_loss, retain_graph=True)
         self.manual_backward(constraint_loss)
@@ -1360,10 +1368,9 @@ class AdaMSHyper(L.LightningModule):
         )
         return mse_loss
 
-    def validation_step(self, batch, batch_idx) -> float:
-        x, y = batch
-        preds, constraint_loss = self.model(x)
-        mse_loss = self.loss(preds, y)
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        preds, constraint_loss = self.model(look_back_window)
+        mse_loss = self.criterion(preds, prediction_window)
         self.log_dict(
             {
                 "val_loss": mse_loss,

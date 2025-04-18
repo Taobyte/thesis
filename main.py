@@ -1,14 +1,26 @@
+import numpy as np
 import hydra
 import yaml
+import lightning as L
+
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-
-import lightning as L
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
 
 
+def compute_square_window(seq_len, max_window=4):
+    """
+    Finds the largest equal factors [k,k] such that k*k <= seq_len.
+    Defaults to [4,4] if to valid window exists.
+    """
+    max_k = int(np.sqrt(seq_len))  # Largest possible equal factor
+    max_k = min(max_k, max_window)  # Respect user's max_window
+    return [max_k, max_k]
+
+
+OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
 
 

@@ -28,9 +28,15 @@ def _test_model(model_name: str, look_back_window: int, prediction_window: int):
         config.dataset.datamodule,
         batch_size=1,
     )
+    datamodule.setup("fit")
     model = instantiate(config.model.model)
 
-    pl_model = instantiate(config.model.pl_model, model=model)
+    pl_model = instantiate(
+        config.model.pl_model,
+        model=model,
+        global_mean=datamodule.train_dataset.global_mean,
+        global_std=datamodule.train_dataset.global_std,
+    )
     trainer = L.Trainer(
         max_epochs=max_epochs,
         overfit_batches=1,

@@ -70,8 +70,8 @@ def wildppg_load_data(
     combined_series = np.concatenate(
         [arr.reshape(-1, arr.shape[-1]) for arr in arrays], axis=0
     )
-    global_mean = np.mean(combined_series, axis=0)
-    global_std = np.std(combined_series, axis=0)
+    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
+    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
 
     return arrays, global_mean, global_std
 

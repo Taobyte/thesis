@@ -24,13 +24,13 @@ from src.plotting import plot_prediction_wandb
 
 def z_normalization(x, global_mean: np.ndarray, global_std: np.ndarray):
     eps = 1e-8
-    x_norm = (x - global_mean[None, None, :]) / (global_std[None, None, :] + eps)
+    x_norm = (x - global_mean) / (global_std + eps)
 
     return x_norm.float()
 
 
 def z_denormalization(x_norm, global_mean: np.ndarray, global_std: np.ndarray):
-    x_denorm = x_norm * global_std[None, None, :] + global_mean
+    x_denorm = x_norm * global_std + global_mean
     return x_denorm.float()
 
 
@@ -38,8 +38,9 @@ class BaseLightningModule(L.LightningModule):
     def __init__(self, global_mean: np.ndarray, global_std: np.ndarray):
         super().__init__()
 
-        self.global_mean = global_mean
-        self.global_std = global_std
+        self.register_buffer("global_mean", torch.from_numpy(global_mean).float())
+        self.register_buffer("global_std", torch.from_numpy(global_std).float())
+
         self.evaluator = Evaluator()
 
     def model_forward(self, look_back_window: torch.Tensor):
@@ -54,10 +55,6 @@ class BaseLightningModule(L.LightningModule):
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> float:
         raise NotImplementedError
-
-    def on_fit_start(self):
-        self.global_mean = torch.Tensor(self.global_mean).to(self.device)
-        self.global_std = torch.Tensor(self.global_std).to(self.device)
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data

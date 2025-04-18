@@ -12,7 +12,7 @@ def dalia_load_data(
     participants: list[int],
     use_heart_rate: bool,
     use_activity_info: bool,
-) -> Tuple[list[np.ndarray], float, float]:
+) -> Tuple[list[np.ndarray], np.ndarray, np.ndarray]:
     loaded_series = []
     for i in participants:
         label = "S" + str(i)
@@ -30,8 +30,8 @@ def dalia_load_data(
         loaded_series.append(series)
 
     combined_series = np.concatenate(loaded_series, axis=0)
-    global_mean = np.mean(combined_series, axis=0)
-    global_std = np.std(combined_series, axis=0)
+    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
+    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
 
     return loaded_series, global_mean, global_std
 

@@ -26,7 +26,7 @@ model:
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
   learning_rate: 0.02
-  lradj: 'TST'
+  lradj: 'type1'
 
 trainer: 
   max_epochs: 10
