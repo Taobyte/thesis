@@ -1342,7 +1342,7 @@ class AdaMSHyper(BaseLightningModule):
         self.automatic_optimization = False
 
     def model_forward(self, look_back_window):
-        preds = self.model(look_back_window)
+        preds, _ = self.model(look_back_window)
         return preds
 
     def model_specific_train_step(self, look_back_window, prediction_window):
@@ -1350,7 +1350,9 @@ class AdaMSHyper(BaseLightningModule):
         opt_1.zero_grad()
         opt_2.zero_grad()
         preds, constraint_loss = self.model(look_back_window)
-        mse_loss = self.criterion(preds, prediction_window)
+        mse_loss = self.criterion(
+            preds[:, :, prediction_window.shape[-1]], prediction_window
+        )
         constraint_loss = constraint_loss.abs()
         self.manual_backward(mse_loss, retain_graph=True)
         self.manual_backward(constraint_loss)
@@ -1370,7 +1372,9 @@ class AdaMSHyper(BaseLightningModule):
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds, constraint_loss = self.model(look_back_window)
-        mse_loss = self.criterion(preds, prediction_window)
+        mse_loss = self.criterion(
+            preds[:, :, : prediction_window.shape[-1]], prediction_window
+        )
         self.log_dict(
             {
                 "val_loss": mse_loss,

@@ -22,14 +22,14 @@ from src.metrics import Evaluator
 from src.plotting import plot_prediction_wandb
 
 
-def z_normalization(x, global_mean: np.ndarray, global_std: np.ndarray):
+def z_normalization(x, global_mean: torch.Tensor, global_std: torch.Tensor):
     eps = 1e-8
     x_norm = (x - global_mean) / (global_std + eps)
 
     return x_norm.float()
 
 
-def z_denormalization(x_norm, global_mean: np.ndarray, global_std: np.ndarray):
+def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tensor):
     x_denorm = x_norm * global_std + global_mean
     return x_denorm.float()
 

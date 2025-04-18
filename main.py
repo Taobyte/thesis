@@ -8,6 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 
 def compute_square_window(seq_len, max_window=4):
@@ -78,9 +79,19 @@ def main(config: DictConfig):
             )
         )
 
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        filename="last-{epoch}",
+        save_last=True,  # Saves a 'last.ckpt' file
+        save_top_k=1,  # Also saves best model if you want
+    )
+
+    callbacks.append(checkpoint_callback)
+
     trainer = L.Trainer(
         logger=wandb_logger,
         max_epochs=config.model.trainer.max_epochs,
+        callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=True,
         overfit_batches=1 if config.overfit else 0.0,
@@ -91,7 +102,7 @@ def main(config: DictConfig):
     print("End Training.")
 
     print("Start Evaluation.")
-    trainer.test(datamodule=datamodule)
+    trainer.test(ckpt_path="last", datamodule=datamodule)
     print("End Evaluation.")
 
 
