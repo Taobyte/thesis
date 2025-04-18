@@ -5,7 +5,7 @@ model:
   _target_: src.models.adamshyper.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
-  channels: ${dataset.input_channels}
+  channels: ${dataset.input_channels} 
   # dec_in: 7
   d_model: 512
   # d_ff: 128
@@ -38,5 +38,5 @@ trainer:
   patience: 3
 
 data:
-  batch_size: 32
+  batch_size: 256
   num_workers: ${num_workers}

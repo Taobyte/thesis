@@ -28,9 +28,6 @@ OmegaConf.register_new_resolver("eval", eval)
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig):
-    if os.getenv("USER") == "ckeusch":
-        os.system("module load eth_proxy")
-
     # print(config)
     L.seed_everything(config.seed)
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))

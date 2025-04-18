@@ -188,12 +188,16 @@ class Inception_Block_V1(nn.Module):
 
 def FFT_for_Period(x, k=2):
     # [B, T, C]
+
     xf = torch.fft.rfft(x, dim=1)
     # find period by amplitudes
     frequency_list = abs(xf).mean(0).mean(-1)
     frequency_list[0] = 0
-    _, top_list = torch.topk(frequency_list, k)
+    _, top_list = torch.topk(
+        frequency_list, min(k, len(frequency_list) - 1)
+    )  # added min for k to not select too many indices if we only have l_b_w = 3
     top_list = top_list.detach().cpu().numpy()
+
     period = x.shape[1] // top_list
     return period, abs(xf).mean(-1)[:, top_list]
 
@@ -224,8 +228,13 @@ class TimesBlock(nn.Module):
         period_list, period_weight = FFT_for_Period(x, self.k)
 
         res = []
-        for i in range(self.k):
+        for i in range(
+            min(self.k, len(period_list) - 1)
+        ):  # we need to loop over the length used in FFT_for_Period
             period = period_list[i]
+            import pdb
+
+            # pdb.set_trace()
             # padding
             if (self.look_back_window + self.prediction_window) % period != 0:
                 length = (
