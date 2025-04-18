@@ -23,14 +23,16 @@ from src.plotting import plot_prediction_wandb
 
 
 def z_normalization(x, global_mean: torch.Tensor, global_std: torch.Tensor):
+    B, T, C = x.shape
     eps = 1e-8
-    x_norm = (x - global_mean) / (global_std + eps)
+    x_norm = (x - global_mean[:, :, :C]) / (global_std[:, :, :C] + eps)
 
     return x_norm.float()
 
 
 def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tensor):
-    x_denorm = x_norm * global_std + global_mean
+    B, T, C = x_norm.shape
+    x_denorm = x_norm * global_std[:, :, :C] + global_mean[:, :, :C]
     return x_denorm.float()
 
 
