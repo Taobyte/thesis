@@ -1,19 +1,10 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import lightning as L
 
-from torch.nn.utils import weight_norm
-from torch import optim
-
-from ..losses import smape_loss
-from transformers import GPT2ForSequenceClassification
+from src.losses import smape_loss
 from transformers.models.gpt2.modeling_gpt2 import GPT2Model
-from transformers.models.gpt2.configuration_gpt2 import GPT2Config
-from transformers import BertTokenizer, BertModel
-from einops import rearrange
-from typing import Optional
+from src.models.utils import BaseLightningModule
 
 
 def adjust_learning_rate(
@@ -22,12 +13,15 @@ def adjust_learning_rate(
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
     if lradj == "type1":
         lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
-    if lradj == "type7":
+    elif lradj == "type7":
         lr_adjust = {epoch: learning_rate * (0.7 ** ((epoch - 1) // 1))}
-    if lradj == "type6":
+    elif lradj == "type6":
         lr_adjust = {epoch: learning_rate * (0.6 ** ((epoch - 1) // 1))}
     elif lradj == "type2":
         lr_adjust = {2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 10: 5e-7, 15: 1e-7, 20: 5e-8}
+    else:
+        lr_adjust = {epoch: learning_rate}
+
     if epoch in lr_adjust.keys():
         lr = lr_adjust[epoch]
         for param_group in optimizer.param_groups:
@@ -341,46 +335,43 @@ class Model(nn.Module):
         return dec_out
 
 
-class GPT4TS(L.LightningModule):
+class GPT4TS(BaseLightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
         learning_rate: float = 0.002,
         loss: str = "SMAPE",
         lradj: str = "type1",
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
         self.criterion = smape_loss()
         self.save_hyperparameters()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def model_forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
-        time = torch.zeros((B, T, 1))
+        time = torch.zeros((B, T, 1)).to(device=x.device)
         return self.model(x, time)
 
-    def training_step(self, batch, batch_idx):
-        x, y = batch
+    def _shared_step(self, look_back_window, prediction_window):
         mask = torch.ones_like(
-            y
+            prediction_window
         )  # the implementation of SMAPE from the paper needs a mask
-        preds = self(x)
+        preds = self.model_forward(look_back_window)
         loss = self.criterion(
-            None, None, preds, y, mask
+            None, None, preds, prediction_window, mask
         )  # we don't need look_back_window info for the SMAPE
-        self.log("train_smape_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        mask = torch.ones_like(
-            y
-        )  # the implementation of SMAPE from the paper needs a mask
-        preds = self(x)
-        loss = self.criterion(
-            None, None, preds, y, mask
-        )  # we don't need look_back_window info for the SMAPE
-        self.log("val_smape_loss", loss, on_epoch=True, prog_bar=True)
+    def model_specific_train_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True)
+        return loss
+
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
+        self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def on_train_epoch_start(self):
@@ -397,11 +388,3 @@ class GPT4TS(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
-
-
-if __name__ == "__main__":
-    model = Model(use_gpu=False)
-    input = torch.randn((1, 96, 1))
-    time = torch.zeros((1, 96, 1))
-    output = model(input, time)
-    print(output.shape)
