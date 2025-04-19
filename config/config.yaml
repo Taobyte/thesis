@@ -1,11 +1,11 @@
 defaults:
   - _self_
-  - model: adamshyper
+  - model: elastst
   - dataset: dalia
   - path: local
 
 seed: 123
-use_wandb: True
+use_wandb: False
 overfit: True
 num_workers: 0
 look_back_window: 3

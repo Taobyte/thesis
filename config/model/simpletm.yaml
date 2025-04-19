@@ -1,4 +1,4 @@
-name: "SimpleTM"
+name: "simpletm"
 
 model:
   _target_: src.models.simpletm.Model

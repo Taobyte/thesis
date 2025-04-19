@@ -15,9 +15,7 @@ from typing import List, Union, Optional, Callable, Tuple
 
 import lightning.pytorch as pl
 import sys
-
-from src.datasets.elastst.data_wrapper import ProbTSBatchData
-from src.datasets.elastst.data_utils.data_scaler import Scaler, IdentityScaler
+from src.models.utils import BaseLightningModule
 
 
 class Time_Encoder(nn.Module):
@@ -636,81 +634,6 @@ def weighted_average(
         ) / sum_weights
     else:
         return x.mean(dim=dim) if dim else x
-
-
-class TemporalScaler(Scaler):
-    def __init__(self, minimum_scale: float = 1e-10, time_first: bool = True):
-        """
-        The ``TemporalScaler`` computes a per-item scale according to the average
-        absolute value over time of each item. The average is computed only among
-        the observed values in the data tensor, as indicated by the second
-        argument. Items with no observed data are assigned a scale based on the
-        global average.
-
-        Args:
-            minimum_scale: default scale that is used if the time series has only zeros.
-            time_first: if True, the input tensor has shape (N, T, C), otherwise (N, C, T).
-        """
-        super().__init__()
-        self.scale = None
-        self.minimum_scale = torch.tensor(minimum_scale)
-        self.time_first = time_first
-
-    def fit(self, data: torch.Tensor, observed_indicator: torch.Tensor = None):
-        """
-        Fit the scaler to the data.
-
-        Args:
-            data: tensor of shape (N, T, C) if ``time_first == True`` or (N, C, T)
-                if ``time_first == False`` containing the data to be scaled
-
-            observed_indicator: observed_indicator: binary tensor with the same shape as
-                ``data``, that has 1 in correspondence of observed data points,
-                and 0 in correspondence of missing data points.
-
-        Note:
-            Tensor containing the scale, of shape (N, 1, C) or (N, C, 1).
-        """
-        if self.time_first:
-            dim = -2
-        else:
-            dim = -1
-
-        if observed_indicator is None:
-            observed_indicator = torch.ones_like(data)
-
-        # These will have shape (N, C)
-        num_observed = observed_indicator.sum(dim=dim)
-        sum_observed = (data.abs() * observed_indicator).sum(dim=dim)
-
-        # First compute a global scale per-dimension
-        total_observed = num_observed.sum(dim=0)
-        denominator = torch.max(total_observed, torch.ones_like(total_observed))
-        default_scale = sum_observed.sum(dim=0) / denominator
-
-        # Then compute a per-item, per-dimension scale
-        denominator = torch.max(num_observed, torch.ones_like(num_observed))
-        scale = sum_observed / denominator
-
-        # Use per-batch scale when no element is observed
-        # or when the sequence contains only zeros
-        scale = torch.where(
-            sum_observed > torch.zeros_like(sum_observed),
-            scale,
-            default_scale * torch.ones_like(num_observed),
-        )
-
-        self.scale = torch.max(scale, self.minimum_scale).unsqueeze(dim=dim).detach()
-
-    def transform(self, data):
-        return data / self.scale.to(data.device)
-
-    def fit_transform(self, data, observed_indicator=None):
-        self.fit(data, observed_indicator)
-        return self.transform(data)
-
-    def inverse_transform(self, data):
-        return data * self.scale.to(data.device)
 
 
 class InstanceNorm(nn.Module):
@@ -1501,7 +1424,7 @@ class Model(Forecaster):
         for p in self.l_patch_size:
             new_pred_len = self.check_divisibility(new_pred_len, p)
 
-        look_back_window, prediction_window = batch_data
+        look_back_window, _ = batch_data
         past_target = look_back_window
         B, _, K = look_back_window.shape
         # B, _, K = batch_data.past_target_cdf.shape
@@ -1514,7 +1437,7 @@ class Model(Forecaster):
 
         # future_observed_values is the mask indicate whether there is a value in a position
         future_observed_values = torch.zeros([B, new_pred_len, K]).to(
-            prediction_window.device
+            look_back_window.device
         )
 
         # pred_len = batch_data.future_observed_values.shape[1]
@@ -1522,7 +1445,7 @@ class Model(Forecaster):
 
         # target placeholder
         future_placeholder = torch.zeros([B, new_pred_len, K]).to(
-            prediction_window.device
+            look_back_window.device
         )
 
         x, pred_list = self.model(
@@ -1551,7 +1474,7 @@ class Model(Forecaster):
         # observed_values = batch_data.future_observed_values
         observed_values = torch.ones_like(prediction_window)
 
-        loss = self.loss_fn(target, predict)
+        loss = self.loss_fn(target, predict[:, :, : target.shape[-1]])
 
         loss = self.get_weighted_loss(observed_values, loss, reduce=reduce)
 
@@ -1599,37 +1522,33 @@ def get_weights(sampling_weight_scheme, max_hor):
     return torch.tensor(w)
 
 
-class ElasTST(pl.LightningModule):
+class ElasTST(BaseLightningModule):
     def __init__(
         self,
         model: Forecaster,
-        scaler: Scaler = None,
-        train_pred_len_list: list = None,
-        num_samples: int = 100,
+        prediction_length: list = None,
         learning_rate: float = 1e-3,
         load_from_ckpt: str = None,
         sampling_weight_scheme: str = "none",
         **kwargs,
     ):
-        super().__init__()
-        self.num_samples = num_samples
+        super().__init__(**kwargs)
         self.learning_rate = learning_rate
         self.load_from_ckpt = load_from_ckpt
-        self.train_pred_len_list = train_pred_len_list
+        self.prediction_length = prediction_length
         self.forecaster = model
 
-        self.scaler = IdentityScaler()
-
-        # init the parapemetr for sampling
         self.sampling_weight_scheme = sampling_weight_scheme
         print(f"sampling_weight_scheme: {sampling_weight_scheme}")
-        # self.save_hyperparameters()
 
-    def training_forward(self, batch_data):
-        # batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
-        # batch_data.future_target_cdf = self.scaler.transform(
-        #     batch_data.future_target_cdf
-        # )
+    def model_forward(self, look_back_window):
+        preds = self.forecaster.forward(
+            (look_back_window, None), self.prediction_length
+        )
+        return preds
+
+    def _shared_step(self, look_back_window, prediction_window):
+        batch_data = (look_back_window, prediction_window)
         loss = self.forecaster.loss(batch_data)
 
         if len(loss.shape) > 1:
@@ -1638,57 +1557,16 @@ class ElasTST(pl.LightningModule):
                 loss_weights.detach().to(loss.device).unsqueeze(0).unsqueeze(-1) * loss
             ).sum(dim=1)
             loss = loss.mean()
-
         return loss
 
-    def training_step(self, batch, batch_idx):
-        # batch_data = ProbTSBatchData(batch, self.device)
-        batch_data = batch
-        loss = self.training_forward(batch_data)
+    def model_specific_train_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, prog_bar=True, logger=True)
-        return loss
 
-    def evaluate(self, batch, stage="", dataloader_idx=None):
-        # batch_data = ProbTSBatchData(batch, self.device)
-        batch_data = batch
-        pred_len = batch_data.future_target_cdf.shape[1]
-        orin_past_data = batch_data.past_target_cdf[:]
-        orin_future_data = batch_data.future_target_cdf[:]
-
-        norm_past_data = self.scaler.transform(batch_data.past_target_cdf)
-        norm_future_data = self.scaler.transform(batch_data.future_target_cdf)
-        self.batch_size.append(orin_past_data.shape[0])
-
-        batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
-        forecasts = self.forecaster.forecast(batch_data, self.num_samples)[
-            :, :, :pred_len
-        ]
-
-        # Calculate denorm metrics
-        denorm_forecasts = self.scaler.inverse_transform(forecasts)
-        # TODO: calculate MSE, L1 and cross correlation metric
-        return None
-
-    def validation_step(self, batch, batch_idx, dataloader_idx=None):
-        # metrics = self.evaluate(batch, stage="val", dataloader_idx=dataloader_idx)
-        return 1  # TODO
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        loss = self._shared_step(look_back_window, prediction_window)
+        self.log("val_loss", loss, on_step=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
-
-
-if __name__ == "__main__":
-    model = Model(
-        target_dim=96,
-        context_length=96,
-        prediction_length=720,
-        freq="h",
-        lags_list=[64],
-    )
-
-    module = ElasTST(model)
-    input = torch.randn((1, 96, 1))
-    output = model(input, 720)
-
-    (output.shape)
