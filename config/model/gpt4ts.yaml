@@ -29,4 +29,4 @@ trainer:
   use_early_stopping: False
 
 data:
-  batch_size: 256
+  batch_size: 32

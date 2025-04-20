@@ -347,7 +347,7 @@ class GPT4TS(BaseLightningModule):
         super().__init__(**kwargs)
         self.model = model
         self.criterion = smape_loss()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["model"])
 
     def model_forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
