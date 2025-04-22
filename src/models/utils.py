@@ -36,6 +36,20 @@ def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tenso
     return x_denorm.float()
 
 
+def local_z_norm(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    mean = x.mean(dim=1, keepdim=True)
+    std = x.std(dim=1, keepdim=True)
+    x_norm = (x - mean) / (std + 1e-8)
+    return x_norm, mean, std
+
+
+def local_z_denorm(
+    x_norm: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
+) -> torch.Tensor:
+    x_denorm = x_norm * std + mean
+    return x_denorm
+
+
 class BaseLightningModule(L.LightningModule):
     def __init__(self, global_mean: np.ndarray, global_std: np.ndarray):
         super().__init__()

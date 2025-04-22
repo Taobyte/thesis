@@ -5,8 +5,83 @@ import os
 
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal
+from scipy.io import loadmat
 from pathlib import Path
 from tqdm import tqdm
+
+
+def create_ieee_npz_files(datadir: str):
+    ieee_preprocessed = os.path.join(datadir, "ieee_preprocessed")
+    os.makedirs(ieee_preprocessed, exist_ok=True)
+    signal_files = Path(datadir).glob("*[12].mat")
+    bpm_files = Path(datadir).glob("*_BPMtrace.mat")
+
+    fs = 125  # sampling rate
+    window_duration = 8
+    overlap_duration = 6
+
+    from scipy.signal import butter, filtfilt
+    from sklearn.preprocessing import MinMaxScaler
+
+    def filter_butter(x, fs):
+        f1 = 0.5
+        f2 = 4
+        Wn = [f1, f2]
+        N = 4
+        b, a = butter(N, Wn, btype="bandpass", fs=fs)
+        filtered = filtfilt(b, a, x)
+        # Normalize to range [0, 1]
+        scaler = MinMaxScaler()
+        filtered = scaler.fit_transform(filtered.reshape(-1, 1)).flatten()
+        return filtered
+
+    def preprocess_signal(signal: np.ndarray):
+        # create windows
+        windows = sliding_window_view(signal, window_shape=window_duration * fs)[
+            :: (window_duration - overlap_duration) * fs
+        ]
+        # downsample from 125Hz => 25Hz
+        downsampled_windows = windows[:, ::5]
+
+        return downsampled_windows
+
+    participant_signals = []
+    participant_bpms = []
+    print("Start processing IEEE files...")
+    for signal_file, bpm_file in zip(signal_files, bpm_files):
+        signals = loadmat(signal_file)["sig"]
+        bpm = loadmat(bpm_file)
+
+        ppg1 = filter_butter(signals[1], fs)
+        ppg2 = filter_butter(signals[2], fs)
+        acc_x = filter_butter(signals[3], fs)
+        acc_y = filter_butter(signals[4], fs)
+        acc_z = filter_butter(signals[5], fs)
+
+        avg_ppg = (ppg1 + ppg2) / 2
+        acc = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
+        ppg = preprocess_signal(avg_ppg)[:, :, np.newaxis]  # add concatenation axis
+        acc = preprocess_signal(acc)[:, :, np.newaxis]
+        combined_signal = np.concatneate((ppg, acc), axis=-1)  # Shape (W, T, 2)
+
+        signal_data = combined_signal[:-1]
+        if len(signal_data) != len(bpm):
+            signal_data = combined_signal[:]
+
+        assert len(signal_data) == len(bpm)
+
+        participant_signals.append(signal_data[np.newaxis, :, :, :])
+        participant_bpms.append(bpm[np.newaxis, :, :])
+
+    stacked_signals = np.concatenate(participant_signals, axis=0)
+    stacked_bpms = np.concatenate(participant_bpms, axis=0)
+
+    np.savez(
+        ieee_preprocessed + "/" + "IEEE_big",
+        signals=stacked_signals,
+        bpms=stacked_bpms,
+    )
+    print("End processing IEEE files.")
 
 
 def create_capture24_npy_files(datadir: str):
@@ -17,8 +92,10 @@ def create_capture24_npy_files(datadir: str):
     print("Start processing capture24 files.")
     for csv_file in tqdm(csv_files):
         df = pd.read_csv(csv_file)
-        df["annotation"] = df["annotation"].str.split().str[-1].astype(float)
         df = df.drop(["time"], axis=1)
+        df = df.iloc[::4]  # downsample by factor of 4 | 100Hz => 25Hz
+        df["annotation"] = df["annotation"].str.split().str[-1].astype(float)
+        df["annotation"] = df["annotation"].interpolate()
         np.save(
             capture24_preprocessed + "/" + str(csv_file).split(".")[0].split("\\")[-1],
             df.to_numpy(),
