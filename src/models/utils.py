@@ -36,9 +36,12 @@ def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tenso
     return x_denorm.float()
 
 
-def local_z_norm(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    mean = x.mean(dim=1, keepdim=True)
-    std = x.std(dim=1, keepdim=True)
+def local_z_norm(
+    x: torch.Tensor, mean: torch.Tensor = None, std: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if mean is None or std is None:
+        mean = x.mean(dim=1, keepdim=True)
+        std = x.std(dim=1, keepdim=True)
     x_norm = (x - mean) / (std + 1e-8)
     return x_norm, mean, std
 
@@ -75,12 +78,17 @@ class BaseLightningModule(L.LightningModule):
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
+        """
         look_back_window_norm = z_normalization(
             look_back_window, self.global_mean, self.global_std
         )
         prediction_window_norm = z_normalization(
             prediction_window, self.global_mean, self.global_std
         )
+        """
+
+        look_back_window_norm, mean, std = local_z_norm(look_back_window)
+        prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
 
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
@@ -90,12 +98,17 @@ class BaseLightningModule(L.LightningModule):
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
+        """
         look_back_window_norm = z_normalization(
             look_back_window, self.global_mean, self.global_std
         )
         prediction_window_norm = z_normalization(
             prediction_window, self.global_mean, self.global_std
         )
+        """
+
+        look_back_window_norm, mean, std = local_z_norm(look_back_window)
+        prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
 
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
@@ -122,15 +135,19 @@ class BaseLightningModule(L.LightningModule):
         self.batch_size.append(look_back_window.shape[0])
 
         # Normalization
+        """
         look_back_window_norm = z_normalization(
             look_back_window, self.global_mean, self.global_std
         )
+        """
+        look_back_window_norm, mean, std = local_z_norm(look_back_window)
 
         # Prediction
         preds = self.model_forward(look_back_window_norm)
 
         # Metric Calculation
-        denormalized_preds = z_denormalization(preds, self.global_mean, self.global_std)
+        # denormalized_preds = z_denormalization(preds, self.global_mean, self.global_std)
+        denormalized_preds = local_z_denorm(preds, mean, std)
         metrics = self.evaluator(prediction_window, denormalized_preds)
         self.update_metrics(metrics)
 
