@@ -1,7 +1,6 @@
 name: "wildppg"
-freq_ecg: 128
 freq_acc: 200
-freq_ppg: 128 
+freq_ppg: 25 # in the paper, they downsample the signal
 
 datamodule:
   _target_: src.datasets.wildppg_dataset.WildPPGDataModule
