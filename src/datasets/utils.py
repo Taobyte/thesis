@@ -45,12 +45,10 @@ def create_ieee_npz_files(datadir: str):
 
         return downsampled_windows
 
-    participant_signals = []
-    participant_bpms = []
     print("Start processing IEEE files...")
-    for signal_file, bpm_file in zip(signal_files, bpm_files):
+    for i, (signal_file, bpm_file) in enumerate(zip(signal_files, bpm_files)):
         signals = loadmat(signal_file)["sig"]
-        bpm = loadmat(bpm_file)
+        bpm = loadmat(bpm_file)["BPM0"]
 
         ppg1 = filter_butter(signals[1], fs)
         ppg2 = filter_butter(signals[2], fs)
@@ -62,25 +60,28 @@ def create_ieee_npz_files(datadir: str):
         acc = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
         ppg = preprocess_signal(avg_ppg)[:, :, np.newaxis]  # add concatenation axis
         acc = preprocess_signal(acc)[:, :, np.newaxis]
-        combined_signal = np.concatneate((ppg, acc), axis=-1)  # Shape (W, T, 2)
 
-        signal_data = combined_signal[:-1]
-        if len(signal_data) != len(bpm):
-            signal_data = combined_signal[:]
+        ppg_final = ppg[:-1]
+        acc_final = acc[:-1]
+        if len(ppg_final) != len(bpm):
+            ppg_final = ppg[:]
+            acc_final = acc[:]
 
-        assert len(signal_data) == len(bpm)
+        assert len(ppg_final) == len(acc_final), (
+            f"signal_length: {len(ppg)} | bpm_length: {len(bpm)}"
+        )
 
-        participant_signals.append(signal_data[np.newaxis, :, :, :])
-        participant_bpms.append(bpm[np.newaxis, :, :])
+        assert len(ppg) == len(bpm), (
+            f"signal_length: {len(ppg)} | bpm_length: {len(bpm)}"
+        )
 
-    stacked_signals = np.concatenate(participant_signals, axis=0)
-    stacked_bpms = np.concatenate(participant_bpms, axis=0)
+        np.savez(
+            ieee_preprocessed + "/" + f"IEEE_{i}",
+            ppg=ppg_final,
+            acc=acc_final,
+            bpms=bpm,
+        )
 
-    np.savez(
-        ieee_preprocessed + "/" + "IEEE_big",
-        signals=stacked_signals,
-        bpms=stacked_bpms,
-    )
     print("End processing IEEE files.")
 
 
@@ -184,11 +185,13 @@ def ucihar_preprocess(datadir: str):
 if __name__ == "__main__":
     # path = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
     # create_capture24_npy_files(path)
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
-    create_dalia_npy_files(datadir)
+    # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
+    # create_dalia_npy_files(datadir)
     # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data"
     # create_wildppg_npy_files(datadir)
     # datadir = (
     #      "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
     # )
     # ucihar_preprocess(datadir)
+    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
+    create_ieee_npz_files(datadir)

@@ -39,18 +39,22 @@ def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tenso
 def local_z_norm(
     x: torch.Tensor, mean: torch.Tensor = None, std: torch.Tensor = None
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    _, _, C = (
+        x.shape
+    )  # we need channel dim, because channel dims vary for look_back_window and prediction_window
     if mean is None or std is None:
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True)
-    x_norm = (x - mean) / (std + 1e-8)
-    return x_norm, mean, std
+    x_norm = (x - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
+    return x_norm.float(), mean.float(), std.float()
 
 
 def local_z_denorm(
     x_norm: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
 ) -> torch.Tensor:
-    x_denorm = x_norm * std + mean
-    return x_denorm
+    _, _, C = x_norm.shape
+    x_denorm = x_norm * std[:, :, :C] + mean[:, :, :C]
+    return x_denorm.float()
 
 
 class BaseLightningModule(L.LightningModule):

@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import lightning as L
 from torch.utils.data import DataLoader, Dataset
-from scipy.io import loadmat
 
 
 def ieee_load_data(
@@ -31,18 +30,33 @@ def ieee_load_data(
             (each of shape (T,)) representing different channels/signals.
     """
 
-    data = loadmat(datadir + "IEEE_Big.mat")["whole_dataset"]
-    if use_heart_rate:
-        return [data[i - 1][1].squeeze(-1) for i in participants]
-    else:
-        loaded_series = []
-        for i in participants:
-            arr = data[i - 1][0]
-            participant_series = []
-            for j in range(len(arr)):
-                participant_series.append(arr[j, :])  # (200,)
-            loaded_series.append(participant_series)
-        return loaded_series
+    loaded_series = []
+    for participant in participants:
+        data = np.load(datadir + f"IEEE_{participant}.npz")
+        ppg = data["ppg"]  # shape (W, 200, 1)
+        acc = data["acc"]  # shape (W, 200, 1)
+        bpm = data["bpms"]  # shape (W, 1)
+
+        if use_heart_rate and use_activity_info:
+            avg_acc = np.mean(acc, axis=1, keepdims=True).squeeze(-1)  # shape (W, 1)
+            series = np.concatenate((bpm, avg_acc), axis=1)
+        elif use_heart_rate and not use_activity_info:
+            series = bpm
+        elif not use_heart_rate and use_activity_info:
+            series = np.concatenate((ppg, acc), axis=2)
+        else:
+            series = ppg
+
+        loaded_series.append(series)
+
+    combined_series = np.concatenate(
+        [arr.reshape(-1, 1) for arr in loaded_series], axis=0
+    )
+
+    global_mean = np.mean(combined_series, axis=0, keepdims=True)
+    global_std = np.std(combined_series, axis=0, keepdims=True)
+
+    return loaded_series, global_mean, global_std
 
 
 class IEEEDataset(Dataset):
@@ -61,8 +75,11 @@ class IEEEDataset(Dataset):
         self.window_length = look_back_window + prediction_window
         self.use_heart_rate = use_heart_rate
         self.use_activity_info = use_activity_info
+        self.base_channel_dim = 1
 
-        self.data = ieee_load_data(datadir, participants, use_heart_rate)
+        self.data, self.global_mean, self.global_std = ieee_load_data(
+            datadir, participants, use_heart_rate, use_activity_info
+        )
 
         assert self.window_length <= 200, (
             f"window_length: {self.window_length}: IEEE for PPG contains only time series of length 200!"
@@ -109,8 +126,10 @@ class IEEEDataset(Dataset):
             window_pos + self.look_back_window : window_pos + self.window_length
         ]
 
-        look_back_window = torch.from_numpy(look_back_window[:, np.newaxis]).float()
-        prediction_window = torch.from_numpy(prediction_window[:, np.newaxis]).float()
+        look_back_window = torch.from_numpy(look_back_window).float()
+        prediction_window = torch.from_numpy(
+            prediction_window[:, : self.base_channel_dim]
+        ).float()
 
         return look_back_window, prediction_window
 

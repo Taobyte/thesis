@@ -24,7 +24,7 @@ dataset_params = {
     "ieee": {
         "base_dim": 1,
         "heart_rate": True,
-        "activity": False,
+        "activity": True,
         "is_categorical": None,
         "n_activities": None,
     },  # PPG or heart rate
