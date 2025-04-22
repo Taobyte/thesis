@@ -7,29 +7,6 @@ from torch.utils.data import DataLoader, Dataset
 def ieee_load_data(
     datadir: str, participants: list[int], use_heart_rate: bool, use_activity_info: bool
 ):
-    """
-    Load time series data from the IEEE_Big.mat dataset for selected participants.
-
-    Parameters
-    ----------
-    datadir : str
-        Path to the directory containing the "IEEE_Big.mat" file.
-    participants : list[int]
-        List of participant IDs (1-based indices) to load data for.
-    use_heart_rate : bool
-        If True, loads heart rate time series directly for each participant.
-        If False, loads multichannel data (e.g., multiple signals per participant).
-
-    Returns
-    -------
-    list
-        - If `use_heart_rate` is True:
-            A list of NumPy arrays, one per participant, each of shape (T,), where T is the time series length.
-        - If `use_heart_rate` is False:
-            A list of lists of NumPy arrays. Each inner list corresponds to one participant and contains multiple time series arrays
-            (each of shape (T,)) representing different channels/signals.
-    """
-
     loaded_series = []
     for participant in participants:
         data = np.load(datadir + f"IEEE_{participant}.npz")
@@ -53,8 +30,8 @@ def ieee_load_data(
         [arr.reshape(-1, 1) for arr in loaded_series], axis=0
     )
 
-    global_mean = np.mean(combined_series, axis=0, keepdims=True)
-    global_std = np.std(combined_series, axis=0, keepdims=True)
+    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
+    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
 
     return loaded_series, global_mean, global_std
 
@@ -204,9 +181,3 @@ class IEEEDataModule(L.LightningDataModule):
         return DataLoader(
             self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
         )
-
-
-if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/"
-    data = ieee_load_data(datadir, [1, 2, 3], False)
-    print(data[0][0].shape)

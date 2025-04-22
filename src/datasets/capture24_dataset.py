@@ -125,19 +125,3 @@ class Capture24DataModule(L.LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
-
-    data_module = Capture24DataModule(datadir)
-    data_module.setup("fit")
-
-    """
-    dataset = Capture24Dataset(datadir, "train", [1], [2], [3])
-
-    n = len(dataset)
-    choices = np.random.choice(n, size=(100,), replace=False)
-    for i in choices:
-        x, y = dataset[i]
-    """

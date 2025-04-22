@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
-
+import zipfile
+import gzip
+import shutil
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal
 from scipy.io import loadmat
@@ -88,19 +90,26 @@ def create_ieee_npz_files(datadir: str):
 def create_capture24_npy_files(datadir: str):
     capture24_preprocessed = os.path.join(datadir, "capture24_preprocessed")
     os.makedirs(capture24_preprocessed, exist_ok=True)
-    csv_files = Path(datadir).glob("P*.csv")
+
+    zip_files = Path(datadir).glob("P*.csv.gz")
 
     print("Start processing capture24 files.")
-    for csv_file in tqdm(csv_files):
-        df = pd.read_csv(csv_file)
+    for zip_file in tqdm(zip_files):
+        name = str(zip_file).split(".")[0].split("\\")[-1]
+        csv_file_path = datadir + name + ".csv"
+        with gzip.open(f"{csv_file_path}.gz", "rb") as f_in:
+            with open(csv_file_path, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        df = pd.read_csv(csv_file_path)
         df = df.drop(["time"], axis=1)
         df = df.iloc[::4]  # downsample by factor of 4 | 100Hz => 25Hz
         df["annotation"] = df["annotation"].str.split().str[-1].astype(float)
         df["annotation"] = df["annotation"].interpolate()
         np.save(
-            capture24_preprocessed + "/" + str(csv_file).split(".")[0].split("\\")[-1],
+            capture24_preprocessed + "/" + name,
             df.to_numpy(),
         )
+        os.remove(csv_file_path)
 
     print("Finished processing capture24 files.")
 
@@ -183,8 +192,8 @@ def ucihar_preprocess(datadir: str):
 
 
 if __name__ == "__main__":
-    # path = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
-    # create_capture24_npy_files(path)
+    path = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
+    create_capture24_npy_files(path)
     # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
     # create_dalia_npy_files(datadir)
     # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data"
@@ -193,5 +202,5 @@ if __name__ == "__main__":
     #      "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
     # )
     # ucihar_preprocess(datadir)
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
-    create_ieee_npz_files(datadir)
+    # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
+    # create_ieee_npz_files(datadir)
