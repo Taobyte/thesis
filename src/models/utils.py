@@ -120,7 +120,7 @@ class BaseLightningModule(L.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        metrics = self.evaluate(batch)
+        metrics = self.evaluate(batch, batch_idx)
         return metrics
 
     def on_test_epoch_start(self):
@@ -134,7 +134,7 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
-    def evaluate(self, batch):
+    def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch
         self.batch_size.append(look_back_window.shape[0])
 
@@ -156,7 +156,12 @@ class BaseLightningModule(L.LightningModule):
         self.update_metrics(metrics)
 
         plot_prediction_wandb(
-            look_back_window, prediction_window, denormalized_preds, self.logger
+            look_back_window,
+            prediction_window,
+            denormalized_preds,
+            self.logger,
+            metrics,
+            batch_idx,
         )
 
         return metrics

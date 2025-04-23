@@ -1,5 +1,5 @@
 name: "ieee"
-freq: 125
+freq: 25 # preprocessed from 125Hz => 25Hz
 datamodule:
   _target_: src.datasets.ieee_dataset.IEEEDataModule
   data_dir: "${path.datadir}/IEEEPPG/Training_data/Training_data/ieee_preprocessed/"

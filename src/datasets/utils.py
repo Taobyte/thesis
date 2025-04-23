@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
-import zipfile
 import gzip
 import shutil
+
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal
 from scipy.io import loadmat
