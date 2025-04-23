@@ -405,16 +405,14 @@ class TimesNet(BaseLightningModule):
         return val_loss
 
     def on_train_epoch_end(self):
-        # only update learning rate if we are not testing overfitting on a single batch
-        if self.trainer.overfit_batches != 1:
-            current_lr = adjust_learning_rate(
-                optimizer=self.trainer.optimizers[0],
-                epoch=self.current_epoch + 1,
-                lradj=self.lradj,
-                learning_rate=self.learning_rate,
-                train_epochs=self.trainer.max_epochs,
-            )
-            self.log("current_lr", current_lr, on_epoch=True)
+        current_lr = adjust_learning_rate(
+            optimizer=self.trainer.optimizers[0],
+            epoch=self.current_epoch + 1,
+            lradj=self.lradj,
+            learning_rate=self.learning_rate,
+            train_epochs=self.trainer.max_epochs,
+        )
+        self.log("current_lr", current_lr, on_epoch=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(

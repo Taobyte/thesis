@@ -290,7 +290,7 @@ def deserialize_str(
 
 def llama2_model_string(model_size, chat):
     chat = "chat-" if chat else ""
-    return f"meta-llama/Llama-2-{model_size.lower()}-{chat}hf"
+    return f"C:/Users/cleme/.llama/checkpoints/Llama-2-{model_size.lower()}"
 
 
 def get_tokenizer(model):
@@ -1287,7 +1287,7 @@ if __name__ == "__main__":
 
     data = np.load(datadir + "/P001.npy")
     data = data[:, :3]  # take only x, y, z
-    data = np.linalg.norm(data, axis=1)
+    data = np.linalg.norm(data, axis=1)[:1000]
     length = len(data)
     train = data[: int(length * 0.8)]
     test = data
