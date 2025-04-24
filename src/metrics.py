@@ -9,6 +9,7 @@ class Evaluator:
     def get_sequence_metrics(self, targets, preds):
         metrics = {
             "MSE": mse(targets, preds),
+            "MAE": mae(targets, preds),
             "abs_error": abs_error(targets, preds),
             "abs_target_sum": abs_target_sum(targets),
             "abs_target_mean": abs_target_mean(targets),
@@ -108,6 +109,10 @@ def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
     mean_corr = np.mean(corr)  # scalar
 
     return mean_corr
+
+
+def mae(target: np.ndarray, forecast: np.ndarray) -> float:
+    return np.mean(np.abs(target - forecast))
 
 
 def mse(target: np.ndarray, forecast: np.ndarray) -> float:

@@ -290,7 +290,7 @@ def deserialize_str(
 
 def llama2_model_string(model_size, chat):
     chat = "chat-" if chat else ""
-    return f"C:/Users/cleme/.llama/checkpoints/Llama-2-{model_size.lower()}"
+    return "C:/Users/cleme/ETH/Master/Thesis/llama_weights/"
 
 
 def get_tokenizer(model):

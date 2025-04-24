@@ -4,11 +4,15 @@ defaults:
   - dataset: dalia
   - path: local
 
+# most important params
+look_back_window: 3
+prediction_window: 1
+use_heart_rate: False
+use_activity_info: False
+
 seed: 123
 use_wandb: False
 overfit: True
 num_workers: 0
-look_back_window: 3
-prediction_window: 1
-use_activity_info: False
+
 

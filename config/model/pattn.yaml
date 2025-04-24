@@ -12,7 +12,7 @@ model:
 pl_model: 
   _target_: src.models.pattn.PAttn
   learning_rate: 0.00005
-  lradj: 'type4'
+  lradj: 'type1'
   tmax: 20
 
 trainer: 

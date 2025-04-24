@@ -8,11 +8,11 @@ datamodule:
   train_participants: [0, 1, 2, 3, 4, 5, 6, 7]
   val_participants: [8, 9]
   test_participants: [10, 11]
-  use_heart_rate: False
+  use_heart_rate: ${use_heart_rate}
   use_activity_info: ${use_activity_info}
   batch_size: 32
   num_workers: ${num_workers}
 
 base_channel_dim: 1
-activity_channel_dim: 0
+activity_channel_dim: 1
 input_channels: ${dataset.base_channel_dim}
