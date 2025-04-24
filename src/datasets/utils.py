@@ -96,7 +96,8 @@ def create_capture24_npy_files(datadir: str):
 
     print("Start processing capture24 files.")
     for zip_file in tqdm(zip_files):
-        name = str(zip_file).split(".")[0].split("\\")[-1]
+        name = zip_file.stem  # Returns 'P023.csv' (but we want 'P023')
+        name = zip_file.stem.split(".")[0]  # Returns 'P023'
         csv_file_path = datadir + name + ".csv"
         with gzip.open(f"{csv_file_path}.gz", "rb") as f_in:
             with open(csv_file_path, "wb") as f_out:
