@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import pickle
+import argparse
 import os
 import gzip
 import shutil
@@ -192,15 +193,34 @@ def ucihar_preprocess(datadir: str):
 
 
 if __name__ == "__main__":
-    path = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
-    create_capture24_npy_files(path)
-    # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
-    # create_dalia_npy_files(datadir)
-    # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data"
-    # create_wildppg_npy_files(datadir)
-    # datadir = (
-    #      "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
-    # )
-    # ucihar_preprocess(datadir)
-    # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
-    # create_ieee_npz_files(datadir)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--dataset",
+        choices=["ieee", "capture24", "ucihar", "dalia"],
+        required=True,
+        help="You have to choose from [dalia, ucihar, ieee, capture24]",
+    )
+
+    parser.add_argument(
+        "--datadir", required=True, help="Specifiy the path were the data is located."
+    )
+
+    args = parser.parse_args()
+
+    if args.dataset == "capture24":
+        # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
+        create_capture24_npy_files(args.datadir)
+    elif args.dataset == "dalia":
+        # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
+        create_dalia_npy_files(args.datadir)
+    elif args.dataset == "ucihar":
+        # datadir = (
+        #      "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
+        # )
+        ucihar_preprocess(args.datadir)
+    elif args.dataset == "ieee":
+        # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
+        create_ieee_npz_files(args.datadir)
+    else:
+        raise NotImplementedError()
