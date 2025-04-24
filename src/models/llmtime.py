@@ -25,6 +25,7 @@ from transformers import (
     LlamaTokenizer,
 )
 
+cluster = True
 STEP_MULTIPLIER = 1.2
 
 DEFAULT_EOS_TOKEN = "</s>"
@@ -290,6 +291,9 @@ def deserialize_str(
 
 def llama2_model_string(model_size, chat):
     chat = "chat-" if chat else ""
+    if cluster:
+        return "/cluster/project/holz/ckeusch/llama_weights/"
+
     return "C:/Users/cleme/ETH/Master/Thesis/llama_weights/"
 
 

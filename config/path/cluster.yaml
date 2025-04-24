@@ -1,2 +1,2 @@
-
 datadir:  "/cluster/project/holz/ckeusch/euler"
+llamadir: "/cluster/project/holz/ckeusch/llama_weights" 
