@@ -1356,9 +1356,9 @@ class AdaMSHyper(BaseLightningModule):
         self.manual_backward(constraint_loss)
         opt_1.step()
         opt_2.step()
+        self.log("train_loss", mse_loss, on_step=True, on_epoch=True, logger=True)
         self.log_dict(
             {
-                "train_loss": mse_loss,
                 "constraint_loss": constraint_loss,
                 "total_loss": mse_loss + constraint_loss,
             },
@@ -1373,9 +1373,9 @@ class AdaMSHyper(BaseLightningModule):
         mse_loss = self.criterion(
             preds[:, :, : prediction_window.shape[-1]], prediction_window
         )
+        self.log("val_loss", mse_loss, on_step=True, on_epoch=True, logger=True)
         self.log_dict(
             {
-                "val_loss": mse_loss,
                 "constraint_loss": constraint_loss,
                 "total_loss": mse_loss + constraint_loss,
             },

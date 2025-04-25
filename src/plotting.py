@@ -1,70 +1,46 @@
+import io
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 import wandb
+import seaborn as sns
 import plotly.io as pio
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from lightning.pytorch.loggers import WandbLogger
-from typing import Tuple
 
+from PIL import Image
+from lightning.pytorch.loggers import WandbLogger
+
+
+sns.set_theme(style="whitegrid")
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
-
-name_to_title = {"MSE": "MSE", "abs_target_mean": "MAE", "cross_correlation": "Pearson"}
-
-types = ["best", "worst", "median"]
+name_to_title = {"MSE": "MSE", "MAE": "MAE", "cross_correlation": "Pearson"}
 
 
-def find_best_worst_median_idx(
-    metrics: list[float], best_is_highest: bool = False
-) -> Tuple[int, int, int]:
-    # return min_idx, max_idx, median_idx
-    arr = np.array(metrics)
-    sorted_indices = np.argsort(arr)
-    if best_is_highest:
-        best_idx = sorted_indices[0]
-        worst_idx = sorted_indices[-1]
-    else:
-        best_idx = sorted_indices[-1]
-        worst_idx = sorted_indices[0]
-
-    median_idx = sorted_indices[len(sorted_indices) // 2]
-
-    return [worst_idx, best_idx, median_idx]
-
-
-def plot_example(
-    lookback,
+def plot_ploty(
+    t_lookback,
+    t_future,
+    look_back_window,
     target,
     prediction,
-    metric_name: str,
-    metric_value: float,
-    type: str,
-    use_heart_rate: bool = False,
-    freq: int = 25,
-    yaxis_name: str = "Heartrate",
-    batch_idx: int = 0,
+    metric_name,
+    metric_value,
+    type,
+    yaxis_name,
+    wandb_logger,
 ):
-    if use_heart_rate:
-        t_lookback = np.arange(-(len(lookback) - 1), 1) * 2
-        t_future = np.arange(0, len(target)) * 2
-    else:
-        t_lookback = np.linspace(-len(lookback) // freq, 0, len(lookback))
-        t_future = np.linspace(0, len(target) // freq, len(target))
     fig = go.Figure()
 
-    # Lookback history (blue)
     fig.add_trace(
         go.Scatter(
             x=t_lookback,
-            y=lookback,
+            y=look_back_window,
             mode="lines",
             name="Lookback",
             line=dict(color="#0000ff"),
         )
     )
 
-    # Ground truth future (black)
     fig.add_trace(
         go.Scatter(
             x=t_future,
@@ -75,7 +51,6 @@ def plot_example(
         )
     )
 
-    # Model prediction future (purple)
     fig.add_trace(
         go.Scatter(
             x=t_future,
@@ -88,7 +63,7 @@ def plot_example(
         )
     )
 
-    title = f"Batch {batch_idx} | {type} {metric_name}: {metric_value}"
+    title = f"{name_to_title[metric_name]}: {metric_value}"
 
     fig.update_layout(
         title=title,
@@ -97,8 +72,7 @@ def plot_example(
         legend=dict(x=0.01, y=0.99, borderwidth=1),
     )
 
-    # plt.close(fig)
-    return fig
+    wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Plotly(fig)})
 
 
 def plot_prediction_wandb(
@@ -106,59 +80,61 @@ def plot_prediction_wandb(
     y: torch.Tensor,
     preds: torch.Tensor,
     wandb_logger: WandbLogger,
-    metrics: dict,
-    batch_idx: int,
+    metric_name: str,
+    metric_value: float,
+    type: str,
     use_heart_rate: bool = False,
     freq: int = 25,
     yaxis_name: str = "Heartrate",
 ):
-    look_back_window = x.cpu().detach()
-    target = y.cpu().detach()
-    prediction = preds.cpu().detach()
+    # make sure to always plot only the first channel
+    look_back_window = x.cpu().detach().numpy()[0, :, 0]
+    target = y.cpu().detach().numpy()[0, :, 0]
+    prediction = preds.cpu().detach().numpy()[0, :, 0]
 
-    # all_figs = []
-    for metric_name in metric_names:
-        indices = find_best_worst_median_idx(
-            metrics[metric_name], True if metric_name == "cross_correlation" else False
+    assert look_back_window.ndim == 1, f"look_back_window: {look_back_window.shape}"
+    assert target.ndim == 1, f"target: {target.shape}"
+    assert prediction.ndim == 1, f"prediction: {prediction.shape}"
+
+    if use_heart_rate:
+        t_lookback = np.arange(-(len(look_back_window) - 1), 1) * 2
+        t_future = np.arange(0, len(target) + 1) * 2
+    else:
+        t_lookback = np.linspace(
+            -len(look_back_window) // freq, 0, len(look_back_window)
         )
+        t_future = np.linspace(0, len(target) // freq, len(target))
+    last_look_back = np.array([look_back_window[-1]])
+    target = np.concatenate((last_look_back, target))
+    prediction = np.concatenate((last_look_back, prediction))
 
-        for type, idx in zip(types, indices):
-            metric_value = metrics[metric_name][idx]
-            fig = plot_example(
-                look_back_window[idx][:, 0],
-                target[idx][:, 0],
-                prediction[idx][:, 0],
-                name_to_title[metric_name],
-                metric_value,
-                type,
-                use_heart_rate,
-                freq,
-                yaxis_name,
-                batch_idx,
-            )
-            # all_figs.append(fig)
-            wandb_logger.experiment.log({"test/predictions": wandb.Image(fig)})
+    colors = sns.color_palette("colorblind", 3)
+    fig, ax = plt.subplots(figsize=(8, 4))
 
-        metric = metrics[metric_name]
-        wandb_logger.experiment.log(
-            {
-                f"test/batch_{batch_idx}/best_{metric_name}": metric[indices[1]],
-                f"test/batch_{batch_idx}/worst_{metric_name}": metric[indices[0]],
-                f"test/batch_{batch_idx}/median_{metric_name}": metric[2],
-            }
-        )
-    """
-    with open(f"all_predictions_batch_{batch_idx}.html", "w") as f:
-        for fig in all_figs:
-            f.write(pio.to_html(fig, full_html=False, include_plotlyjs="cdn"))
-    """
+    ax.plot(t_lookback, look_back_window, color=colors[0], label="Lookback")
+    ax.plot(t_future, target, color=colors[1], label="Ground Truth")
+    ax.plot(t_future, prediction, color=colors[2], label="Prediction")
+
+    title = f"{metric_name} {type} {metric_value:.3f}"
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("Seconds", fontsize=12)
+    ax.set_ylabel(yaxis_name, fontsize=12)
+
+    ax.legend(loc="upper left", fontsize=10, frameon=True)
+    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+
+    plt.tight_layout()
+
+    # fig.show()
+
+    wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Image(fig)})
 
 
 if __name__ == "__main__":
     # test plotting functionality
-    x = torch.randn((3, 96, 2))
-    y = torch.randn((3, 32, 2))
-    preds = torch.randn((3, 32, 2))
+    x = torch.randn((1, 96, 2)).abs() + 100
+    y = torch.randn((1, 32, 2)).abs() + 100
+    preds = torch.randn((1, 32, 2)).abs() + 100
 
     metrics = {
         "cross_correlation": [0.1, 0.7, 0.3],
@@ -167,5 +143,5 @@ if __name__ == "__main__":
     }
 
     plot_prediction_wandb(
-        x, y, preds, None, metrics, 0, False, freq=32, yaxis_name="PPG"
+        x, y, preds, None, "MSE", 0.1, "best", True, freq=32, yaxis_name="PPG"
     )

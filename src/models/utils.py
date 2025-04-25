@@ -17,6 +17,7 @@ import numpy as np
 
 
 from typing import Dict, Tuple
+from collections import defaultdict
 
 from src.metrics import Evaluator
 from src.plotting import plot_prediction_wandb
@@ -79,14 +80,6 @@ class BaseLightningModule(L.LightningModule):
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
-        """
-        look_back_window_norm = z_normalization(
-            look_back_window, self.global_mean, self.global_std
-        )
-        prediction_window_norm = z_normalization(
-            prediction_window, self.global_mean, self.global_std
-        )
-        """
 
         look_back_window_norm, mean, std = local_z_norm(look_back_window)
         prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
@@ -99,14 +92,6 @@ class BaseLightningModule(L.LightningModule):
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
-        """
-        look_back_window_norm = z_normalization(
-            look_back_window, self.global_mean, self.global_std
-        )
-        prediction_window_norm = z_normalization(
-            prediction_window, self.global_mean, self.global_std
-        )
-        """
 
         look_back_window_norm, mean, std = local_z_norm(look_back_window)
         prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
@@ -117,12 +102,17 @@ class BaseLightningModule(L.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        metrics = self.evaluate(batch, batch_idx)
+        metrics, current_metrics = self.evaluate(batch, batch_idx)
+
+        for k, v in current_metrics.items():
+            self.metric_full[k] += v
         return metrics
 
     def on_test_epoch_start(self):
         self.metrics_dict = {}
         self.batch_size = []
+
+        self.metric_full = defaultdict(list)
 
     def on_test_epoch_end(self):
         avg_metrics = self.calculate_weighted_average(
@@ -131,37 +121,55 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
+        # plot best, worst and median
+        for metric_name, v in self.metric_full.items():
+            sorted_indices = np.argsort(v)
+            min_idx = sorted_indices[0]
+            max_idx = sorted_indices[-1]
+            median_idx = sorted_indices[len(v) // 2]
+            if metric_name == "cross_correlation":
+                zipped = zip(
+                    ["worst", "best", "median"], [min_idx, max_idx, median_idx]
+                )
+            else:
+                zipped = zip(
+                    ["worst", "best", "median"], [max_idx, min_idx, median_idx]
+                )
+
+            for type, idx in zipped:
+                look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
+                look_back_window = look_back_window.unsqueeze(0)
+                target = target.unsqueeze(0)
+                pred = self.model_forward(look_back_window)
+
+                plot_prediction_wandb(
+                    look_back_window,
+                    target,
+                    pred,
+                    self.logger,
+                    metric_name,
+                    v[idx],
+                    type,
+                    True,
+                    25,
+                    "Heartrate",
+                )
+
     def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch
         self.batch_size.append(look_back_window.shape[0])
 
-        # Normalization
-        """
-        look_back_window_norm = z_normalization(
-            look_back_window, self.global_mean, self.global_std
-        )
-        """
         look_back_window_norm, mean, std = local_z_norm(look_back_window)
 
         # Prediction
         preds = self.model_forward(look_back_window_norm)
 
         # Metric Calculation
-        # denormalized_preds = z_denormalization(preds, self.global_mean, self.global_std)
         denormalized_preds = local_z_denorm(preds, mean, std)
-        metrics = self.evaluator(prediction_window, denormalized_preds)
+        metrics, current_metrics = self.evaluator(prediction_window, denormalized_preds)
         self.update_metrics(metrics)
 
-        plot_prediction_wandb(
-            look_back_window,
-            prediction_window,
-            denormalized_preds,
-            self.logger,
-            metrics,
-            batch_idx,
-        )
-
-        return metrics
+        return metrics, current_metrics
 
     def update_metrics(self, new_metrics: Dict):
         prefix = "test"

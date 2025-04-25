@@ -10,17 +10,17 @@ class Evaluator:
         metrics = {
             "MSE": mse(targets, preds),
             "MAE": mae(targets, preds),
-            "abs_error": abs_error(targets, preds),
-            "abs_target_sum": abs_target_sum(targets),
-            "abs_target_mean": abs_target_mean(targets),
-            "MAPE": mape(targets, preds),
-            "sMAPE": smape(targets, preds),
+            # "abs_error": abs_error(targets, preds),
+            # "abs_target_sum": abs_target_sum(targets),
+            # "abs_target_mean": abs_target_mean(targets),
+            # "MAPE": mape(targets, preds),
+            # "sMAPE": smape(targets, preds),
             "cross_correlation": correlation(preds, targets),
         }
 
-        metrics["RMSE"] = np.sqrt(metrics["MSE"])
-        metrics["NRMSE"] = metrics["RMSE"] / metrics["abs_target_mean"]
-        metrics["ND"] = metrics["abs_error"] / metrics["abs_target_sum"]
+        # metrics["RMSE"] = np.sqrt(metrics["MSE"])
+        # metrics["NRMSE"] = metrics["RMSE"] / metrics["abs_target_mean"]
+        # metrics["ND"] = metrics["abs_error"] / metrics["abs_target_sum"]
 
         return metrics
 
@@ -38,7 +38,6 @@ class Evaluator:
         Dict[String, float]
             the mean metric values of the batch
         """
-        metrics = {}
         seq_metrics = {}
 
         # Calculate metrics for each sequence in the batch
@@ -51,10 +50,7 @@ class Evaluator:
                 if metric_name not in seq_metrics:
                     seq_metrics[metric_name] = []
                 seq_metrics[metric_name].append(metric_value)
-
-        for metric_name, metric_values in seq_metrics.items():
-            metrics[metric_name] = np.mean(metric_values)
-        return metrics
+        return seq_metrics
 
     def __call__(self, targets, forecasts):
         """
@@ -77,8 +73,12 @@ class Evaluator:
             targets,
             forecasts,
         )
+        mean_metrics = metrics.copy()
 
-        return metrics
+        for metric_name, metric_value in mean_metrics.items():
+            mean_metrics[metric_name] = np.mean(metric_value)
+
+        return mean_metrics, metrics
 
 
 def correlation(preds: np.ndarray, targets: np.ndarray) -> float:

@@ -412,7 +412,7 @@ class TimesNet(BaseLightningModule):
             learning_rate=self.learning_rate,
             train_epochs=self.trainer.max_epochs,
         )
-        self.log("current_lr", current_lr, on_epoch=True)
+        self.log("current_lr", current_lr, on_epoch=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(

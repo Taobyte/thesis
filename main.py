@@ -90,6 +90,7 @@ def main(config: DictConfig):
         enable_progress_bar=True,
         enable_model_summary=True,
         overfit_batches=1 if config.overfit else 0.0,
+        limit_test_batches=10 if config.overfit else None,
     )
 
     print("Start Training.")

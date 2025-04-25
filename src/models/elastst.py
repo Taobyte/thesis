@@ -13,7 +13,6 @@ from torch import Tensor
 from einops import rearrange, repeat
 from typing import List, Union, Optional, Callable, Tuple
 
-import lightning.pytorch as pl
 import sys
 from src.models.utils import BaseLightningModule
 
