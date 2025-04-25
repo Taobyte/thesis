@@ -58,11 +58,8 @@ def local_z_denorm(
 
 
 class BaseLightningModule(L.LightningModule):
-    def __init__(self, global_mean: np.ndarray, global_std: np.ndarray):
+    def __init__(self):
         super().__init__()
-
-        self.register_buffer("global_mean", torch.from_numpy(global_mean).float())
-        self.register_buffer("global_std", torch.from_numpy(global_std).float())
 
         self.evaluator = Evaluator()
 

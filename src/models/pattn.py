@@ -148,11 +148,14 @@ class Model(nn.Module):
         self.patch_size = patch_size
         self.stride = patch_size // 2
 
+        # precompute size after padding
+        self.pad_size = self.stride + look_back_window
+
         self.d_model = d_model
 
-        self.patch_num = (look_back_window - self.patch_size) // self.stride + 2
+        self.patch_num = max((look_back_window - self.patch_size) // self.stride + 2, 1)
         self.padding_patch_layer = nn.ReplicationPad1d((0, self.stride))
-        self.in_layer = nn.Linear(self.patch_size, self.d_model)
+        self.in_layer = nn.Linear(min(self.patch_size, self.pad_size), self.d_model)
         self.basic_attn = MultiHeadAttention(d_model=self.d_model)
         self.out_layer = nn.Linear(self.d_model * self.patch_num, prediction_window)
 
@@ -169,13 +172,19 @@ class Model(nn.Module):
             return x, means, stdev
 
     def forward(self, x):
+        x = rearrange(x, "B T C -> B C T")
+
         B, C = x.size(0), x.size(1)
         # [Batch, Channel, 336]
         x, means, stdev = self.norm(x, dim=2)
         # [Batch, Channel, 344]
         x = self.padding_patch_layer(x)
+
         # [Batch, Channel, 12, 16]
-        x = x.unfold(dimension=-1, size=self.patch_size, step=self.stride)
+        x = x.unfold(
+            dimension=-1, size=min(self.patch_size, x.shape[-1]), step=self.stride
+        )
+
         # [Batch, Channel, 12, 768]
         x = self.in_layer(x)
         x = rearrange(x, "b c m l -> (b c) m l")
@@ -215,12 +224,12 @@ class PAttn(BaseLightningModule):
         loss = self._shared_step(look_back_window, prediction_window)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_step=True, on_epoch=True)
-        self.log_dict({"train_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log_dict({"train_loss": loss}, on_epoch=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
-        self.log_dict({"val_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log_dict({"val_loss": loss}, on_epoch=True, logger=True)
         return loss
 
     def on_train_epoch_end(self):
@@ -246,14 +255,14 @@ class PAttn(BaseLightningModule):
                 if epoch < 3
                 else self.learning_rate * (0.9 ** ((epoch - 3) // 1))
             }
-        print("lr_adjust = {}".format(lr_adjust))
+        # print("lr_adjust = {}".format(lr_adjust))
 
         if epoch in lr_adjust.keys():
             lr = lr_adjust[epoch]
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
-            print("Updating learning rate to {}".format(lr))
+            # print("Updating learning rate to {}".format(lr))
 
     def configure_optimizers(self):
         param_dict = [

@@ -396,12 +396,12 @@ class TimesNet(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window) -> float:
         loss = self._shared_step(look_back_window, prediction_window)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window) -> float:
         val_loss = self._shared_step(look_back_window, prediction_window)
-        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_loss", val_loss, on_step=True, on_epoch=True, logger=True)
         return val_loss
 
     def on_train_epoch_end(self):

@@ -455,13 +455,13 @@ class SimpleTM(BaseLightningModule):
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-        self.log("current_lr", current_lr, on_step=True, on_epoch=True)
-        self.log_dict({"train_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
-        self.log_dict({"val_loss": loss}, on_epoch=True, prog_bar=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def configure_optimizers(self):

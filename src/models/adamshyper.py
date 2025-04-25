@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# import torch_scatter
-import lightning as L
 
 from torch.nn import Parameter
 from torch_geometric.nn import MessagePassing
@@ -1366,7 +1364,7 @@ class AdaMSHyper(BaseLightningModule):
             },
             on_step=True,
             on_epoch=True,
-            prog_bar=True,
+            logger=True,
         )
         return mse_loss
 
@@ -1381,6 +1379,9 @@ class AdaMSHyper(BaseLightningModule):
                 "constraint_loss": constraint_loss,
                 "total_loss": mse_loss + constraint_loss,
             },
+            on_step=True,
+            on_epoch=True,
+            logger=True,
         )
         return mse_loss
 

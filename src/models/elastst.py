@@ -1167,11 +1167,13 @@ class Forecaster(nn.Module):
         self.dataset = dataset
         # Lag parameters
         self.lags_list = lags_list
+        """
         if self.use_scaling:
             self.scaler = TemporalScaler()
         else:
             self.scaler = None
-
+        """
+        self.scaler = None
         self.lags_dim = len(self.lags_list) * target_dim
         self.feat_idx_emb = nn.Embedding(
             num_embeddings=self.target_dim, embedding_dim=self.feat_idx_emb_dim
@@ -1561,11 +1563,11 @@ class ElasTST(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
-        self.log("train_loss", loss, on_step=True, prog_bar=True, logger=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
-        self.log("val_loss", loss, on_step=True, prog_bar=True, logger=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
