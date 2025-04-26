@@ -9,8 +9,8 @@ model:
   stride: 1
   d_ff: 128
   d_model: 128
-  enc_in: 1
-  c_out: 1
+  enc_in: ${dataset.input_channels}
+  c_out: ${dataset.input_channels}
   gpt_layers: 6
   embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   freq: 'm'

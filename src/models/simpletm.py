@@ -437,7 +437,7 @@ class SimpleTM(BaseLightningModule):
         super().__init__(**kwargs)
         self.model = model
         self.criterion = torch.nn.MSELoss()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["model", "criterion"])
 
     def model_forward(self, x):
         # B, T, C = x.shape
