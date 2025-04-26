@@ -224,15 +224,18 @@ class TimesBlock(nn.Module):
         )
 
     def forward(self, x):
+        import pdb
+
+        # pdb.set_trace()
         B, T, N = x.size()
         period_list, period_weight = FFT_for_Period(x, self.k)
 
+        # pdb.set_trace()
         res = []
         for i in range(
-            min(self.k, len(period_list) - 1)
+            min(self.k, len(period_list))
         ):  # we need to loop over the length used in FFT_for_Period
             period = period_list[i]
-            import pdb
 
             # pdb.set_trace()
             # padding
@@ -262,6 +265,7 @@ class TimesBlock(nn.Module):
             # reshape back
             out = out.permute(0, 2, 3, 1).reshape(B, -1, N)
             res.append(out[:, : (self.look_back_window + self.prediction_window), :])
+        # pdb.set_trace()
         res = torch.stack(res, dim=-1)
         # adaptive aggregation
         period_weight = F.softmax(period_weight, dim=1)

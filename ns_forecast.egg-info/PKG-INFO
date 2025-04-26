@@ -1,8 +1,0 @@
-Metadata-Version: 2.4
-Name: ns-forecast
-Version: 0.1.0
-Summary: Master Thesis about Non-Stationary Forecasting
-Author-email: Clemens Keusch <ckeusch@student.ethz.ch>
-License: MIT
-Requires-Python: >=3.8
-Description-Content-Type: text/markdown

@@ -45,14 +45,14 @@ or if advancements are needed to improve their predictive accuracy in such scena
 - [LLMTime](https://github.com/ngruver/llmtime)
 - TODO: ASK WHICH ONE
 
-| Model        | Description | Link |
-|--------------|-------------|------|
-| TimesNet     | Transformer-based model tailored for long-term time series forecasting. Excels in multivariate settings. | [GitHub](https://github.com/thuml/Time-Series-Library/) |
-| SimpleTM     | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | [GitHub](https://github.com/vsingh-group/SimpleTM/) |
-| ElasTST      | Patch-based transformer with rotary embeddings and elastic structure, effective for non-stationary series. | [GitHub](https://github.com/microsoft/ProbTS/tree/elastst) |
-| Ada-MSHyper  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
-| GPT4TS       | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | [GitHub](https://github.com/DAMO-DI-ML/NeurIPS2023-One-Fits-All/) |
-| LLMTime      | Uses large language models (LLMs) for time series modeling through tokenization and prompt tuning. | [GitHub](https://github.com/ngruver/llmtime) |
+| Model        | Description | Supports Short Seq | Link |
+|--------------|-------------|---------| ----- |
+| TimesNet     | Transformer-based model tailored for long-term time series forecasting. Excels in multivariate settings.| No | [GitHub](https://github.com/thuml/Time-Series-Library/) |
+| SimpleTM    | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | Yes| [GitHub](https://github.com/vsingh-group/SimpleTM/) |
+| ElasTST   | Patch-based transformer with rotary embeddings and elastic structure, effective for non-stationary series. | No| [GitHub](https://github.com/microsoft/ProbTS/tree/elastst) |
+| Ada-MSHyper  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | No | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
+| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/NeurIPS2023-One-Fits-All/) |
+| LLMTime      |  Uses large language models (LLMs) for time series modeling through tokenization and prompt tuning. | Yes | [GitHub](https://github.com/ngruver/llmtime) |
 
 ## Simpler Models 
 - Linear Models

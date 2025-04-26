@@ -1,3 +1,4 @@
+checkpoints/
 outputs/
 thesis/
 wandb/
@@ -31,6 +32,7 @@ var/
 wheels/
 share/python-wheels/
 *.egg-info/
+ns_forecast.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
