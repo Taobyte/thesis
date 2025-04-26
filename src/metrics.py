@@ -93,16 +93,16 @@ def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
     Returns:
         float: Mean Pearson correlation over (B, C)
     """
-    preds_mean = np.mean(preds, axis=1)
-    targets_mean = np.mean(targets, axis=1)
+    preds_mean = np.mean(preds, axis=1, keepdims=True)
+    targets_mean = np.mean(targets, axis=1, keepdims=True)
 
     preds_centered = preds - preds_mean
     targets_centered = targets - targets_mean
 
-    numerator = np.sum(preds_centered * targets_centered, axis=1)
+    numerator = np.sum(preds_centered * targets_centered, axis=1)  # shape (B,C)
     denominator = np.sqrt(
         np.sum(preds_centered**2, axis=1) * np.sum(targets_centered**2, axis=1)
-    )
+    )  # shape (B, C)
 
     corr = numerator / (denominator + 1e-8)  # shape: (B, C)
 

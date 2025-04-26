@@ -222,7 +222,7 @@ class PAttn(BaseLightningModule):
     def _shared_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
         loss = self.criterion(
-            preds[:, :, prediction_window.shape[-1]], prediction_window
+            preds[:, :, : prediction_window.shape[-1]], prediction_window
         )
         return loss
 

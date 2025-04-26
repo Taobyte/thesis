@@ -362,7 +362,7 @@ class GPT4TS(BaseLightningModule):
         loss = self.criterion(
             None,
             None,
-            preds[:, :, prediction_window.shape[-1]],
+            preds[:, :, : prediction_window.shape[-1]],
             prediction_window,
             mask,
         )  # we don't need look_back_window info for the SMAPE
