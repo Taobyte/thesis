@@ -31,8 +31,6 @@ def process_results(
 
     start_time = datetime(2025, 4, 23)
 
-    import pdb
-
     time_filtered_runs = [
         run
         for run in runs

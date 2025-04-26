@@ -11,6 +11,8 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.inits import glorot, zeros
 from torch_geometric.utils import degree, softmax
 from torch.nn import Linear
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.core.optimizer import LightningOptimizer
 
 from src.models.utils import BaseLightningModule
 
@@ -1344,7 +1346,10 @@ class AdaMSHyper(BaseLightningModule):
         return preds
 
     def model_specific_train_step(self, look_back_window, prediction_window):
-        opt_1, opt_2 = self.configure_optimizers()
+        # opt_1, opt_2 = self.configure_optimizers()
+
+        opt_1, opt_2 = self.optimizers(use_pl_optimizer=True)
+
         opt_1.zero_grad()
         opt_2.zero_grad()
         preds, constraint_loss = self.model(look_back_window)
@@ -1388,4 +1393,14 @@ class AdaMSHyper(BaseLightningModule):
     def configure_optimizers(self):
         optimizer_1 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         optimizer_2 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+
+        if self.automatic_optimization is False:
+            strategy = self.trainer.strategy
+            optimizer_1 = LightningOptimizer._to_lightning_optimizer(
+                optimizer_1, strategy
+            )
+            optimizer_2 = LightningOptimizer._to_lightning_optimizer(
+                optimizer_2, strategy
+            )
+
         return optimizer_1, optimizer_2

@@ -1,6 +1,4 @@
-import numpy as np
 import hydra
-import yaml
 import lightning as L
 
 from hydra.utils import instantiate
@@ -8,17 +6,7 @@ from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 
-from src.utils import setup_wandb_logger
-
-
-def compute_square_window(seq_len, max_window=4):
-    """
-    Finds the largest equal factors [k,k] such that k*k <= seq_len.
-    Defaults to [4,4] if to valid window exists.
-    """
-    max_k = int(np.sqrt(seq_len))  # Largest possible equal factor
-    max_k = min(max_k, max_window)  # Respect user's max_window
-    return [max_k, max_k]
+from src.utils import setup_wandb_logger, compute_square_window
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
@@ -29,7 +17,7 @@ OmegaConf.register_new_resolver("eval", eval)
 def main(config: DictConfig):
     L.seed_everything(config.seed)
 
-    wandb_logger = setup_wandb_logger(config)
+    wandb_logger, run_name = setup_wandb_logger(config)
 
     datamodule = instantiate(
         config.dataset.datamodule,
@@ -54,8 +42,7 @@ def main(config: DictConfig):
     if config.use_checkpoint_callback:
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",
-            filename="last-{epoch}",
-            save_last=True,  # Saves a 'last.ckpt' file
+            filename=run_name + "-{epoch}-{step}",
             save_top_k=1,  # Also saves best model if you want
         )
 
