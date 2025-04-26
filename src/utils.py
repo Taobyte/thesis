@@ -7,10 +7,15 @@ from lightning.pytorch.loggers.logger import DummyLogger
 from typing import Tuple
 
 
-def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
-    config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
-
-    hr_or_ppg = "hr" if config.use_heart_rate else "ppg"
+def create_group_run_name(
+    dataset_name: str,
+    model_name: str,
+    use_heart_rate: bool,
+    use_activity_info: bool,
+    look_back_window: int,
+    prediction_window: int,
+) -> Tuple[str, str, list[str]]:
+    hr_or_ppg = "hr" if use_heart_rate else "ppg"
 
     dataset_to_signal_type = {
         "dalia": hr_or_ppg,
@@ -22,13 +27,28 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         "usc": "acc",
     }
 
-    signal_type = dataset_to_signal_type[config.dataset.name]
-    activity = "activity" if config.use_activity_info else "no_activity"
+    signal_type = dataset_to_signal_type[dataset_name]
+    activity = "activity" if use_activity_info else "no_activity"
 
-    group_name = f"{config.dataset.name}_{signal_type}_{activity}_{config.look_back_window}_{config.prediction_window}"
-    run_name = f"{config.dataset.name}_{config.model.name}_{signal_type}_{activity}_{config.look_back_window}_{config.prediction_window}"
+    group_name = f"{dataset_name}_{signal_type}_{activity}_{look_back_window}_{prediction_window}"
+    run_name = f"{dataset_name}_{model_name}_{signal_type}_{activity}_{look_back_window}_{prediction_window}"
 
-    tags = [config.dataset.name, config.model.name, signal_type, activity]
+    tags = [dataset_name, model_name, signal_type, activity]
+
+    return group_name, run_name, tags
+
+
+def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
+    config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
+
+    group_name, run_name, tags = create_group_run_name(
+        config.dataset.name,
+        config.model.name,
+        config.use_heart_rate,
+        config.use_activity_info,
+        config.look_back_window,
+        config.prediction_window,
+    )
 
     wandb_logger = (
         WandbLogger(
