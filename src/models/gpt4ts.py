@@ -360,7 +360,11 @@ class GPT4TS(BaseLightningModule):
         )  # the implementation of SMAPE from the paper needs a mask
         preds = self.model_forward(look_back_window)
         loss = self.criterion(
-            None, None, preds, prediction_window, mask
+            None,
+            None,
+            preds[:, :, prediction_window.shape[-1]],
+            prediction_window,
+            mask,
         )  # we don't need look_back_window info for the SMAPE
         return loss
 

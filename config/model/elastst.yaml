@@ -30,6 +30,7 @@ pl_model:
   learning_rate: 0.001
   prediction_length: ${prediction_window}
   sampling_weight_scheme: random
+  reduce: "mean" # reduce loss or not must be either "mean" or "none"
 
 trainer:
   use_early_stopping: False

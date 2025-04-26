@@ -1531,6 +1531,7 @@ class ElasTST(BaseLightningModule):
         learning_rate: float = 1e-3,
         load_from_ckpt: str = None,
         sampling_weight_scheme: str = "none",
+        reduce: str = "none",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -1539,6 +1540,7 @@ class ElasTST(BaseLightningModule):
         self.prediction_length = prediction_length
         self.forecaster = model
 
+        self.reduce = reduce
         self.sampling_weight_scheme = sampling_weight_scheme
         print(f"sampling_weight_scheme: {sampling_weight_scheme}")
 
@@ -1550,7 +1552,7 @@ class ElasTST(BaseLightningModule):
 
     def _shared_step(self, look_back_window, prediction_window):
         batch_data = (look_back_window, prediction_window)
-        loss = self.forecaster.loss(batch_data)
+        loss = self.forecaster.loss(batch_data, reduce=self.reduce)
 
         if len(loss.shape) > 1:
             loss_weights = get_weights(self.sampling_weight_scheme, loss.shape[1])
