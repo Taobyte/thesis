@@ -143,7 +143,7 @@ class BaseLightningModule(L.LightningModule):
                 look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
                 look_back_window = look_back_window.unsqueeze(0).to(self.device)
                 target = target.unsqueeze(0)
-                pred = self.model_forward(look_back_window)
+                pred = self.model_forward(look_back_window)[:, :, : target.shape[-1]]
 
                 plot_prediction_wandb(
                     look_back_window,
