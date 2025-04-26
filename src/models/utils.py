@@ -121,6 +121,9 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
+        # use_heart_rate = self.trainer.datamodule.use_heart_rate
+        # use_activity_info = self.trainer.datamodule.use_activity_info
+
         # plot best, worst and median
         for metric_name, v in self.metric_full.items():
             sorted_indices = np.argsort(v)
@@ -138,7 +141,7 @@ class BaseLightningModule(L.LightningModule):
 
             for type, idx in zipped:
                 look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
-                look_back_window = look_back_window.unsqueeze(0)
+                look_back_window = look_back_window.unsqueeze(0).to(self.device)
                 target = target.unsqueeze(0)
                 pred = self.model_forward(look_back_window)
 

@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import hydra
 import yaml
@@ -7,9 +6,9 @@ import lightning as L
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.loggers.logger import DummyLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
+
+from src.utils import setup_wandb_logger
 
 
 def compute_square_window(seq_len, max_window=4):
@@ -28,30 +27,9 @@ OmegaConf.register_new_resolver("eval", eval)
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig):
-    # print(config)
     L.seed_everything(config.seed)
-    config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
 
-    signal_type = "hr" if config.dataset.datamodule.use_heart_rate else "ppg"
-    activity = (
-        "activity" if config.dataset.datamodule.use_activity_info else "no_activity"
-    )
-
-    name = f"{config.dataset.name}_{config.model.name}_{signal_type}_{activity}_{config.look_back_window}_{config.prediction_window}"
-    tags = [config.dataset.name, config.model.name, signal_type, activity]
-    wandb_logger = (
-        WandbLogger(
-            name=name,
-            config=config_dict,
-            project="thesis",
-            log_model=True,
-            save_code=True,
-            reinit=True,
-            tags=tags,
-        )
-        if config.use_wandb
-        else DummyLogger()
-    )
+    wandb_logger = setup_wandb_logger(config)
 
     datamodule = instantiate(
         config.dataset.datamodule,
@@ -73,15 +51,15 @@ def main(config: DictConfig):
                 patience=config.model.trainer.patience,
             )
         )
+    if config.use_checkpoint_callback:
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            filename="last-{epoch}",
+            save_last=True,  # Saves a 'last.ckpt' file
+            save_top_k=1,  # Also saves best model if you want
+        )
 
-    checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
-        filename="last-{epoch}",
-        save_last=True,  # Saves a 'last.ckpt' file
-        save_top_k=1,  # Also saves best model if you want
-    )
-
-    callbacks.append(checkpoint_callback)
+        callbacks.append(checkpoint_callback)
 
     trainer = L.Trainer(
         logger=wandb_logger,
@@ -98,7 +76,7 @@ def main(config: DictConfig):
     print("End Training.")
 
     print("Start Evaluation.")
-    trainer.test(ckpt_path="last", datamodule=datamodule)
+    trainer.test(datamodule=datamodule)
     print("End Evaluation.")
 
 

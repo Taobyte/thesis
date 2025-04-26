@@ -1,13 +1,10 @@
-import io
 import numpy as np
 import torch
 import wandb
 import seaborn as sns
-import plotly.io as pio
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
-from PIL import Image
 from lightning.pytorch.loggers import WandbLogger
 
 

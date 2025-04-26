@@ -13,6 +13,7 @@ use_activity_info: False
 seed: 123
 use_wandb: False
 overfit: True
+use_checkpoint_callback: False
 num_workers: 0
 
 

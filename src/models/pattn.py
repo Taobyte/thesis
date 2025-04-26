@@ -172,6 +172,7 @@ class Model(nn.Module):
             return x, means, stdev
 
     def forward(self, x):
+        # PAttn assume (B, C, T) shape
         x = rearrange(x, "B T C -> B C T")
 
         B, C = x.size(0), x.size(1)
@@ -192,6 +193,9 @@ class Model(nn.Module):
         x = rearrange(x, "(b c) m l -> b c (m l)", b=B, c=C)
         x = self.out_layer(x)
         x = self.norm(x, means=means, stdev=stdev)
+
+        x = rearrange(x, "B C T -> B T C")
+
         return x
 
 

@@ -3,6 +3,9 @@ import wandb
 import argparse
 import plotly.graph_objects as go
 
+from plotly.subplots import make_subplots
+from datetime import datetime
+
 
 def process_results(
     dataset: str,
@@ -26,38 +29,53 @@ def process_results(
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters={"$and": filter})
 
-    print(f"Found {len(runs)} number of runs.")
-    print("Model names:")
-    for run in runs:
-        # print(run.config["model"])
-        if run.config["model"] is None:
-            print(run)
+    start_time = datetime(2025, 4, 23)
+
+    import pdb
+
+    time_filtered_runs = [
+        run
+        for run in runs
+        if start_time <= datetime.strptime(run.created_at.split("T")[0], "%Y-%m-%d")
+        and run.state == "finished"
+    ]
+
+    print(f"Found {len(time_filtered_runs)} number of runs.")
+
     metrics = {}
     loss = {}
 
-    for run in runs:
+    for run in time_filtered_runs:
         model_name = run.name.split("_")[1]
         if model_name not in metrics:
             metrics[model_name] = []
             loss[model_name] = []
         summary = run.summary._json_dict
-        metrics[model_name].append(summary)
-        history = run.history(keys=["train_loss_epoch"])
+        filtered_summary = {
+            k: summary[k]
+            for k in summary
+            if k in ["test_MSE", "test_MAE", "test_cross_correlation"]
+        }
+        metrics[model_name].append(filtered_summary)
+        history = run.history(keys=["train_loss_epoch", "val_loss_epoch"])
         loss[model_name].append(history)
 
     # TODO: plot training loss
     # TODO: plot val loss
     # TODO: plot table with metrics
 
-    import pdb
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        row_heights=[0.7, 0.3],
+        vertical_spacing=0.15,
+        specs=[[{"type": "xy"}], [{"type": "table"}]],
+    )
 
-    pdb.set_trace()
-
-    loss_fig = go.Figure()
     for model_name, runs in loss.items():
         df = runs[0]
         if "train_loss_epoch" in df.columns:
-            loss_fig.add_trace(
+            fig.add_trace(
                 go.Scatter(
                     x=df["_step"],
                     y=df["train_loss_epoch"],
@@ -66,24 +84,47 @@ def process_results(
                     line=dict(dash="solid"),
                 )
             )
-        if "val/loss" in df.columns:
-            loss_fig.add_trace(
+        if "val_loss_epoch" in df.columns:
+            fig.add_trace(
                 go.Scatter(
                     x=df["_step"],
-                    y=df["val/loss"],
+                    y=df["val_loss_epoch"],
                     mode="lines",
                     name=f"{model_name} (val)",
                     line=dict(dash="dash"),
                 )
             )
 
-    loss_fig.update_layout(
-        title="Training and Validation Loss Over Time",
+    processed_metrics = {}
+    for k, v in metrics.items():
+        processed_metrics[k] = v[0]
+    df = pd.DataFrame.from_dict(processed_metrics)
+    fig.add_trace(
+        go.Table(
+            header=dict(
+                values=list(df.columns),
+                fill_color="paleturquoise",
+                align="left",
+            ),
+            cells=dict(
+                values=[df[column].to_list() for column in df.columns],
+                fill_color="lavender",
+                align="left",
+            ),
+        ),
+        row=2,
+        col=1,
+    )
+    # Final layout
+    fig.update_layout(
+        title="Loss Curves and Final Metrics",
+        height=800,  # Adjust height as needed
         xaxis_title="Step",
         yaxis_title="Loss",
         legend_title="Model",
     )
-    loss_fig.show()
+
+    fig.show()
 
 
 if __name__ == "__main__":
