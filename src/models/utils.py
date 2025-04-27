@@ -169,6 +169,10 @@ class BaseLightningModule(L.LightningModule):
         # Prediction
         preds = self.model_forward(look_back_window_norm)
 
+        preds = preds[:, :, : prediction_window.shape[-1]]
+
+        assert preds.shape == prediction_window.shape
+
         # Metric Calculation
         denormalized_preds = local_z_denorm(preds, mean, std)
         metrics, current_metrics = self.evaluator(prediction_window, denormalized_preds)
