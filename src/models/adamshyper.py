@@ -1353,9 +1353,12 @@ class AdaMSHyper(BaseLightningModule):
         opt_1.zero_grad()
         opt_2.zero_grad()
         preds, constraint_loss = self.model(look_back_window)
-        mse_loss = self.criterion(
-            preds[:, :, : prediction_window.shape[-1]], prediction_window
-        )
+
+        preds = preds[:, :, : prediction_window.shape[-1]]
+
+        assert preds.shape == prediction_window.shape
+
+        mse_loss = self.criterion(preds, prediction_window)
         constraint_loss = constraint_loss.abs()
         self.manual_backward(mse_loss, retain_graph=True)
         self.manual_backward(constraint_loss)

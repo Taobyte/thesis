@@ -145,6 +145,8 @@ class BaseLightningModule(L.LightningModule):
                 target = target.unsqueeze(0)
                 pred = self.model_forward(look_back_window)[:, :, : target.shape[-1]]
 
+                assert pred.shape == target.shape
+
                 plot_prediction_wandb(
                     look_back_window,
                     target,

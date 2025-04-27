@@ -1475,7 +1475,11 @@ class Model(Forecaster):
         # observed_values = batch_data.future_observed_values
         observed_values = torch.ones_like(prediction_window)
 
-        loss = self.loss_fn(target, predict[:, :, : target.shape[-1]])
+        predict = predict[:, :, : target.shape[-1]]
+
+        assert predict.shape == target.shape
+
+        loss = self.loss_fn(target, predict)
 
         loss = self.get_weighted_loss(observed_values, loss, reduce=reduce)
 

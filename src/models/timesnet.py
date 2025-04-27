@@ -395,6 +395,9 @@ class TimesNet(BaseLightningModule):
     def _shared_step(self, look_back_window, prediction_window) -> float:
         preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]  # remove activity channels
+
+        assert preds.shape == prediction_window.shape
+
         loss = self.criterion(preds, prediction_window)
         return loss
 
