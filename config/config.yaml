@@ -5,8 +5,8 @@ defaults:
   - path: local
 
 # most important params
-look_back_window: 3
-prediction_window: 1
+look_back_window: 5
+prediction_window: 3
 use_heart_rate: True
 use_activity_info: False
 

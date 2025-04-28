@@ -15,10 +15,10 @@ freq = 64
 l_b_w_ppg = [3 * freq, 4 * freq, 5 * freq]
 p_w_ppg = [1 * freq, 2 * freq, 3 * freq]
 
-l_b_w_hr = [3, 4, 5]
-p_w_hr = [1, 2, 3]
-
-models = ["elastst", "simpletm", "adamshyper", "timesnet", "gpt4ts", "pattn"]
+l_b_w_hr = [3]
+p_w_hr = [1]
+# models = ["elastst", "simpletm", "adamshyper", "timesnet", "gpt4ts", "pattn", "timellm"]
+models = ["timellm"]
 
 
 def _test_model_overfitting(

@@ -1,0 +1,30 @@
+name: "timellm"
+
+model:
+  _target_: src.models.timellm.Model
+  seq_len: ${look_back_window}
+  pred_len: ${prediction_window}
+  d_ff: 32
+  llm_dim: 4096
+  dropout: 0.1
+  llm_layers: 6
+  d_model: 16
+  n_heads: 8
+  enc_in: ${dataset.input_channels}
+  patch_len: 16 
+  stride: 8 
+  top_k: 5 # tune calculate lags parameter top_k = 5 does not work for small window lengths
+  llama_model_path: ${path.llamadir}
+  description: "" # TODO: change to ${dataset.description}
+
+pl_model:
+  _target_: src.models.timellm.TimeLLM
+  learning_rate: 0.01
+  lradj: "COS"
+  pct_start: 0.2
+
+trainer:
+  max_epochs: 10
+
+data:
+  batch_size: 32
