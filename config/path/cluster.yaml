@@ -1,2 +1,7 @@
+basedir: "/cluster/project/holz/ckeusch"
 datadir:  "/cluster/project/holz/ckeusch/euler"
 llamadir: "/cluster/project/holz/ckeusch/llama_weights" 
+
+hydra:
+  run:
+    dir: /cluster/project/holz/ckeusch/outputs/

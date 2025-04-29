@@ -4,6 +4,10 @@ defaults:
   - dataset: dalia
   - path: local
 
+hydra:
+  run:
+    dir: ${path.basedir}/outputs
+
 # most important params
 look_back_window: 5
 prediction_window: 3
@@ -22,5 +26,7 @@ multi:
   accelerator: "gpu"
   devices: 4
   strategy: "ddp"
+
+
 
 
