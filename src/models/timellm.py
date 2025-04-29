@@ -6,23 +6,52 @@ import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 
-from torch.nn.utils import weight_norm
 from torch import Tensor
 from transformers import (
     LlamaConfig,
     LlamaModel,
     LlamaTokenizer,
-    GPT2Config,
-    GPT2Model,
-    GPT2Tokenizer,
-    BertConfig,
-    BertModel,
-    BertTokenizer,
 )
 
 from src.models.utils import BaseLightningModule
 
 transformers.logging.set_verbosity_error()
+
+
+def adjust_learning_rate(
+    accelerator,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler,
+    epoch: int,
+    learning_rate: int,
+    lradj: str,
+    printout=True,
+):
+    if lradj == "type1":
+        lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
+    elif lradj == "type2":
+        lr_adjust = {2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 10: 5e-7, 15: 1e-7, 20: 5e-8}
+    elif lradj == "type3":
+        lr_adjust = {
+            epoch: learning_rate
+            if epoch < 3
+            else learning_rate * (0.9 ** ((epoch - 3) // 1))
+        }
+    elif lradj == "PEMS":
+        lr_adjust = {epoch: learning_rate * (0.95 ** (epoch // 1))}
+    elif lradj == "TST":
+        lr_adjust = {epoch: scheduler.get_last_lr()[0]}
+    elif lradj == "constant":
+        lr_adjust = {epoch: learning_rate}
+    if epoch in lr_adjust.keys():
+        lr = lr_adjust[epoch]
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+        if printout:
+            if accelerator is not None:
+                accelerator.print("Updating learning rate to {}".format(lr))
+            else:
+                print("Updating learning rate to {}".format(lr))
 
 
 class Normalize(nn.Module):
@@ -686,9 +715,9 @@ class TimeLLM(BaseLightningModule):
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
-        if self.lradj != "COS":
-            current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-            self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
+        # here lightning calls OneCycleLR scheduler
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
@@ -697,9 +726,8 @@ class TimeLLM(BaseLightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        if self.lradj == "COS":
-            current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-            self.log("current_lr", current_lr, on_epoch=True, logger=True)
+        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
+        self.log("current_lr", current_lr, on_epoch=True, logger=True)
 
     def configure_optimizers(self):
         trainable_parameters = []
