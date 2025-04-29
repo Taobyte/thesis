@@ -18,42 +18,6 @@ from src.models.utils import BaseLightningModule
 transformers.logging.set_verbosity_error()
 
 
-def adjust_learning_rate(
-    accelerator,
-    optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler,
-    epoch: int,
-    learning_rate: int,
-    lradj: str,
-    printout=True,
-):
-    if lradj == "type1":
-        lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
-    elif lradj == "type2":
-        lr_adjust = {2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 10: 5e-7, 15: 1e-7, 20: 5e-8}
-    elif lradj == "type3":
-        lr_adjust = {
-            epoch: learning_rate
-            if epoch < 3
-            else learning_rate * (0.9 ** ((epoch - 3) // 1))
-        }
-    elif lradj == "PEMS":
-        lr_adjust = {epoch: learning_rate * (0.95 ** (epoch // 1))}
-    elif lradj == "TST":
-        lr_adjust = {epoch: scheduler.get_last_lr()[0]}
-    elif lradj == "constant":
-        lr_adjust = {epoch: learning_rate}
-    if epoch in lr_adjust.keys():
-        lr = lr_adjust[epoch]
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
-        if printout:
-            if accelerator is not None:
-                accelerator.print("Updating learning rate to {}".format(lr))
-            else:
-                print("Updating learning rate to {}".format(lr))
-
-
 class Normalize(nn.Module):
     def __init__(
         self,
