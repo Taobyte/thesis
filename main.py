@@ -48,6 +48,11 @@ def main(config: DictConfig):
 
         callbacks.append(checkpoint_callback)
 
+    # multi gpu training
+    multi_gpu_dict = {}
+    if config.use_multi_gpu:
+        multi_gpu_dict = config.multi
+
     trainer = L.Trainer(
         logger=wandb_logger,
         max_epochs=config.model.trainer.max_epochs,
@@ -56,6 +61,7 @@ def main(config: DictConfig):
         enable_model_summary=True,
         overfit_batches=1 if config.overfit else 0.0,
         limit_test_batches=10 if config.overfit else None,
+        **multi_gpu_dict,
     )
 
     print("Start Training.")

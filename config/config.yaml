@@ -16,4 +16,11 @@ overfit: True
 use_checkpoint_callback: False
 num_workers: 0
 
+# multi gpu training
+use_multi_gpu: False
+multi:
+  accelerator: "gpu"
+  devices: 4
+  strategy: "ddp"
+
 
