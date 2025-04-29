@@ -1569,10 +1569,12 @@ class ElasTST(BaseLightningModule):
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)

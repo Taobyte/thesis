@@ -1,15 +1,12 @@
-# (multi_gpu.sh)
 #!/bin/bash -l
 
-# SLURM SUBMIT SCRIPT
-#SBATCH --nodes=1             # This needs to match Trainer(num_nodes=...)
-#SBATCH --gres=gpu:4
-#SBATCH --ntasks-per-node=4   # This needs to match Trainer(devices=...)
-#SBATCH --cpus-per-task=8
+#SBATCH --gpus=4
+#SBATCH --gres=gpumem:24g
 #SBATCH --mem-per-cpu=24G
-#SBATCH --mem=0
-#SBATCH --time=0-02:00:00
+#SBATCH --time=2:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --nodes=1
+#SBATCH --ntasks=4
 
 module load eth_proxy
-
-srun python main.py model=timellm num_workers=8 
+python main.py model=timellm use_multi_gpu=True
