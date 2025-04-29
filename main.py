@@ -59,9 +59,9 @@ def main(config: DictConfig):
         callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=False,
-        enable_checkpointing=config.use_checkpoint_callback,
         overfit_batches=1 if config.overfit else 0.0,
         limit_test_batches=10 if config.overfit else None,
+        default_root_dir=config.path.basedir,
         **multi_gpu_dict,
     )
 
