@@ -9,11 +9,15 @@ datamodule:
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
 
-  train_participants: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-  val_participants: [10, 11, 12]
-  test_participants: [13, 14, 15]
+  train_participants: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+  val_participants: [10, 11]
+  test_participants: [9, 12, 13, 14, 15]
 
   use_heart_rate: ${use_heart_rate}
-  use_activity_info: ${use_activity_info}
+  use_activity_info: ${use_activity_info} 
+  num_workers: ${num_workers}
+  batch_size: 32
 
-  batch_size: 1
+base_channel_dim: 1 
+activity_channel_dim: 1
+input_channels: ${eval:'2 if ${use_activity_info} else 1'} 
