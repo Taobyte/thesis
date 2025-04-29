@@ -9,7 +9,6 @@ from collections import defaultdict
 
 from utils import create_group_run_name
 
-import pdb
 
 model_to_loss_name = {"gpt4ts": "sMAPE Loss", "TODO": None}
 
@@ -31,7 +30,6 @@ def create_loss_plots(dataframes, fig):
 
     for col_idx, (model_name, runs) in enumerate(dataframes.items(), start=1):
         df = runs[0]  # Assuming each model has one run
-
         # Train Loss (left column)
         if "train_loss_epoch" in df.columns:
             x, y = process_column(df["train_loss_epoch"])
@@ -42,7 +40,7 @@ def create_loss_plots(dataframes, fig):
                     mode="lines",
                     name=f"{model_name} (train)",
                     line=dict(color="blue"),
-                    showlegend=True,
+                    showlegend=False,
                 ),
                 row=1,
                 col=col_idx,
@@ -58,16 +56,16 @@ def create_loss_plots(dataframes, fig):
                     mode="lines",
                     name=f"{model_name} (val)",
                     line=dict(color="red"),
-                    showlegend=True,
+                    showlegend=False,
                 ),
                 row=1,
                 col=col_idx,
             )
-
+    """
     # Update y-axis titles
     for i in range(1, 7):
         fig.update_yaxes(title_text="Loss", row=1, col=i)
-
+    """
     return fig
 
 
@@ -117,8 +115,19 @@ def process_results(
             if k in ["test_MSE", "test_MAE", "test_cross_correlation"]
         }
         metrics[model_name].append(filtered_summary)
-        history = run.history()
-        dataframes[model_name].append(history)
+        history = run.scan_history()
+        train_loss = []
+        val_loss = []
+        for row in history:
+            if "train_loss_epoch" in row and row["train_loss_epoch"]:
+                train_loss.append(row["train_loss_epoch"])
+            if "val_loss_epoch" in row and row["val_loss_epoch"]:
+                val_loss.append(row["val_loss_epoch"])
+
+        loss_df = pd.DataFrame.from_dict(
+            {"train_loss_epoch": train_loss, "val_loss_epoch": val_loss}
+        )
+        dataframes[model_name].append(loss_df)
 
     fig = make_subplots(
         rows=2,
@@ -164,6 +173,8 @@ def process_results(
 
     font_weights = [weight for row in font_weights for weight in row]
 
+    df = df.round(decimals=3)
+
     fig.add_trace(
         go.Table(
             header=dict(
@@ -189,10 +200,11 @@ def process_results(
     # Final layout
     fig.update_layout(
         title="Loss Curves and Final Metrics",
-        height=800,  # Adjust height as needed
-        xaxis_title="Step",
-        yaxis_title="Loss",
-        legend_title="Model",
+        # height=800,  # Adjust height as needed
+        # width=1200,
+        # xaxis_title="Step",
+        # yaxis_title="Loss",
+        # legend_title="Model",
     )
 
     fig.show()

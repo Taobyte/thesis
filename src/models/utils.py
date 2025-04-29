@@ -10,14 +10,14 @@
 # ---------------------------------------------------------------
 
 
-import math
 import torch
 import lightning as L
 import numpy as np
-
+import optuna
 
 from typing import Dict, Tuple
 from collections import defaultdict
+from optuna.integration.wandb import WeightsAndBiasesCallback
 
 from src.metrics import Evaluator
 from src.plotting import plot_prediction_wandb
@@ -59,8 +59,11 @@ def local_z_denorm(
 
 
 class BaseLightningModule(L.LightningModule):
-    def __init__(self):
+    def __init__(self, wandb_project: str, n_trials: int):
         super().__init__()
+
+        self.n_trials = n_trials
+        self.wandb_project = wandb_project
 
         self.evaluator = Evaluator()
 
@@ -194,33 +197,16 @@ class BaseLightningModule(L.LightningModule):
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
         return metrics
 
+    def objective(self):
+        raise NotImplementedError
 
-def adjust_learning_rate(
-    optimizer: torch.optim.Optimizer,
-    epoch: int,
-    lradj: str,
-    learning_rate: float,
-    train_epochs: int = 10,
-):
-    # lr = learning_rate * (0.2 ** (epoch // 2))
-    if lradj == "type1":
-        lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
-    elif lradj == "type2":
-        lr_adjust = {2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 10: 5e-7, 15: 1e-7, 20: 5e-8}
-    elif lradj == "type3":
-        lr_adjust = {
-            epoch: learning_rate
-            if epoch < 3
-            else learning_rate * (0.9 ** ((epoch - 3) // 1))
-        }
-    elif lradj == "cosine":
-        lr_adjust = {
-            epoch: learning_rate / 2 * (1 + math.cos(epoch / train_epochs * math.pi))
-        }
-    if epoch in lr_adjust.keys():
-        lr = lr_adjust[epoch]
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
-        # print("Updating learning rate to {}".format(lr))
-        return lr
-    return optimizer.param_groups[0]["lr"]
+    def tune_model(self):
+        wandb_kwargs = {"project": self.wandb_project}
+        wandbc = WeightsAndBiasesCallback(
+            metric_name="val_loss",
+            wandb_kwargs=wandb_kwargs,
+        )
+        study = optuna.create_study(direction="minimize")
+        study.optimize(self.objective, n_trials=self.n_trials, callbacks=[wandbc])
+
+        self.log("tuner_best_params", study.best_params)
