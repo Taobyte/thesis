@@ -9,7 +9,7 @@
 #SBATCH --output=/cluster/project/holz/ckeusch/tune_logs/%x_%j.out
 
 source ~/.bashrc
-conda activate thesissource ./bashrc
+conda activate thesis
 
 module load eth_proxy
 
