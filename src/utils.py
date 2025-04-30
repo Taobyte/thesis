@@ -55,11 +55,8 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
             name=run_name,
             group=group_name,
             config=config_dict,
-            project="thesis",
-            log_model=True,
-            save_code=True,
-            reinit=True,
             tags=tags,
+            **config.wandb,
         )
         if config.use_wandb
         else DummyLogger()

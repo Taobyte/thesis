@@ -20,6 +20,15 @@ overfit: True
 use_checkpoint_callback: False
 num_workers: 0
 
+# wandb 
+wandb:
+  save_dir: ${path.basedir}/wandb_logs
+  project: "thesis"
+  log_model: False
+  save_code: True
+  reinit: True
+
+
 # multi gpu training
 use_multi_gpu: False
 multi:
