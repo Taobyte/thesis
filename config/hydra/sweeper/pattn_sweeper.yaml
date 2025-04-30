@@ -1,0 +1,8 @@
+defaults:
+ -  shared_sweeper
+
+params:
+  model.model.patch_size: choice(4, 8, 16, 32)
+  model.model.d_model: range(128, 1025, step=128)
+  model.pl_model.learning_rate: range(0.00005, 0.001)
+  model.trainer.max_epochs: range(5, 10)

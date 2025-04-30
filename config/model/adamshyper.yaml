@@ -6,23 +6,14 @@ model:
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
   channels: ${dataset.input_channels} 
-  # dec_in: 7
   d_model: 512
-  # d_ff: 128
-  # d_bottleneck: 512
-  # d_layers: 1
-  # e_layers: 2
-  # n_heads: 8
   individual: False
-  # dim: 10
   hyper_num: [50, 20, 10]
   inner_size: 5
   # window_size: [4,4] does not work if look_back_window < 4
   window_size: ${compute_square_window:${look_back_window}}
   CSCM: 'Bottleneck_Construct'
   k: 1
-  # activation: 'gelu'
-  # dropout: 0.05
 
 pl_model: 
   _target_: src.models.adamshyper.AdaMSHyper
@@ -40,3 +31,4 @@ trainer:
 data:
   batch_size: 256
   num_workers: ${num_workers}
+

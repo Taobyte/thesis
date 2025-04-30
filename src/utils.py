@@ -41,6 +41,10 @@ def create_group_run_name(
 def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
 
+    # print(config_dict)
+    if config.tune:
+        config.use_wandb = False
+
     group_name, run_name, tags = create_group_run_name(
         config.dataset.name,
         config.model.name,

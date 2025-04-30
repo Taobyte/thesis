@@ -108,3 +108,14 @@ As an example consider the following command.
 python main.py --multirun hydra/launcher=submitit_slurm look_back_window=3,4,5 prediction_window=1,2,3
 ```
 This command sweeps over all lookback window and prediction window combinations (in this case 9 combinations) and spawns a job for each of them. 
+
+
+### Hydra Optuna Sweeper 
+On the 30th of April, I installed the hydra optuna sweeper plugin using 
+```
+pip install hydra-optuna-sweeper --upgrade
+```
+(see https://hydra.cc/docs/plugins/optuna_sweeper/).
+
+This plugin does not natively support WandB. Thus, I added the `optuna.integration.WeightsAndBiasesCallback` to the `_imp.py` file and added three parameters to the sweeper, namely `use_wandb, metric_name, wandb_kwargs`. 
+For now, I just copy the changes I made locally to the cluster, but later I may have to create a package to install it properly. 

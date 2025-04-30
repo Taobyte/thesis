@@ -11,8 +11,6 @@ model:
   kernel_size: 3  
   n_channels: ${dataset.input_channels}
   d_model: 512
-  # embed_type: 0 # '0: default 1: value embedding + temporal embedding + positional embedding 2: value embedding + temporal embedding 3: value embedding + positional embedding 4: value embedding'
-  # embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   wv: "db1"
   factor: 1 # TODO: find out what this is doing
   dropout: 0.1

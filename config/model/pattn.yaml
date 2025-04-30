@@ -7,8 +7,6 @@ model:
   patch_size: 16
   d_model: 768
 
-
-
 pl_model: 
   _target_: src.models.pattn.PAttn
   learning_rate: 0.00005
@@ -22,3 +20,5 @@ trainer:
 
 data:
   batch_size: 256
+
+tuner:

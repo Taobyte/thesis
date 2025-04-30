@@ -5,18 +5,21 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
+from typing import Optional
 
 from src.utils import setup_wandb_logger, compute_square_window
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
+OmegaConf.register_new_resolver(
+    "suffix_if_true", lambda flag, suffix: suffix if flag else ""
+)
 
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
-def main(config: DictConfig):
+def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
-
     wandb_logger, run_name = setup_wandb_logger(config)
 
     datamodule = instantiate(
@@ -69,9 +72,16 @@ def main(config: DictConfig):
     trainer.fit(pl_model, datamodule=datamodule)
     print("End Training.")
 
-    print("Start Evaluation.")
-    trainer.test(datamodule=datamodule)
-    print("End Evaluation.")
+    if config.tune:
+        val_results = trainer.validate(pl_model, datamodule=datamodule)
+
+        last_val_loss = val_results[0]["val_loss_epoch"]
+        # return val loss for tuner
+        return last_val_loss
+    else:
+        print("Start Evaluation.")
+        trainer.test(datamodule=datamodule)
+        print("End Evaluation.")
 
 
 if __name__ == "__main__":

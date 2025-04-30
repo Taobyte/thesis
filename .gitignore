@@ -1,5 +1,6 @@
 checkpoints/
 outputs/
+multirun/
 thesis/
 wandb/
 lightning_logs/
