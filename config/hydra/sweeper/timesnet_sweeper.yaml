@@ -1,11 +1,14 @@
 defaults:
  -  shared_sweeper
 
-study_name: ${dataset.name}_${model.name}${suffix_if_true:${use_heart_rate},_hr}${suffix_if_true:${use_activity_info},_activity}_${look_back_window}_${prediction_window}
+
 
 params:
-  model.model.num_kernels: choice(4, 8, 16, 32)
-  model.model.top_k: range(128, 1025, step=128)
-  model.model.d_model: range(32, 256)
-  model.pl_model.learning_rate: range(0.00005, 0.001)
-  model.trainer.max_epochs: range(5, 100)
+  model.trainer.max_epochs: 50
+  model.pl_model.learning_rate: tag(log, interval(1e-4, 5e-2))
+  model.model.d_model: choice(32, 64, 128, 256, 512)
+  model.model.d_ff: choice(32, 64, 128)
+  model.model.dropout: interval(0.0, 0.3)
+  model.model.top_k: choice(3, 5, 7, 9)
+  
+  # model.data.batch_size: choice(32, 64, 128, 256)
