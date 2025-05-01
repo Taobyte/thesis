@@ -45,6 +45,8 @@ class IEEEDataset(Dataset):
         participants: list[int],
         use_heart_rate: bool = False,
         use_activity_info: bool = False,
+        freq: int = 25,
+        name: str = "ieee",
     ):
         self.datadir = datadir
         self.look_back_window = look_back_window

@@ -72,6 +72,21 @@ def plot_ploty(
     wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Plotly(fig)})
 
 
+def get_yaxis_name(dataset: str, use_heart_rate: bool = False):
+    if dataset in ["dalia", "wildppg", "ieee"]:
+        yaxis_name = "Heartrate" if use_heart_rate else "PPG"
+    elif dataset == "chapman":
+        yaxis_name = "ECG"
+    elif dataset in ["ucihar", "usc"]:
+        yaxis_name = "Acc & Gyro"
+    elif dataset == "capture24":
+        yaxis_name = "Acc"
+    else:
+        raise NotImplementedError()
+
+    return yaxis_name
+
+
 def plot_prediction_wandb(
     x: torch.Tensor,
     y: torch.Tensor,
@@ -82,12 +97,14 @@ def plot_prediction_wandb(
     type: str,
     use_heart_rate: bool = False,
     freq: int = 25,
-    yaxis_name: str = "Heartrate",
+    dataset: str = "dalia",
 ):
     # make sure to always plot only the first channel
     look_back_window = x.cpu().detach().numpy()[0, :, 0]
     target = y.cpu().detach().numpy()[0, :, 0]
     prediction = preds.cpu().detach().numpy()[0, :, 0]
+
+    yaxis_name = get_yaxis_name(dataset)
 
     assert look_back_window.ndim == 1, f"look_back_window: {look_back_window.shape}"
     assert target.ndim == 1, f"target: {target.shape}"

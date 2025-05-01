@@ -1,5 +1,4 @@
 name: "chapman"
-freq: 10 # TODO
 
 datamodule:
   _target_: src.datasets.chapman_dataset.ChapmanDataModule
@@ -8,6 +7,9 @@ datamodule:
   prediction_window: ${prediction_window}
   use_disease: ${use_activity_info}
   batch_size: 32
+
+  freq: 10 # TODO
+  name: ${dataset.name}
 
 base_channel_dim: 4
 activity_channel_dim: 4

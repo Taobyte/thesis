@@ -44,6 +44,8 @@ class DaLiADataset(Dataset):
         use_activity_info: bool = False,
         look_back_window: int = 32,
         prediction_window: int = 10,
+        freq: int = 25,
+        name: str = "dalia",
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -51,6 +53,9 @@ class DaLiADataset(Dataset):
         self.participants = participants
         self.use_activity_info = use_activity_info
         self.target_channel_dim = 1
+
+        self.freq = freq
+        self.name = name
 
         self.data, self.global_mean, self.global_std = dalia_load_data(
             path, participants, use_heart_rate, use_activity_info

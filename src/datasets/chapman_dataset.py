@@ -82,6 +82,8 @@ class ChapmanDataset(Dataset):
         X: np.ndarray,
         disease: np.ndarray,
         use_disease: bool = False,
+        freq: int = 10,  # TODO
+        name: str = "chapman",
     ):
         self.X = X
         self.disease = disease
@@ -90,6 +92,9 @@ class ChapmanDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
+
+        self.freq = freq
+        self.name = name
 
     def __len__(self) -> int:
         """

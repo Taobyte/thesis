@@ -1,5 +1,4 @@
 name: "usc"
-freq: 100
 datamodule:
   _target_: src.datasets.usc_dataset.USCDataModule
   data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD/"
@@ -11,6 +10,9 @@ datamodule:
   use_activity_info: ${use_activity_info}
   num_workers: ${num_workers}
   batch_size: 32
+
+  freq: 100
+  name: ${dataset.name}
 
 base_channel_dim: 6 
 activity_channel_dim: 12

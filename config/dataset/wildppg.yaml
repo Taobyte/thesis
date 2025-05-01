@@ -1,6 +1,4 @@
 name: "wildppg"
-freq_acc: 200
-freq_ppg: 25 # in the paper, they downsample the signal
 
 datamodule:
   _target_: src.datasets.wildppg_dataset.WildPPGDataModule
@@ -17,6 +15,9 @@ datamodule:
   use_activity_info: ${use_activity_info} 
   num_workers: ${num_workers}
   batch_size: 32
+
+  freq: 25 # PPG signal in the paper, they downsample the signal to 25Hz
+  name: ${dataset.name}
 
 base_channel_dim: 1 
 activity_channel_dim: 1

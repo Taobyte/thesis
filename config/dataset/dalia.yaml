@@ -1,5 +1,4 @@
 name: "dalia"
-freq: 64 
 
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
@@ -14,6 +13,9 @@ datamodule:
   num_workers: ${num_workers}
   batch_size: 32
 
+  freq: 32
+  name: ${dataset.name}
+  
 base_channel_dim: 1 
 activity_channel_dim: 1
 input_channels: ${eval:'2 if ${use_activity_info} else 1'} 

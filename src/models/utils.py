@@ -150,6 +150,11 @@ class BaseLightningModule(L.LightningModule):
 
                 assert pred.shape == target.shape
 
+                if hasattr(self.trainer.datamodule.use_heart_rate):
+                    use_heart_rate = self.trainer.datamodule.use_heart_rate
+                else:
+                    use_heart_rate = False
+
                 plot_prediction_wandb(
                     look_back_window,
                     target,
@@ -158,9 +163,9 @@ class BaseLightningModule(L.LightningModule):
                     metric_name,
                     v[idx],
                     type,
-                    True,
-                    25,
-                    "Heartrate",
+                    use_heart_rate,
+                    self.trainer.datamodule.freq,
+                    self.trainer.datamodule.name,
                 )
 
     def evaluate(self, batch, batch_idx):

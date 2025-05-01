@@ -41,6 +41,8 @@ class UCIHARDataset(Dataset):
         prediction_window: int,
         participants: list[int] = [1, 2, 3],
         use_activity_info: bool = False,
+        freq: int = 50,
+        name: str = "ucihar",
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -48,6 +50,9 @@ class UCIHARDataset(Dataset):
         assert self.window <= 128
 
         self.base_channel_dim = 9
+        self.freq = freq
+        self.name = name
+        self.use_activity_info = use_activity_info
 
         self.X = ucihar_load_data(datadir, participants, use_activity_info)
         print(self.X.shape)
@@ -114,10 +119,10 @@ class UCIHARDataModule(L.LightningDataModule):
             )
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=True)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)

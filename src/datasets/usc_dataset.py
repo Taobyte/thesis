@@ -55,6 +55,8 @@ class USCDataset(Dataset):
         prediction_window: int = 5,
         participants: list[int] = [1, 2, 3, 4, 5, 6, 7, 8],
         use_activity_info: bool = False,
+        freq: int = 100,
+        name: str = "usc",
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -62,6 +64,9 @@ class USCDataset(Dataset):
         self.window_length = look_back_window + prediction_window
         self.base_channel_dim = 6  # 3 channels for acceleration and 3 channels for gyro
         self.participants = participants
+
+        self.freq = freq
+        self.name = name
 
         self.part_cum_sum = []
         self.participant_data = usc_load_data(data_dir, participants, use_activity_info)
