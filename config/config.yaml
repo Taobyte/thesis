@@ -20,9 +20,6 @@ overfit: False
 use_checkpoint_callback: False
 num_workers: 0
 
-# tuner 
-tune: False
-
 # wandb logging
 use_wandb: False
 wandb:
@@ -32,6 +29,8 @@ wandb:
   save_code: True
   reinit: True
 
+# tuner 
+tune: False
 
 # multi gpu training
 use_multi_gpu: False

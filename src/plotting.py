@@ -110,17 +110,18 @@ def plot_prediction_wandb(
     assert target.ndim == 1, f"target: {target.shape}"
     assert prediction.ndim == 1, f"prediction: {prediction.shape}"
 
+    last_look_back = np.array([look_back_window[-1]])
+    target = np.concatenate((last_look_back, target))
+    prediction = np.concatenate((last_look_back, prediction))
+
     if use_heart_rate:
         t_lookback = np.arange(-(len(look_back_window) - 1), 1) * 2
-        t_future = np.arange(0, len(target) + 1) * 2
+        t_future = np.arange(0, len(target)) * 2
     else:
         t_lookback = np.linspace(
             -len(look_back_window) // freq, 0, len(look_back_window)
         )
         t_future = np.linspace(0, len(target) // freq, len(target))
-    last_look_back = np.array([look_back_window[-1]])
-    target = np.concatenate((last_look_back, target))
-    prediction = np.concatenate((last_look_back, prediction))
 
     colors = sns.color_palette("colorblind", 3)
     fig, ax = plt.subplots(figsize=(8, 4))
