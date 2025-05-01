@@ -5,8 +5,6 @@ from torch.utils.data import DataLoader, Dataset
 
 from sklearn.preprocessing import OneHotEncoder
 
-import pdb
-
 
 def ucihar_load_data(datadir: str, participants: list[int], use_activity_info: bool):
     data = np.load(datadir + "ucihar_preprocessed.npz")
@@ -61,8 +59,10 @@ class UCIHARDataset(Dataset):
         row_idx = idx // (128 - self.window + 1)
         window_pos = idx % (128 - self.window + 1)
         window = self.X[row_idx, window_pos : window_pos + self.window]
-        x = torch.from_numpy(window[: self.look_back_window])
-        y = torch.from_numpy(window[self.look_back_window :, : self.base_channel_dim])
+        x = torch.from_numpy(window[: self.look_back_window]).float()
+        y = torch.from_numpy(
+            window[self.look_back_window :, : self.base_channel_dim]
+        ).float()
         return x, y
 
 

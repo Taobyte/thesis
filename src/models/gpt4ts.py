@@ -2,9 +2,10 @@ import math
 import torch
 import torch.nn as nn
 
-from src.losses import smape_loss
 from transformers.models.gpt2.modeling_gpt2 import GPT2Model
+
 from src.models.utils import BaseLightningModule
+from src.losses import get_loss_fn
 
 
 def adjust_learning_rate(
@@ -346,7 +347,7 @@ class GPT4TS(BaseLightningModule):
     ):
         super().__init__(**kwargs)
         self.model = model
-        self.criterion = smape_loss()
+        self.criterion = get_loss_fn(loss)
         self.save_hyperparameters(ignore=["model"])
 
     def model_forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -25,15 +25,15 @@ or if advancements are needed to improve their predictive accuracy in such scena
 - [UCIHAR](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones)
 
 
-| Dataset     | Signal Type              | Variates                  | Activity Type                     |
-|-------------|--------------------------|---------------------------|-----------------------------------|
-| WildPPG     | PPG / HR                    | 1          | Accelerometer                  |
-| DaLiA       | PPG / HR | 1            | Accelerometer   |
-| IEEE        | PPG / HR           | 1            | Accelerometer  |
-| Chapman     | ECG                      | 4 | Disease classes |
-| UCIHAR      | Accelerometer, Gyroscope | 9             | Walking, sitting, lying, etc.     |
-| USC         | Accelerometer            | 6             | Categorical              |
-| Capture24   | Accelerometer    | 3              | MET score      |
+| Dataset     | Signal Type              | Variates                  | Activity Type                     | Frequency | 
+|-------------|--------------------------|---------------------------|-----------------------------------| -------- |
+| WildPPG     | PPG / HR                    | 1          | Accelerometer                  |25 Hz |
+| DaLiA       | PPG / HR | 1            | Accelerometer   | 32 Hz|
+| IEEE        | PPG / HR           | 1            | Accelerometer  | 25 Hz|
+| Chapman     | ECG                      | 4 | Disease classes | TODO|
+| UCIHAR      | Accelerometer, Gyroscope | 9             | Walking, sitting, lying, etc.     | 50 Hz  | 
+| USC         | Accelerometer, Gyroscope           | 6             | Categorical              | 100 Hz
+| Capture24   | Accelerometer    | 3              | MET score      | 25 Hz |
 
 ## Deep Learning Models 
 

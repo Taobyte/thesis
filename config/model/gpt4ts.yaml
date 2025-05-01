@@ -19,7 +19,7 @@ model:
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
   learning_rate: 0.002
-  loss: 'SMAPE'
+  loss: 'MSE'
   lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
   # lradj: "none"
 
