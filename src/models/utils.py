@@ -134,7 +134,7 @@ class BaseLightningModule(L.LightningModule):
 
                 assert pred.shape == target.shape
 
-                if hasattr(self.trainer.datamodule.use_heart_rate):
+                if hasattr(self.trainer.datamodule, "use_heart_rate"):
                     use_heart_rate = self.trainer.datamodule.use_heart_rate
                 else:
                     use_heart_rate = False

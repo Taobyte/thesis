@@ -54,7 +54,7 @@ class GaussianProcess(BaseLightningModule):
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
         self.mll = gpytorch.mlls.VariationalELBO(
-            self.likelihood, self.jmodel, num_data=1
+            self.likelihood, self.model, num_data=1
         )
 
     def model_specific_train_step(self, look_back_window, prediction_window):
