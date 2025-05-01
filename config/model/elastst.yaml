@@ -23,7 +23,7 @@ model:
   target_dim: ${dataset.base_channel_dim}
   context_length: ${look_back_window}
   prediction_length: ${prediction_window}
-  freq: ${dataset.freq}
+  freq: ${dataset.datamodule.freq}
 
 pl_model:
   _target_: src.models.elastst.ElasTST

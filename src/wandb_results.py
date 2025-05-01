@@ -37,6 +37,13 @@ def create_loss_plots(dataframes, fig):
                 run["val_loss_epoch"].values
             )
 
+        for k, v in values.items():
+            length = len(v[0])
+            for item in v:
+                assert length == len(item), (
+                    f"not the same length, {length} and {len(item)}"
+                )
+
         values = {k: np.vstack(v) for k, v in values.items()}
         df = pd.DataFrame()
         df["train_loss_mean"] = np.mean(values["train_loss"], axis=0)
@@ -208,8 +215,7 @@ def process_results(
         vertical_spacing=0.1,
     )
 
-    # Usage
-    fig = create_loss_plots(dataframes, fig)
+    # fig = create_loss_plots(dataframes, fig)
 
     # plot metric table
     processed_metrics_mean = {}
@@ -226,7 +232,6 @@ def process_results(
         processed_metrics_std[k] = std
     df = pd.DataFrame.from_dict(processed_metrics_mean)
     df_std = pd.DataFrame.from_dict(processed_metrics_std)
-    print(df_std)
 
     font_weights = []
     for i in range(len(df)):
@@ -324,7 +329,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--use_heart_rate",
-        required=True,
+        required=False,
         action="store_true",
         help="get runs for heart rate only has an effect for datasets: dalia, ieee & ppg",
     )
