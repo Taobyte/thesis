@@ -2,11 +2,12 @@ name: "ucihar"
 freq: 50
 datamodule:
   _target_: src.datasets.ucihar_dataset.UCIHARDataModule
-  data_dir: "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
+  data_dir: ${path.datadir}/UCIHAR/ 
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
   train_participants: [1,  3,  5,  6,  7,  8, 11, 14, 15, 16, 17, 19, 21, 22]
   val_participants: [23, 25, 26, 27, 28, 29, 30]
+  # we don't need test participants, since we get a train test split
   use_activity_info: False
   batch_size: 32
 
