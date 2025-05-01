@@ -356,9 +356,6 @@ class GPT4TS(BaseLightningModule):
         return self.model(x, time)
 
     def _shared_step(self, look_back_window, prediction_window):
-        mask = torch.ones_like(
-            prediction_window
-        )  # the implementation of SMAPE from the paper needs a mask
         preds = self.model_forward(look_back_window)
 
         preds = preds[:, :, : prediction_window.shape[-1]]
@@ -366,12 +363,9 @@ class GPT4TS(BaseLightningModule):
         assert preds.shape == prediction_window.shape
 
         loss = self.criterion(
-            None,
-            None,
             preds,
             prediction_window,
-            mask,
-        )  # we don't need look_back_window info for the SMAPE
+        )
         return loss
 
     def model_specific_train_step(self, look_back_window, prediction_window):
