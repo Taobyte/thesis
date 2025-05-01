@@ -82,8 +82,6 @@ class ChapmanDataset(Dataset):
         X: np.ndarray,
         disease: np.ndarray,
         use_disease: bool = False,
-        freq: int = 10,  # TODO
-        name: str = "chapman",
     ):
         self.X = X
         self.disease = disease
@@ -92,9 +90,6 @@ class ChapmanDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-
-        self.freq = freq
-        self.name = name
 
     def __len__(self) -> int:
         """
@@ -173,6 +168,8 @@ class ChapmanDataModule(L.LightningDataModule):
         look_back_window: int = 128,
         prediction_window: int = 64,
         use_disease: bool = False,
+        freq: int = 10,  # TODO
+        name: str = "chapman",
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -180,6 +177,9 @@ class ChapmanDataModule(L.LightningDataModule):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.use_disease = use_disease
+
+        self.freq = freq
+        self.name = name
 
         (
             self.X_train,

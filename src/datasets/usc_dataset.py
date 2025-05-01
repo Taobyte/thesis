@@ -55,8 +55,6 @@ class USCDataset(Dataset):
         prediction_window: int = 5,
         participants: list[int] = [1, 2, 3, 4, 5, 6, 7, 8],
         use_activity_info: bool = False,
-        freq: int = 100,
-        name: str = "usc",
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -64,9 +62,6 @@ class USCDataset(Dataset):
         self.window_length = look_back_window + prediction_window
         self.base_channel_dim = 6  # 3 channels for acceleration and 3 channels for gyro
         self.participants = participants
-
-        self.freq = freq
-        self.name = name
 
         self.part_cum_sum = []
         self.participant_data = usc_load_data(data_dir, participants, use_activity_info)
@@ -118,6 +113,8 @@ class USCDataModule(L.LightningDataModule):
         test_participants: list[int] = [9, 12, 13],
         use_activity_info: bool = False,
         num_workers: int = 0,
+        freq: int = 100,
+        name: str = "usc",
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -126,6 +123,9 @@ class USCDataModule(L.LightningDataModule):
         self.prediction_window = prediction_window
         self.num_workers = num_workers
         self.use_activity_info = use_activity_info
+
+        self.name = name
+        self.freq = freq
 
         self.train_participants = train_participants
         self.val_participants = val_participants

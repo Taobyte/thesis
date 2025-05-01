@@ -85,8 +85,6 @@ class WildPPGDataset(Dataset):
         prediction_window: int = 128,
         participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
         use_activity_info: bool = False,
-        freq: int = 25,
-        name: str = "wildppg",
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -98,10 +96,6 @@ class WildPPGDataset(Dataset):
         self.base_channel_dim = 1
         self.use_heart_rate = use_heart_rate
         self.use_activity_info = use_activity_info
-
-        self.freq = freq
-        self.name = name
-
         assert self.window <= 200  # window lengths of WildPPG is 200
         if use_heart_rate:
             self.lengths = [(len(arr) - self.window + 1) for arr in self.arrays]
@@ -157,6 +151,8 @@ class WildPPGDataModule(L.LightningDataModule):
         ],
         val_participants: list[str] = ["qm9", "ssx", "trh"],
         test_participants: list[str] = ["tz8", "u7y", "w4p"],
+        freq: int = 25,
+        name: str = "wildppg",
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -165,6 +161,9 @@ class WildPPGDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
+
+        self.freq = freq
+        self.name = name
 
         self.train_participants = train_participants
         self.val_participants = val_participants

@@ -45,8 +45,6 @@ class IEEEDataset(Dataset):
         participants: list[int],
         use_heart_rate: bool = False,
         use_activity_info: bool = False,
-        freq: int = 25,
-        name: str = "ieee",
     ):
         self.datadir = datadir
         self.look_back_window = look_back_window
@@ -126,6 +124,8 @@ class IEEEDataModule(L.LightningDataModule):
         test_participants: list[int] = [19, 20, 21, 22],
         use_heart_rate: bool = False,
         use_activity_info: bool = False,
+        freq: int = 25,
+        name: str = "ieee",
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -133,6 +133,9 @@ class IEEEDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
+
+        self.freq = freq
+        self.name = name
 
         self.train_participants = train_participants
         self.val_participants = val_participants
