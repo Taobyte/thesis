@@ -108,9 +108,6 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
-        # use_heart_rate = self.trainer.datamodule.use_heart_rate
-        # use_activity_info = self.trainer.datamodule.use_activity_info
-
         # plot best, worst and median
         for metric_name, v in self.metric_full.items():
             sorted_indices = np.argsort(v)
@@ -143,13 +140,13 @@ class BaseLightningModule(L.LightningModule):
                     look_back_window,
                     target,
                     pred,
-                    self.logger,
-                    metric_name,
-                    v[idx],
-                    type,
-                    use_heart_rate,
-                    self.trainer.datamodule.freq,
-                    self.trainer.datamodule.name,
+                    wandb_logger=self.logger,
+                    metric_name=metric_name,
+                    metric_value=v[idx],
+                    type=type,
+                    use_heart_rate=use_heart_rate,
+                    freq=self.trainer.datamodule.freq,
+                    dataset=self.trainer.datamodule.name,
                 )
 
     def evaluate(self, batch, batch_idx):

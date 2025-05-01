@@ -51,7 +51,6 @@ class UCIHARDataset(Dataset):
         self.use_activity_info = use_activity_info
 
         self.X = ucihar_load_data(datadir, participants, use_activity_info)
-        print(self.X.shape)
 
     def __len__(self) -> int:
         return len(self.X) * (128 - self.window + 1)

@@ -104,7 +104,7 @@ def plot_prediction_wandb(
     target = y.cpu().detach().numpy()[0, :, 0]
     prediction = preds.cpu().detach().numpy()[0, :, 0]
 
-    yaxis_name = get_yaxis_name(dataset)
+    yaxis_name = get_yaxis_name(dataset, use_heart_rate)
 
     assert look_back_window.ndim == 1, f"look_back_window: {look_back_window.shape}"
     assert target.ndim == 1, f"target: {target.shape}"
@@ -139,9 +139,10 @@ def plot_prediction_wandb(
 
     plt.tight_layout()
 
-    # fig.show()
-
+    fig.canvas.draw()
+    print(f"Plotting example {metric_name}/{type}")
     wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Image(fig)})
+    plt.close(fig)
 
 
 if __name__ == "__main__":
@@ -157,5 +158,5 @@ if __name__ == "__main__":
     }
 
     plot_prediction_wandb(
-        x, y, preds, None, "MSE", 0.1, "best", True, freq=32, yaxis_name="PPG"
+        x, y, preds, None, "MSE", 0.1, "best", True, freq=32, dataset="ucihar"
     )
