@@ -9,7 +9,6 @@ datamodule:
   val_participants: [23, 25, 26, 27, 28, 29, 30]
   # we don't need test participants, since we get a train test split
   use_activity_info: ${use_activity_info}
-  use_heart_rate: False # not used by ucihar
   batch_size: 32 
 
   freq: 50

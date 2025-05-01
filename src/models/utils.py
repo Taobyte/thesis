@@ -13,28 +13,12 @@
 import torch
 import lightning as L
 import numpy as np
-import optuna
 
 from typing import Dict, Tuple
 from collections import defaultdict
-from optuna.integration.wandb import WeightsAndBiasesCallback
 
 from src.metrics import Evaluator
 from src.plotting import plot_prediction_wandb
-
-
-def z_normalization(x, global_mean: torch.Tensor, global_std: torch.Tensor):
-    B, T, C = x.shape
-    eps = 1e-8
-    x_norm = (x - global_mean[:, :, :C]) / (global_std[:, :, :C] + eps)
-
-    return x_norm.float()
-
-
-def z_denormalization(x_norm, global_mean: torch.Tensor, global_std: torch.Tensor):
-    B, T, C = x_norm.shape
-    x_denorm = x_norm * global_std[:, :, :C] + global_mean[:, :, :C]
-    return x_denorm.float()
 
 
 def local_z_norm(
@@ -201,17 +185,3 @@ class BaseLightningModule(L.LightningModule):
         for key, value in metrics_dict.items():
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
         return metrics
-
-    def objective(self):
-        raise NotImplementedError
-
-    def tune_model(self):
-        wandb_kwargs = {"project": self.wandb_project}
-        wandbc = WeightsAndBiasesCallback(
-            metric_name="val_loss",
-            wandb_kwargs=wandb_kwargs,
-        )
-        study = optuna.create_study(direction="minimize")
-        study.optimize(self.objective, n_trials=self.n_trials, callbacks=[wandbc])
-
-        self.log("tuner_best_params", study.best_params)
