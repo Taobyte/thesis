@@ -119,9 +119,9 @@ def plot_prediction_wandb(
         t_future = np.arange(0, len(target)) * 2
     else:
         t_lookback = np.linspace(
-            -len(look_back_window) // freq, 0, len(look_back_window)
+            -len(look_back_window) / freq, 0, len(look_back_window)
         )
-        t_future = np.linspace(0, len(target) // freq, len(target))
+        t_future = np.linspace(0, len(target) / freq, len(target))
 
     colors = sns.color_palette("colorblind", 3)
     fig, ax = plt.subplots(figsize=(8, 4))
