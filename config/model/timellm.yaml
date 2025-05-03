@@ -10,7 +10,7 @@ model:
   llm_layers: 6
   d_model: 16
   n_heads: 8
-  enc_in: ${dataset.input_channels}
+  enc_in: ${dataset.input_channels}py
   patch_len: 16 
   stride: 8 
   top_k: 5 # tune calculate lags parameter top_k = 5 does not work for small window lengths

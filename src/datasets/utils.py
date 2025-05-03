@@ -5,12 +5,72 @@ import argparse
 import os
 import gzip
 import shutil
+import lightning as L
 
+from torch.utils.data import DataLoader
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal
 from scipy.io import loadmat
 from pathlib import Path
 from tqdm import tqdm
+
+
+class BaseDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        data_dir: str,
+        batch_size: int,
+        num_workers: int,
+        name: str,
+        freq: int,
+        look_back_window: int,
+        prediction_window: int,
+        use_activity_info: bool,
+    ):
+        super().__init__()
+
+        self.name = name
+        self.freq = freq
+        self.data_dir = data_dir
+
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+        self.look_back_window = look_back_window
+        self.prediction_window = prediction_window
+        self.use_activity_info = use_activity_info
+
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+        )
+
+    # used for Gaussian Process model
+    def get_inducing_points(self):
+        self.setup(stage="fit")
 
 
 def create_ieee_npz_files(datadir: str):

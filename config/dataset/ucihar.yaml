@@ -10,6 +10,7 @@ datamodule:
   # we don't need test participants, since we get a train test split
   use_activity_info: ${use_activity_info}
   batch_size: 32 
+  num_workers: ${num_workers}
 
   freq: 50
   name: ${dataset.name}

@@ -1,11 +1,11 @@
 import numpy as np
-import pandas as pd
 import torch
-import lightning as L
 
 from typing import Tuple
 from scipy.io import loadmat
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
+
+from src.datasets.utils import BaseDataModule
 
 
 def nan_helper(y):
@@ -128,13 +128,14 @@ class WildPPGDataset(Dataset):
         return look_back_window.float(), prediction_window.float()
 
 
-class WildPPGDataModule(L.LightningDataModule):
+class WildPPGDataModule(BaseDataModule):
     def __init__(
         self,
         data_dir: str,
         use_heart_rate: bool = False,
         use_activity_info: bool = False,
         batch_size: int = 32,
+        num_workers: int = 0,
         look_back_window: int = 128,
         prediction_window: int = 64,
         train_participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
@@ -143,16 +144,17 @@ class WildPPGDataModule(L.LightningDataModule):
         freq: int = 25,
         name: str = "wildppg",
     ):
-        super().__init__()
-        self.data_dir = data_dir
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_activity_info,
+        )
         self.use_heart_rate = use_heart_rate
-        self.use_activity_info = use_activity_info
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
-
-        self.freq = freq
-        self.name = name
 
         self.train_participants = train_participants
         self.val_participants = val_participants
@@ -185,23 +187,3 @@ class WildPPGDataModule(L.LightningDataModule):
                 self.test_participants,
                 self.use_activity_info,
             )
-
-    def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-if __name__ == "__main__":
-    from tqdm import tqdm
-
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/wildppg_preprocessed/"
-    dataset = WildPPGDataset(datadir, use_activity_info=True)
-    for i in tqdm(range(len(dataset))):
-        look_back_window, prediction_window = dataset[i]
-        print(look_back_window.shape)
-        break

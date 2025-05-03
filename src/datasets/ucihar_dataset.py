@@ -1,9 +1,10 @@
 import numpy as np
 import torch
-import lightning as L
-from torch.utils.data import DataLoader, Dataset
 
+from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder
+
+from src.datasets.utils import BaseDataModule
 
 
 def ucihar_load_data(datadir: str, participants: list[int], use_activity_info: bool):
@@ -66,11 +67,12 @@ class UCIHARDataset(Dataset):
         return x, y
 
 
-class UCIHARDataModule(L.LightningDataModule):
+class UCIHARDataModule(BaseDataModule):
     def __init__(
         self,
         data_dir: str,
         batch_size: int = 32,
+        num_workers: int = 0,
         look_back_window: int = 128,
         prediction_window: int = 64,
         train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
@@ -79,19 +81,19 @@ class UCIHARDataModule(L.LightningDataModule):
         freq: int = 50,
         name: str = "ucihar",
     ):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
-
-        self.freq = freq
-        self.name = name
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_activity_info,
+        )
 
         self.train_participants = train_participants
         self.val_participants = val_participants
-
-        self.use_activity_info = use_activity_info
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -117,12 +119,3 @@ class UCIHARDataModule(L.LightningDataModule):
                 None,
                 self.use_activity_info,
             )
-
-    def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=True)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)

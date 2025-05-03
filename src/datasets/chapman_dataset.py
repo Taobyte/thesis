@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
 import torch
-import lightning as L
 
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.io import loadmat
+
+from src.datasets.utils import BaseDataModule
 
 
 def chapman_load_data(datadir: str):
@@ -54,27 +55,6 @@ def stratified_split_onehot(
 
 
 class ChapmanDataset(Dataset):
-    """
-    A PyTorch Dataset for windowed time series forecasting using the Chapman ECG dataset.
-
-    Each participant has a 1000-length multivariate time series. This dataset provides
-    sliding windows of (look_back_window + prediction_window) length, optionally augmented
-    with repeated one-hot encoded disease class as an extra input channel.
-
-    Parameters
-    ----------
-    look_back_window : int
-        Number of past timesteps used for forecasting.
-    prediction_window : int
-        Number of future timesteps to predict.
-    X : np.ndarray
-        The ECG time series data of shape (n_participants, 1000, channels).
-    disease : np.ndarray
-        One-hot encoded disease labels of shape (n_participants, num_classes).
-    use_disease : bool, optional
-        Whether to include the disease label as a repeated conditioning input.
-    """
-
     def __init__(
         self,
         look_back_window: int,
@@ -92,31 +72,9 @@ class ChapmanDataset(Dataset):
         self.window = look_back_window + prediction_window
 
     def __len__(self) -> int:
-        """
-        Returns the number of sliding windows in the dataset.
-
-        Returns
-        -------
-        int
-            Total number of samples across all participants.
-        """
         return self.n_participants * (1000 - self.window + 1)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
-        """
-        Returns a single sample consisting of a look-back window and a prediction window.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the window sample.
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Tuple of (look_back_window, prediction_window), optionally with disease one-hot vector
-            concatenated as an extra channel in the look_back_window.
-        """
         participant_idx = idx // (1000 - self.window + 1)
         window_pos = idx % (1000 - self.window + 1)
 
@@ -140,27 +98,7 @@ class ChapmanDataset(Dataset):
         ).float()
 
 
-class ChapmanDataModule(L.LightningDataModule):
-    """
-    PyTorch Lightning DataModule for the Chapman ECG dataset.
-
-    Handles loading the data from .mat file, performing stratified splits into
-    train/val/test sets, and preparing DataLoaders.
-
-    Parameters
-    ----------
-    data_dir : str
-        Path to the directory containing `chapman.mat`.
-    batch_size : int
-        Number of samples per batch.
-    look_back_window : int
-        Length of the input window.
-    prediction_window : int
-        Length of the prediction window.
-    use_disease: bool
-        Boolean value that indicates if disease one-hot encoding is concatenated to the look_back_windows
-    """
-
+class ChapmanDataModule(BaseDataModule):
     def __init__(
         self,
         data_dir: str,
@@ -170,16 +108,18 @@ class ChapmanDataModule(L.LightningDataModule):
         use_disease: bool = False,
         freq: int = 10,  # TODO
         name: str = "chapman",
+        num_workers: int = 0,
     ):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
-        self.use_disease = use_disease
-
-        self.freq = freq
-        self.name = name
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_disease,  # we feed in disease information for Chapman
+        )
 
         (
             self.X_train,
@@ -191,28 +131,20 @@ class ChapmanDataModule(L.LightningDataModule):
         ) = chapman_load_data(data_dir)
 
     def setup(self, stage: str):
-        """
-        Setup datasets for a specific stage (fit/test).
-
-        Parameters
-        ----------
-        stage : str
-            One of {"fit", "test"} indicating which datasets to initialize.
-        """
         if stage == "fit":
             self.train_dataset = ChapmanDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.X_train,
                 self.y_train,
-                use_disease=self.use_disease,
+                use_disease=self.use_activity_info,
             )
             self.val_dataset = ChapmanDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.X_val,
                 self.y_val,
-                use_disease=self.use_disease,
+                use_disease=self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = ChapmanDataset(
@@ -220,23 +152,5 @@ class ChapmanDataModule(L.LightningDataModule):
                 self.prediction_window,
                 self.X_test,
                 self.y_test,
-                use_disease=self.use_disease,
+                use_disease=self.use_activity_info,
             )
-
-    def train_dataloader(self):
-        """Returns DataLoader for training set."""
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
-
-    def val_dataloader(self):
-        """Returns DataLoader for validation set."""
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
-
-    def test_dataloader(self):
-        """Returns DataLoader for test set."""
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-if __name__ == "__main__":
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/Chapman/"
-    X_train, y_train, X_val, y_val, X_test, y_test = chapman_load_data(datadir)
-    print(X_train[0].shape)

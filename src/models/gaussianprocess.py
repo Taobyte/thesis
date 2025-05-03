@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 import torch
 import gpytorch
 
@@ -23,18 +21,6 @@ class GPModel(ApproximateGP):
         )
         super(GPModel, self).__init__(variational_strategy)
         self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
-
-
-class SpectralMixtureGPModel(gpytorch.models.ExactGP):
-    def __init__(self, likelihood):
-        super().__init__(likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
         covar = SpectralMixtureKernel(num_mixtures=12)
         self.covar_module = (
             ScaleKernel(covar) + RBFKernel()
@@ -49,7 +35,7 @@ class SpectralMixtureGPModel(gpytorch.models.ExactGP):
 
 class GaussianProcess(BaseLightningModule):
     def __init__(self, learning_rate: int = 0.001):
-        self.model = SpectralMixtureGPModel()
+        self.model = GPModel()
         self.learning_rate = learning_rate
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
 

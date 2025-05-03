@@ -1,10 +1,11 @@
 import numpy as np
 import torch
-import lightning as L
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from pathlib import Path
 from typing import Tuple
+
+from src.datasets.utils import BaseDataModule
 
 
 def dalia_load_data(
@@ -73,7 +74,7 @@ class DaLiADataset(Dataset):
         return look_back_window.float(), prediction_window.float()
 
 
-class DaLiADataModule(L.LightningDataModule):
+class DaLiADataModule(BaseDataModule):
     def __init__(
         self,
         data_dir: str,
@@ -89,24 +90,22 @@ class DaLiADataModule(L.LightningDataModule):
         freq: int = 25,
         name: str = "dalia",
     ):
-        super().__init__()
-
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_activity_info,
+        )
 
         self.use_heart_rate = use_heart_rate
-        self.use_activity_info = use_activity_info
-
-        self.freq = freq
-        self.name = name
 
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
-
-        self.num_workers = num_workers
 
     def setup(self, stage: str = None):
         if stage == "fit":
@@ -135,18 +134,3 @@ class DaLiADataModule(L.LightningDataModule):
                 self.look_back_window,
                 self.prediction_window,
             )
-
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-    def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )

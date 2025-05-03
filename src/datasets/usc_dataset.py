@@ -1,12 +1,13 @@
 import numpy as np
 import torch
-import lightning as L
 
 from pathlib import Path
 from scipy.io import loadmat
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder
 from typing import Tuple
+
+from src.datasets.utils import BaseDataModule
 
 
 def usc_load_data(datadir: str, participants: list[int], use_activity_info: bool):
@@ -101,7 +102,7 @@ class USCDataset(Dataset):
         return look_back_window, prediction_window
 
 
-class USCDataModule(L.LightningDataModule):
+class USCDataModule(BaseDataModule):
     def __init__(
         self,
         data_dir: str,
@@ -116,16 +117,16 @@ class USCDataModule(L.LightningDataModule):
         freq: int = 100,
         name: str = "usc",
     ):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
-        self.num_workers = num_workers
-        self.use_activity_info = use_activity_info
-
-        self.name = name
-        self.freq = freq
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_activity_info,
+        )
 
         self.train_participants = train_participants
         self.val_participants = val_participants
@@ -155,27 +156,3 @@ class USCDataModule(L.LightningDataModule):
                 self.test_participants,
                 self.use_activity_info,
             )
-
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-    def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-
-if __name__ == "__main__":
-    from tqdm import tqdm
-
-    usc_path = Path("C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD")
-    dataset = USCDataset(usc_path, "train")
-    for i in tqdm(range(len(dataset))):
-        x, y = dataset[i]
