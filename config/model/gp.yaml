@@ -1,0 +1,21 @@
+name: "gp"
+n_points: 500 # number of inducing points
+
+model:
+  _target_: src.models.gp.GPModel
+  num_latents: 3 
+  num_tasks: ${prediction_window}
+  # kernel: "linear"
+  # likelihood: "something" # TODO
+  # prior: "something else"
+
+pl_model: 
+  _target_: src.models.gp.GaussianProcess
+  learning_rate: 0.001
+
+trainer:
+  use_early_stopping: False
+  max_epochs: 10
+
+data: 
+  batch_size: 32

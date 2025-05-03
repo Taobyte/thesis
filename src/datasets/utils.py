@@ -5,8 +5,11 @@ import argparse
 import os
 import gzip
 import shutil
+import random
+import torch
 import lightning as L
 
+from einops import rearrange
 from torch.utils.data import DataLoader
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal
@@ -69,8 +72,39 @@ class BaseDataModule(L.LightningDataModule):
         )
 
     # used for Gaussian Process model
-    def get_inducing_points(self):
+
+    def get_inducing_points(self, num_inducing: int = 500) -> torch.Tensor:
+        # Ensure the train dataset is ready
         self.setup(stage="fit")
+
+        assert self.train_dataset is not None, "Train dataset is not initialized."
+
+        dataset_length = len(self.train_dataset)
+        assert dataset_length >= num_inducing, (
+            f"Cannot sample {num_inducing} inducing points from dataset of size {dataset_length}"
+        )
+
+        indices = random.sample(range(dataset_length), num_inducing)
+
+        inducing_points = [self.train_dataset[i][0] for i in indices]
+
+        inducing_points_tensor = torch.stack(inducing_points, dim=0)
+        inducing_points_tensor = rearrange(inducing_points, "B T C -> B (T C)")
+
+        print(inducing_points_tensor.shape)
+
+        return inducing_points_tensor
+
+    def get_train_dataset_length(self):
+        self.setup(stage="fit")
+
+        assert self.train_dataset is not None, "Train dataset is not initialized."
+
+        print(
+            f"Length of train dataset for Gaussian Process: {len(self.train_dataset)}"
+        )
+
+        return len(self.train_dataset)
 
 
 def create_ieee_npz_files(datadir: str):

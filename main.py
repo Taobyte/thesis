@@ -27,7 +27,14 @@ def main(config: DictConfig) -> Optional[float]:
         batch_size=config.model.data.batch_size,
     )
 
-    model = instantiate(config.model.model)
+    model_kwargs = {}
+    if config.model.name == "gp":
+        model_kwargs["inducing_points"] = datamodule.get_inducing_points(
+            config.model.n_points
+        )
+        model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
+
+    model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
         config.model.pl_model,
         model=model,
