@@ -126,10 +126,13 @@ class BaseLightningModule(L.LightningModule):
             for type, idx in zipped:
                 look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
                 look_back_window = look_back_window.unsqueeze(0).to(self.device)
+                look_back_window_norm, mean, std = local_z_norm(look_back_window)
                 target = target.unsqueeze(0)
-                pred = self.model_forward(look_back_window)[:, :, : target.shape[-1]]
-
-                assert pred.shape == target.shape
+                pred = self.model_forward(look_back_window_norm)[
+                    :, :, : target.shape[-1]
+                ]
+                pred_denorm = local_z_denorm(pred, mean, std)
+                assert pred_denorm.shape == target.shape
 
                 if hasattr(self.trainer.datamodule, "use_heart_rate"):
                     use_heart_rate = self.trainer.datamodule.use_heart_rate
@@ -139,7 +142,7 @@ class BaseLightningModule(L.LightningModule):
                 plot_prediction_wandb(
                     look_back_window,
                     target,
-                    pred,
+                    pred_denorm,
                     wandb_logger=self.logger,
                     metric_name=metric_name,
                     metric_value=v[idx],

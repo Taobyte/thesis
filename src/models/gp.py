@@ -1,13 +1,9 @@
 import torch
 import gpytorch
 
-import pdb
 
 from einops import rearrange
-from gpytorch.kernels import SpectralMixtureKernel, RBFKernel, ScaleKernel, MaternKernel
 from gpytorch.models import ApproximateGP
-from gpytorch.variational import CholeskyVariationalDistribution
-from gpytorch.variational import VariationalStrategy, MultitaskVariationalStrategy
 
 from src.models.utils import BaseLightningModule
 
