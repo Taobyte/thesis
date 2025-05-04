@@ -1,0 +1,11 @@
+defaults:
+ -  shared_sweeper
+
+params:
+  model.trainer.max_epochs: choice(5, 10, 20, 30)
+  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
+
+  model.model.num_latents: choice(3, 5, 10)
+  model.model.kernel: choice("rbf", "matern", "sm", "periodic")
+
+  model.n_points: choice(500, 1000, 1500, 2000)

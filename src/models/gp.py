@@ -10,7 +10,12 @@ from src.models.utils import BaseLightningModule
 
 class GPModel(ApproximateGP):
     def __init__(
-        self, inducing_points, train_dataset_length: int, num_latents=3, num_tasks=3
+        self,
+        inducing_points,
+        train_dataset_length: int,
+        num_latents=3,
+        num_tasks=3,
+        kernel: str = "rbf",
     ):
         self.num_latents = num_latents
         self.num_tasks = num_tasks
@@ -43,12 +48,34 @@ class GPModel(ApproximateGP):
         # The mean and covariance modules should be marked as batch
         # so we learn a different set of hyperparameters
         self.mean_module = gpytorch.means.ConstantMean(
-            batch_shape=torch.Size([num_latents])
-        )
-        self.covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel(batch_shape=torch.Size([num_latents])),
             batch_shape=torch.Size([num_latents]),
         )
+
+        if kernel == "periodic":
+            base_kernel = gpytorch.kernels.PeriodicKernel(
+                batch_shape=torch.Size([num_latents]),
+                ard_num_dims=inducing_points.shape[-1],
+            )
+        elif kernel == "rbf":
+            base_kernel = gpytorch.kernels.RBFKernel(
+                batch_shape=torch.Size([num_latents])
+            )
+        elif kernel == "matern":
+            base_kernel = gpytorch.kernels.MaternKernel(
+                nu=2.5, batch_shape=torch.Size([num_latents])
+            )
+        elif kernel == "sm":
+            base_kernel = gpytorch.kernels.SpectralMixtureKernel(
+                num_mixtures=12,
+                batch_shape=torch.Size([num_latents]),
+                ard_num_dims=inducing_points.shape[-1],
+            )
+        if kernel in ["sm"]:
+            self.covar_module = base_kernel  # spectralMixture kernel should not be combined with scalekernel
+        else:
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                base_kernel, batch_shape=torch.Size([num_latents])
+            )
 
     def forward(self, x):
         # pdb.set_trace()
