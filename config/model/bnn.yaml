@@ -1,0 +1,23 @@
+name: "bnn"
+
+model: 
+  _target_: src.models.bnn.Model
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  base_channel_dim: ${dataset.base_channel_dim}
+  input_channels: ${dataset.input_channels}
+  hid_dim: 10
+  n_hid_layers: 5
+  prior_scale: 5.0
+
+pl_model: 
+  _target_: src.models.bnn.BayesianNeuralNetwork
+  learning_rate: 0.01
+  num_samples: 500
+
+trainer:
+  max_epochs: 5
+  use_early_stopping: False 
+
+data:
+  batch_size: 32

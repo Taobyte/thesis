@@ -1,0 +1,23 @@
+name: "mlp"
+
+model: 
+  _target_: src.models.mlp.Model
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  base_channel_dim: ${dataset.base_channel_dim}
+  input_channels: ${dataset.input_channels}
+  hid_dim: 10
+  n_hid_layers: 2
+  activiation: "relu" # can be tanh, relu or none
+
+pl_model: 
+  _target_: src.models.mlp.MLP
+  learning_rate: 0.01
+  loss: "MSE"
+
+trainer:
+  max_epochs: 5
+  use_early_stopping: False 
+
+data:
+  batch_size: 32

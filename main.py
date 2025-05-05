@@ -87,7 +87,7 @@ def main(config: DictConfig) -> Optional[float]:
         return last_val_loss
     else:
         print("Start Evaluation.")
-        trainer.test(datamodule=datamodule)
+        trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
         print("End Evaluation.")
 
 
