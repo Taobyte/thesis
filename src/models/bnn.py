@@ -11,6 +11,8 @@ from einops import rearrange
 
 from src.models.utils import BaseLightningModule
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class Model(PyroModule):
     def __init__(
@@ -42,12 +44,15 @@ class Model(PyroModule):
 
         for layer_idx, layer in enumerate(self.layers):
             layer.weight = PyroSample(
-                dist.Normal(0.0, prior_scale * np.sqrt(2 / self.layer_sizes[layer_idx]))
+                dist.Normal(
+                    torch.tensor(0.0, device=device),
+                    prior_scale * np.sqrt(2 / self.layer_sizes[layer_idx]),
+                )
                 .expand([self.layer_sizes[layer_idx + 1], self.layer_sizes[layer_idx]])
                 .to_event(2)
             )
             layer.bias = PyroSample(
-                dist.Normal(0.0, prior_scale)
+                dist.Normal(torch.tensor(0.0, device=device), prior_scale)
                 .expand([self.layer_sizes[layer_idx + 1]])
                 .to_event(1)
             )
@@ -60,7 +65,9 @@ class Model(PyroModule):
         for layer in self.layers[1:-1]:
             x = self.activation(layer(x))  # hidden --> hidden
         mu = self.layers[-1](x)  # hidden --> output
-        sigma = pyro.sample("sigma", dist.Gamma(0.5, 1))  # infer the response noise
+        sigma = pyro.sample(
+            "sigma", dist.Gamma(torch.tensor(0.5, device=device), 1)
+        )  # infer the response noise
         # pdb.set_trace()
 
         # this part computes the log likelihood during training
