@@ -35,7 +35,7 @@ class Model(torch.nn.Module):
             x_hat = layer(x)
             x = torch.cat((x, x_hat), dim=1)
 
-        pred = x[:, -(self.prediction_window * self.base_channel_dim) :]
+        pred = x[:, -(self.prediction_window * self.input_channels) :]
         return pred
 
 
@@ -54,18 +54,21 @@ class KalmanFilter(BaseLightningModule):
 
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         preds = self.model(look_back_window)
-        preds = rearrange(preds, "B (T C) -> B T C", C=self.model.base_channel_dim)
+        preds = rearrange(preds, "B (T C) -> B T C", C=self.model.input_channels)
 
-        return preds
+        return preds[:, :, : self.model.base_channel_dim]
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
+        assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
+        assert preds.shape == prediction_window.shape
+        loss = self.criterion(preds, prediction_window)
         loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
