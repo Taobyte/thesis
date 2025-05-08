@@ -8,7 +8,7 @@ model:
   input_channels: ${dataset.input_channels}
   hid_dim: 10
   n_hid_layers: 2
-  activiation: "relu" # can be tanh, relu or none
+  activation: "relu" # can be tanh, relu or none
 
 pl_model: 
   _target_: src.models.mlp.MLP

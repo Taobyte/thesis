@@ -1,28 +1,6 @@
 import torch
-
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
-
-"""
-# SES stands for simple exponential smoothing
-class SESModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.alpha = torch.nn.Parameter()
-
-    def forward(self, x: torch.Tensor):
-        # x.shape = (B, T, C)
-        pass
-
-class RandomForest():
-    pass
-
-"""
-
-
-class ARIMAModel(torch.nn.Module):
-    pass
 
 
 class Linear(BaseLightningModule):

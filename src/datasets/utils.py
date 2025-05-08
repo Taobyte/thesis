@@ -16,6 +16,7 @@ from scipy import signal
 from scipy.io import loadmat
 from pathlib import Path
 from tqdm import tqdm
+from typing import Tuple
 
 
 class BaseDataModule(L.LightningDataModule):
@@ -105,6 +106,42 @@ class BaseDataModule(L.LightningDataModule):
         )
 
         return len(self.train_dataset)
+
+    def _get_dataset(self, mode: str = "train") -> Tuple[np.ndarray, np.ndarray]:
+        """
+        return z-normalized dataset
+        """
+        self.setup(stage="fit")
+        if mode == "train":
+            dataloader = self.train_dataloader()
+        elif mode == "val":
+            dataloader = self.val_dataloader()
+        else:
+            raise NotImplementedError()
+
+        from src.models.utils import local_z_norm
+
+        lbws = []
+        pws = []
+        for look_back_window, prediction_window in dataloader:
+            look_back_window, mean, std = local_z_norm(look_back_window)
+            prediction_window, _, _ = local_z_norm(prediction_window, mean, std)
+            look_back_window = look_back_window.detach().cpu().numpy()
+            prediction_window = prediction_window.detach().cpu().numpy()
+
+            lbws.append(look_back_window)
+            pws.append(prediction_window)
+
+        lbws_dataset = np.concatenate(lbws, axis=0)
+        pws_dataset = np.concatenate(pws, axis=0)
+
+        return lbws_dataset, pws_dataset
+
+    def get_train_dataset(self):
+        return self._get_dataset("train")
+
+    def get_val_dataset(self):
+        return self._get_dataset("val")
 
 
 def create_ieee_npz_files(datadir: str):

@@ -10,7 +10,7 @@ model:
   n_hid_layers: 0
 
 pl_model: 
-  _target_: src.models.baselines.Linear
+  _target_: src.models.linear.Linear
   learning_rate: 0.01
   loss: "MSE"
 

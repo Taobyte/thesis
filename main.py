@@ -33,6 +33,13 @@ def main(config: DictConfig) -> Optional[float]:
             config.model.n_points
         )
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
+    elif config.model.name == "xgboost":
+        lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
+        model_kwargs["lbw_train_dataset"] = lbw_train_dataset
+        model_kwargs["pw_train_dataset"] = pw_train_dataset
+        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
+        model_kwargs["lbw_val_dataset"] = lbw_val_dataset
+        model_kwargs["pw_val_dataset"] = pw_val_dataset
 
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
@@ -72,6 +79,7 @@ def main(config: DictConfig) -> Optional[float]:
         overfit_batches=1 if config.overfit else 0.0,
         limit_test_batches=10 if config.overfit else None,
         default_root_dir=config.path.basedir,
+        num_sanity_val_steps=0,
         **multi_gpu_dict,
     )
 
@@ -88,7 +96,7 @@ def main(config: DictConfig) -> Optional[float]:
     else:
         print("Start Evaluation.")
         try:
-            trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
+            trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
         except FileNotFoundError:
             print("Best checkpoint not found, testing with current model.")
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
