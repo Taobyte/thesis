@@ -17,6 +17,13 @@ class XGBoostModel(torch.nn.Module):
         lbw_val_dataset: np.ndarray,
         pw_val_dataset: np.ndarray,
         learning_rate: float = 0.001,
+        objective: str = "reg:squarederror",
+        n_estimators: int = 300,
+        max_depth: int = 4,
+        reg_alpha: int = 1,
+        reg_lambda: int = 1,
+        subsample: float = 0.8,
+        colsample_bytree: float = 0.8,
     ):
         super().__init__()
 
@@ -26,15 +33,15 @@ class XGBoostModel(torch.nn.Module):
         self.pw_val_dataset = pw_val_dataset
 
         self.model = XGBRegressor(
-            objective="reg:squarederror",
-            n_estimators=300,
+            objective=objective,
+            n_estimators=n_estimators,
             learning_rate=learning_rate,
             eval_metric="rmse",
-            max_depth=4,
-            reg_alpha=1,
-            reg_lambda=1,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            max_depth=max_depth,
+            reg_alpha=reg_alpha,
+            reg_lambda=reg_lambda,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
             # tree_method="gpu_hist",
             # predictor="gpu_predictor",
         )
@@ -65,7 +72,7 @@ class XGBoost(BaseLightningModule):
         preds = self.model.predict(look_back_window)
         preds = rearrange(preds, "B (T C) -> B T C", C=self.base_channel_dim)
         # we need to have a pytorch tensor for evaluation
-        preds = torch.tensor(preds, dtype=torch.float32)
+        preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         return preds
 
     def on_fit_end(self):

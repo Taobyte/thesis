@@ -3,6 +3,11 @@ name: "xgboost"
 model:
   _target_: src.models.xgboost.XGBoostModel
   learning_rate: 0.05
+  max_depth: 4
+  reg_alpha: 1
+  reg_lambda: 1 
+  subsample: 0.8
+  colsample_bytree: 0.8
 
 pl_model:
   _target_: src.models.xgboost.XGBoost
