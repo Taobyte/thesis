@@ -34,8 +34,8 @@ class Model(torch.nn.Module):
         out_dim = prediction_window * base_channel_dim
 
         self.layer_sizes = [in_dim] + n_hid_layers * [hid_dim] + [out_dim]
-        self.layers = torch.nn.ModuleList(
-            [
+        self.layers = torch.nn.Sequential(
+            *[
                 torch.nn.Linear(self.layer_sizes[i - 1], self.layer_sizes[i])
                 for i in range(1, len(self.layer_sizes))
             ]
