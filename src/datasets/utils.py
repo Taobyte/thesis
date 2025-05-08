@@ -135,6 +135,14 @@ class BaseDataModule(L.LightningDataModule):
         lbws_dataset = np.concatenate(lbws, axis=0)
         pws_dataset = np.concatenate(pws, axis=0)
 
+        lbw_gb = lbws_dataset.nbytes / (1024**3)
+        pw_gb = pws_dataset.nbytes / (1024**3)
+        total_gb = lbw_gb + pw_gb
+
+        print(f"[{mode}] look_back_window: {lbws_dataset.shape}, {lbw_gb:.4f} GB")
+        print(f"[{mode}] prediction_window: {pws_dataset.shape}, {pw_gb:.4f} GB")
+        print(f"[{mode}] total size: {total_gb:.4f} GB")
+
         return lbws_dataset, pws_dataset
 
     def get_train_dataset(self):

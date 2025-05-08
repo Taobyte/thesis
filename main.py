@@ -1,3 +1,4 @@
+import os
 import hydra
 import lightning as L
 
@@ -95,9 +96,10 @@ def main(config: DictConfig) -> Optional[float]:
         return last_val_loss
     else:
         print("Start Evaluation.")
-        try:
-            trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
-        except FileNotFoundError:
+        best_ckpt_path = os.path.join(config.path.basedir, "checkpoints", "best.ckpt")
+        if os.path.exists(best_ckpt_path):
+            trainer.test(datamodule=datamodule, ckpt_path="best")
+        else:
             print("Best checkpoint not found, testing with current model.")
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
         print("End Evaluation.")
