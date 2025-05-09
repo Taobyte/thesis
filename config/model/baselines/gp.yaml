@@ -1,11 +1,12 @@
 name: "gp"
 n_points: 500 # number of inducing points
+strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
   _target_: src.models.gp.GPModel
   num_latents: 3 
   num_tasks: ${prediction_window}
-  kernel: "periodic"  # can be "rbf", "matern", "periodic" or "sm" spectral mixutre kernel
+  kernel: "matern"  # can be "rbf", "matern", "periodic" or "sm" spectral mixutre kernel
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess

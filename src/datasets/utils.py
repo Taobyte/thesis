@@ -74,7 +74,9 @@ class BaseDataModule(L.LightningDataModule):
 
     # used for Gaussian Process model
 
-    def get_inducing_points(self, num_inducing: int = 500) -> torch.Tensor:
+    def get_inducing_points(
+        self, num_inducing: int = 500, strategy: str = "random"
+    ) -> torch.Tensor:
         # Ensure the train dataset is ready
         self.setup(stage="fit")
 
@@ -84,15 +86,21 @@ class BaseDataModule(L.LightningDataModule):
         assert dataset_length >= num_inducing, (
             f"Cannot sample {num_inducing} inducing points from dataset of size {dataset_length}"
         )
+        if strategy == "random":
+            indices = random.sample(range(dataset_length), num_inducing)
+            inducing_points = [self.train_dataset[i][0] for i in indices]
 
-        indices = random.sample(range(dataset_length), num_inducing)
+            inducing_points_tensor = torch.stack(inducing_points, dim=0)
+            inducing_points_tensor = rearrange(inducing_points, "B T C -> B (T C)")
+        else:
+            # use KMeans clustering
+            inducing_points = 0
+            from sklearn.cluster import KMeans
 
-        inducing_points = [self.train_dataset[i][0] for i in indices]
-
-        inducing_points_tensor = torch.stack(inducing_points, dim=0)
-        inducing_points_tensor = rearrange(inducing_points, "B T C -> B (T C)")
-
-        print(inducing_points_tensor.shape)
+            train_x, _ = self.get_train_dataset()
+            train_x = rearrange(train_x, "B T C -> B (T C)")
+            kmeans = KMeans(n_clusters=num_inducing).fit(train_x)
+            inducing_points_tensor = torch.tensor(kmeans.cluster_centers_)
 
         return inducing_points_tensor
 
@@ -145,10 +153,10 @@ class BaseDataModule(L.LightningDataModule):
 
         return lbws_dataset, pws_dataset
 
-    def get_train_dataset(self):
+    def get_train_dataset(self) -> np.ndarray:
         return self._get_dataset("train")
 
-    def get_val_dataset(self):
+    def get_val_dataset(self) -> np.ndarray:
         return self._get_dataset("val")
 
 

@@ -31,7 +31,7 @@ def main(config: DictConfig) -> Optional[float]:
     model_kwargs = {}
     if config.model.name == "gp":
         model_kwargs["inducing_points"] = datamodule.get_inducing_points(
-            config.model.n_points
+            config.model.n_points, config.model.strategy
         )
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
     elif config.model.name == "xgboost":

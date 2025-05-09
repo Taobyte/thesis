@@ -6,7 +6,7 @@ class Evaluator:
     def __init__(self):
         super().__init__()
 
-    def get_sequence_metrics(self, targets, preds):
+    def get_sequence_metrics(self, targets, preds, look_back_window):
         metrics = {
             "MSE": mse(targets, preds),
             "MAE": mae(targets, preds),
@@ -16,6 +16,7 @@ class Evaluator:
             # "MAPE": mape(targets, preds),
             # "sMAPE": smape(targets, preds),
             "cross_correlation": correlation(preds, targets),
+            "dir_acc": dir_acc(preds, targets, look_back_window),
         }
 
         # metrics["RMSE"] = np.sqrt(metrics["MSE"])
@@ -24,7 +25,12 @@ class Evaluator:
 
         return metrics
 
-    def get_metrics(self, targets: torch.Tensor, forecasts: torch.Tensor):
+    def get_metrics(
+        self,
+        targets: torch.Tensor,
+        forecasts: torch.Tensor,
+        look_back_window: torch.Tensor = None,
+    ):
         """
 
         Parameters
@@ -45,6 +51,7 @@ class Evaluator:
             single_seq_metrics = self.get_sequence_metrics(
                 np.expand_dims(targets[i], axis=0),
                 np.expand_dims(forecasts[i], axis=0),
+                np.expand_dims(look_back_window[i], axis=0),
             )
             for metric_name, metric_value in single_seq_metrics.items():
                 if metric_name not in seq_metrics:
@@ -52,7 +59,12 @@ class Evaluator:
                 seq_metrics[metric_name].append(metric_value)
         return seq_metrics
 
-    def __call__(self, targets, forecasts):
+    def __call__(
+        self,
+        targets,
+        forecasts,
+        look_back_window: torch.Tensor = None,
+    ):
         """
 
         Parameters
@@ -69,16 +81,29 @@ class Evaluator:
         targets = targets.cpu().detach().numpy()
         forecasts = forecasts.cpu().detach().numpy()
 
-        metrics = self.get_metrics(
-            targets,
-            forecasts,
-        )
+        metrics = self.get_metrics(targets, forecasts, look_back_window)
         mean_metrics = metrics.copy()
 
         for metric_name, metric_value in mean_metrics.items():
             mean_metrics[metric_name] = np.mean(metric_value)
 
         return mean_metrics, metrics
+
+
+def dir_acc(
+    preds: np.ndarray, targets: np.ndarray, look_back_window: np.ndarray
+) -> float:
+    """
+    Computes the TODO
+    """
+    _, _, C = targets.shape
+    last_look_back = look_back_window[
+        :, -1, :C
+    ]  # filter out the activity info channels
+    ground_truth_slope = np.sign(targets[:, 0, :] - last_look_back)  # (B, 1, C)
+    prediction_slope = np.sign(preds[:, 0, :] - last_look_back)  # (B, 1, C)
+
+    return np.mean(ground_truth_slope == prediction_slope)
 
 
 def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
@@ -171,3 +196,18 @@ def smape(target: np.ndarray, forecast: np.ndarray) -> float:
     See [HA21]_ for more details.
     """
     return 2 * np.mean(np.abs(target - forecast) / (np.abs(target) + np.abs(forecast)))
+
+
+if __name__ == "__main__":
+    preds = np.array([1, 2, 3]).reshape(1, -1, 1)
+    targets = np.array([-1, 3, 4]).reshape(1, -1, 1)
+    look_back_window = np.array([2]).reshape(1, -1, 1)
+    import pdb
+
+    preds = np.random.normal(size=(1, 3, 2))
+    targets = np.random.normal(size=(1, 3, 2))
+    look_back_window = np.random.normal(size=(1, 3, 4))
+
+    pdb.set_trace()
+
+    print(dir_acc(preds, targets, look_back_window))

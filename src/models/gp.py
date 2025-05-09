@@ -327,6 +327,18 @@ class GPModel(ApproximateGP):
                 batch_shape=torch.Size([num_latents]),
                 ard_num_dims=inducing_points.shape[-1],
             )
+
+        # hardcode kernel
+        base_kernel = (
+            gpytorch.kernels.LinearKernel()
+            + gpytorch.kernels.MaternKernel(
+                nu=2.5, batch_shape=torch.Size([num_latents])
+            )
+            + gpytorch.kernels.PeriodicKernel(
+                batch_shape=torch.Size([num_latents]),
+                ard_num_dims=inducing_points.shape[-1],
+            )
+        )
         if kernel in ["sm"]:
             self.covar_module = base_kernel  # spectralMixture kernel should not be combined with scalekernel
         else:

@@ -167,7 +167,9 @@ class BaseLightningModule(L.LightningModule):
 
         # Metric Calculation
         denormalized_preds = local_z_denorm(preds, mean, std)
-        metrics, current_metrics = self.evaluator(prediction_window, denormalized_preds)
+        metrics, current_metrics = self.evaluator(
+            prediction_window, denormalized_preds, look_back_window
+        )
         self.update_metrics(metrics)
 
         return metrics, current_metrics
