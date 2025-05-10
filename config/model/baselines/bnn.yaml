@@ -9,6 +9,7 @@ model:
   hid_dim: 10
   n_hid_layers: 5
   prior_scale: 5.0
+  activation: "relu"
 
 pl_model: 
   _target_: src.models.bnn.BayesianNeuralNetwork

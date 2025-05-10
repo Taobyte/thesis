@@ -51,8 +51,9 @@ or if advancements are needed to improve their predictive accuracy in such scena
 | SimpleTM    | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | Yes| [GitHub](https://github.com/vsingh-group/SimpleTM/) |
 | ElasTST   | Patch-based transformer with rotary embeddings and elastic structure, effective for non-stationary series. | No| [GitHub](https://github.com/microsoft/ProbTS/tree/elastst) |
 | Ada-MSHyper  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | No | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
-| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/NeurIPS2023-One-Fits-All/) |
-| LLMTime      |  Uses large language models (LLMs) for time series modeling through tokenization and prompt tuning. | Yes | [GitHub](https://github.com/ngruver/llmtime) |
+| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/
+Pattn | Simple baseline forecasting model based on patching and the transfomer architecture | Yes | TODO
+TimeLLM |  TODO | Yes | [GitHub](https://github.com/ngruver/llmtime) |
 
 ## Simpler Models 
 - Linear Models

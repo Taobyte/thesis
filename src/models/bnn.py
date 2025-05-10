@@ -24,12 +24,20 @@ class Model(PyroModule):
         hid_dim=10,
         n_hid_layers=5,
         prior_scale=5.0,
+        activation: str = "tanh",
     ):
         super().__init__()
 
         self.base_channel_dim = base_channel_dim
 
-        self.activation = nn.Tanh()  # could also be ReLU or LeakyReLU
+        if activation == "relu":
+            self.activation = torch.nn.ReLU()
+        elif activation == "tanh":
+            self.activation = torch.nn.Tanh()
+        elif activation == "none":
+            self.activation = torch.nn.Identity()
+        else:
+            raise NotImplementedError()
 
         in_dim = look_back_window * (input_channels)
         out_dim = prediction_window * base_channel_dim
@@ -58,9 +66,6 @@ class Model(PyroModule):
             )
 
     def forward(self, x, y=None):
-        import pdb
-
-        # pdb.set_trace()
         x = self.activation(self.layers[0](x))  # input --> hidden
         for layer in self.layers[1:-1]:
             x = self.activation(layer(x))  # hidden --> hidden
@@ -68,7 +73,6 @@ class Model(PyroModule):
         sigma = pyro.sample(
             "sigma", dist.Gamma(torch.tensor(0.5, device=device), 1)
         )  # infer the response noise
-        # pdb.set_trace()
 
         # this part computes the log likelihood during training
         with pyro.plate("data", x.shape[0]):
@@ -117,7 +121,7 @@ class BayesianNeuralNetwork(BaseLightningModule):
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
 
         loss = self.svi.evaluate_loss(look_back_window, prediction_window)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return None
 
     def configure_optimizers(self):

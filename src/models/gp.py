@@ -339,6 +339,7 @@ class GPModel(ApproximateGP):
                 ard_num_dims=inducing_points.shape[-1],
             )
         )
+
         if kernel in ["sm"]:
             self.covar_module = base_kernel  # spectralMixture kernel should not be combined with scalekernel
         else:

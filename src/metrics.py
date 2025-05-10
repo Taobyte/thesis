@@ -80,6 +80,7 @@ class Evaluator:
         """
         targets = targets.cpu().detach().numpy()
         forecasts = forecasts.cpu().detach().numpy()
+        look_back_window = look_back_window.cpu().detach().numpy()
 
         metrics = self.get_metrics(targets, forecasts, look_back_window)
         mean_metrics = metrics.copy()
