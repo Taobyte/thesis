@@ -1,0 +1,17 @@
+name: "mhc6mwt"
+
+datamodule:
+  _target_: src.datasets.mhc6mwt_dataset.MHC6MWTDataModule
+  data_dir: "${path.datadir}/mhc6mwt/"
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  use_disease: ${use_activity_info}
+  batch_size: 32
+  num_workers: ${num_workers}
+
+  freq: 1 # The freq is one, since we have one timestep per second
+  name: ${dataset.name}
+
+base_channel_dim: 12
+activity_channel_dim: 4
+input_channels: ${eval:'8 if ${use_activity_info} else 4'}

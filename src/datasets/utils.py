@@ -8,6 +8,7 @@ import shutil
 import random
 import torch
 import lightning as L
+import wfdb
 
 from einops import rearrange
 from torch.utils.data import DataLoader
@@ -340,14 +341,72 @@ def ucihar_preprocess(datadir: str):
     )
 
 
+def mhc6mwt_preprocess(datadir: str) -> None:
+    walk_hr_df = pd.read_csv(datadir + "/hr_walk.parquet")
+    # rest_hr_df = pd.read_csv(datadir + "/hr_rest.parquet") leave out resting hr for now
+    pedometer_df = pd.read_csv(datadir + "/pedometer.parquet")
+    dictionaries = []
+    for id in tqdm(
+        walk_hr_df["recordId"].unique(), total=len(walk_hr_df["recordId"].unique())
+    ):
+        hr_test = walk_hr_df[walk_hr_df["recordId"] == id][["value"]]
+        acc_test = pedometer_df[pedometer_df["recordId"] == id]
+        acc_test = acc_test.sort_values("endDate")
+        acc_test = acc_test[["startDate", "endDate", "distance", "numberOfSteps"]]
+        acc_test["seconds"] = (
+            (acc_test["endDate"] - acc_test["startDate"]).dt.total_seconds().astype(int)
+        )
+
+        acc_test["delta_dist"] = acc_test["distance"].diff()
+        acc_test["delta_steps"] = acc_test["numberOfSteps"].diff()
+        acc_test["delta_sec"] = acc_test["seconds"].diff()
+
+        acc_test["delta_dist"].iloc[0] = acc_test["distance"].iloc[0]
+        acc_test["delta_steps"].iloc[0] = acc_test["numberOfSteps"].iloc[0]
+        acc_test["delta_sec"].iloc[0] = acc_test["seconds"].iloc[0]
+
+        acc_test["avg_steps"] = acc_test["delta_steps"] / acc_test["delta_sec"]
+        acc_test["avg_dist"] = acc_test["delta_dist"] / acc_test["delta_sec"]
+
+        df_repeated = acc_test.loc[
+            acc_test.index.repeat(acc_test["delta_sec"])
+        ].reset_index(drop=True)
+        df_repeated = df_repeated[["avg_steps", "avg_dist"]]
+        min_length = min(len(hr_test), len(df_repeated))
+        df_concat = pd.concat(
+            (hr_test.iloc[:min_length, :], df_repeated.iloc[:min_length, :]), axis=1
+        )
+        dictionaries.append({id: df_concat.values})
+
+    with open(datadir + "/mhc6mwt.pkl", "wb") as f:
+        pickle.dump(dictionaries, f)
+
+
+def ptbxl_preprocess(datadir: str) -> None:
+    print("Start processing PTB-XL files.")
+    path = Path(datadir)
+    ts_dict = {}
+
+    for p in tqdm(path.glob("**/*.dat")):
+        record_id = str(p)[-12:-7]
+        record = wfdb.rdrecord(str(p)[:-4])
+        arr = record.p_signal.astype(np.float32)
+        assert arr.shape == (1000, 12)
+        ts_dict[record_id] = arr
+
+    np.savez_compressed(path / "ptbxl_preprocessed.npz", **ts_dict)
+
+    print("Finished processing PTB-XL files.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
         "--dataset",
-        choices=["ieee", "capture24", "ucihar", "dalia"],
+        choices=["ieee", "capture24", "ucihar", "dalia", "ptbxl"],
         required=True,
-        help="You have to choose from [dalia, ucihar, ieee, capture24]",
+        help="You have to choose from [dalia, ucihar, ieee, capture24, ptbxl]",
     )
 
     parser.add_argument(
@@ -370,5 +429,9 @@ if __name__ == "__main__":
     elif args.dataset == "ieee":
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
         create_ieee_npz_files(args.datadir)
+    elif args.dataset == "ptbxl":
+        ptbxl_preprocess(
+            args.datadir
+        )  # "C:/Users/cleme/ETH/Master/Thesis/data/PTB/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3/records100/"
     else:
         raise NotImplementedError()

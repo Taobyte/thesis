@@ -95,7 +95,16 @@ def dir_acc(
     preds: np.ndarray, targets: np.ndarray, look_back_window: np.ndarray
 ) -> float:
     """
-    Computes the TODO
+    Computes the percentage of correct directional predictions (up/down movement)
+    between the last observed value and the predicted/true future value.
+
+    Args:
+        preds: Model predictions shape (B, T, C)
+        targets: Ground truth values shape (B, T, C)
+        look_back_window: Input history window shape (B, L, C)
+
+    Returns:
+        Accuracy score between 0 and 1 where 1 = perfect direction prediction
     """
     _, _, C = targets.shape
     last_look_back = look_back_window[

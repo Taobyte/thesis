@@ -10,6 +10,8 @@ model:
   n_hid_layers: 5
   prior_scale: 5.0
   activation: "relu"
+  heteroscedastic: False # if true, learn output noise
+  output_noise_sigma: 0.01
 
 pl_model: 
   _target_: src.models.bnn.BayesianNeuralNetwork

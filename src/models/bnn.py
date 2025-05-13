@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from pyro.nn import PyroModule, PyroSample
 from pyro.infer import SVI, Trace_ELBO, Predictive
-from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal, AutoMultivariateNormal
 from einops import rearrange
 
 from src.models.utils import BaseLightningModule
@@ -25,6 +25,8 @@ class Model(PyroModule):
         n_hid_layers=5,
         prior_scale=5.0,
         activation: str = "tanh",
+        heteroscedastic: bool = False,
+        output_noise_sigma: float = 0.01,
     ):
         super().__init__()
 
@@ -38,6 +40,9 @@ class Model(PyroModule):
             self.activation = torch.nn.Identity()
         else:
             raise NotImplementedError()
+
+        self.heteroscedastic = heteroscedastic
+        self.output_noise_sigma = output_noise_sigma
 
         in_dim = look_back_window * (input_channels)
         out_dim = prediction_window * base_channel_dim
@@ -70,10 +75,12 @@ class Model(PyroModule):
         for layer in self.layers[1:-1]:
             x = self.activation(layer(x))  # hidden --> hidden
         mu = self.layers[-1](x)  # hidden --> output
+        """
         sigma = pyro.sample(
             "sigma", dist.Gamma(torch.tensor(0.5, device=device), 1)
         )  # infer the response noise
-
+        """
+        sigma = torch.tensor(self.output_noise_sigma, device=device)
         # this part computes the log likelihood during training
         with pyro.plate("data", x.shape[0]):
             obs = pyro.sample("obs", dist.Normal(mu, sigma * sigma).to_event(1), obs=y)

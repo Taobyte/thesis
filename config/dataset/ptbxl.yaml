@@ -1,0 +1,20 @@
+name: "ptbxl"
+
+datamodule:
+  _target_: src.datasets.ptbxl_dataset.PTBXLDataModule
+  data_dir: "${path.datadir}/PTBXL/"
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  train_folds: [1,2,3,4,5,6]
+  val_folds: [7,8]
+  test_folds: [9,10]
+  use_disease: ${use_activity_info}
+  batch_size: 32
+  num_workers: ${num_workers}
+
+  freq: 100
+  name: ${dataset.name}
+
+base_channel_dim: 12
+activity_channel_dim: 4
+input_channels: ${eval:'8 if ${use_activity_info} else 4'}
