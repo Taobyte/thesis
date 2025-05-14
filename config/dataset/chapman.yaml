@@ -9,7 +9,7 @@ datamodule:
   batch_size: 32
   num_workers: ${num_workers}
 
-  freq: 10 # TODO
+  freq: 100 
   name: ${dataset.name}
 
 base_channel_dim: 4

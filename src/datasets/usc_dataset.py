@@ -99,6 +99,9 @@ class USCDataset(Dataset):
             : self.base_channel_dim,
         ]
 
+        look_back_window = torch.tensor(look_back_window).float()
+        prediction_window = torch.tensor(prediction_window).float()
+
         return look_back_window, prediction_window
 
 
@@ -156,3 +159,16 @@ class USCDataModule(BaseDataModule):
                 self.test_participants,
                 self.use_activity_info,
             )
+
+
+if __name__ == "__main__":
+    module = USCDataModule("C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD/")
+    module.setup("fit")
+
+    t_d = module.train_dataloader()
+
+    tensor = next(iter(t_d))
+
+    import pdb
+
+    pdb.set_trace()

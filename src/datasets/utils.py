@@ -342,16 +342,21 @@ def ucihar_preprocess(datadir: str):
 
 
 def mhc6mwt_preprocess(datadir: str) -> None:
-    walk_hr_df = pd.read_csv(datadir + "/hr_walk.parquet")
+    walk_hr_df = pd.read_parquet(datadir + "/hr_walk.parquet")
     # rest_hr_df = pd.read_csv(datadir + "/hr_rest.parquet") leave out resting hr for now
-    pedometer_df = pd.read_csv(datadir + "/pedometer.parquet")
-    dictionaries = []
+    pedometer_df = pd.read_parquet(datadir + "/pedometer.parquet")
+    dictionaries = {}
+
     for id in tqdm(
         walk_hr_df["recordId"].unique(), total=len(walk_hr_df["recordId"].unique())
     ):
         hr_test = walk_hr_df[walk_hr_df["recordId"] == id][["value"]]
         acc_test = pedometer_df[pedometer_df["recordId"] == id]
         acc_test = acc_test.sort_values("endDate")
+
+        # some rows contained endDates < startDate
+        acc_test = acc_test[acc_test["startDate"] <= acc_test["endDate"]]
+
         acc_test = acc_test[["startDate", "endDate", "distance", "numberOfSteps"]]
         acc_test["seconds"] = (
             (acc_test["endDate"] - acc_test["startDate"]).dt.total_seconds().astype(int)
@@ -361,13 +366,31 @@ def mhc6mwt_preprocess(datadir: str) -> None:
         acc_test["delta_steps"] = acc_test["numberOfSteps"].diff()
         acc_test["delta_sec"] = acc_test["seconds"].diff()
 
-        acc_test["delta_dist"].iloc[0] = acc_test["distance"].iloc[0]
-        acc_test["delta_steps"].iloc[0] = acc_test["numberOfSteps"].iloc[0]
-        acc_test["delta_sec"].iloc[0] = acc_test["seconds"].iloc[0]
+        acc_test.loc[acc_test.index[0], "delta_sec"] = acc_test.loc[
+            acc_test.index[0], "seconds"
+        ]
+        acc_test.loc[acc_test.index[0], "delta_dist"] = acc_test.loc[
+            acc_test.index[0], "distance"
+        ]
+        acc_test.loc[acc_test.index[0], "delta_steps"] = acc_test.loc[
+            acc_test.index[0], "numberOfSteps"
+        ]
 
-        acc_test["avg_steps"] = acc_test["delta_steps"] / acc_test["delta_sec"]
-        acc_test["avg_dist"] = acc_test["delta_dist"] / acc_test["delta_sec"]
+        # sometimes delta_sec is 0, then we set avg_dist and avg_steps to 0
+        acc_test["avg_steps"] = np.where(
+            acc_test["delta_sec"] == 0,
+            0,
+            acc_test["delta_steps"] / acc_test["delta_sec"],
+        )
+        acc_test["avg_dist"] = np.where(
+            acc_test["delta_sec"] == 0,
+            0,
+            acc_test["delta_dist"] / acc_test["delta_sec"],
+        )
 
+        assert (acc_test["delta_sec"] >= 0).all(), (
+            f"{np.where(acc_test['delta_sec'].values < 0)}"
+        )
         df_repeated = acc_test.loc[
             acc_test.index.repeat(acc_test["delta_sec"])
         ].reset_index(drop=True)
@@ -376,7 +399,7 @@ def mhc6mwt_preprocess(datadir: str) -> None:
         df_concat = pd.concat(
             (hr_test.iloc[:min_length, :], df_repeated.iloc[:min_length, :]), axis=1
         )
-        dictionaries.append({id: df_concat.values})
+        dictionaries[id] = df_concat.values
 
     with open(datadir + "/mhc6mwt.pkl", "wb") as f:
         pickle.dump(dictionaries, f)
@@ -404,9 +427,9 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dataset",
-        choices=["ieee", "capture24", "ucihar", "dalia", "ptbxl"],
+        choices=["ieee", "capture24", "ucihar", "dalia", "ptbxl", "mhc6mwt"],
         required=True,
-        help="You have to choose from [dalia, ucihar, ieee, capture24, ptbxl]",
+        help="You have to choose from [dalia, ucihar, ieee, capture24, ptbxl, mhc6mwt]",
     )
 
     parser.add_argument(
@@ -433,5 +456,8 @@ if __name__ == "__main__":
         ptbxl_preprocess(
             args.datadir
         )  # "C:/Users/cleme/ETH/Master/Thesis/data/PTB/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3/records100/"
+    elif args.dataset == "mhc6mwt":
+        # datadir = "C:\Users\cleme\ETH\Master\Thesis\data\mhc_6mwt_dataset"
+        mhc6mwt_preprocess(args.datadir)
     else:
         raise NotImplementedError()
