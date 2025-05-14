@@ -95,7 +95,7 @@ class BayesianNeuralNetwork(BaseLightningModule):
         self.automatic_optimization = False  # we optimize the BNN using pyro
         self.model = model
 
-        mean_field_guide = AutoDiagonalNormal(model)
+        mean_field_guide = AutoMultivariateNormal(model)
         optimizer = pyro.optim.Adam({"lr": learning_rate})
 
         self.svi = SVI(model, mean_field_guide, optimizer, loss=Trace_ELBO())

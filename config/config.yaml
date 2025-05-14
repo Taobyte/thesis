@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
-  - path: local
+  - path: cluster
   # - override hydra/sweeper: pattn_sweeper
 
 hydra:
@@ -16,7 +16,7 @@ use_heart_rate: True
 use_activity_info: False
 
 seed: 123
-overfit: True
+overfit: False
 use_checkpoint_callback: False
 num_workers: 0
 
