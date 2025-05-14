@@ -1,2 +1,16 @@
 name: "capture24"
-freq: 25
+
+datamodule:
+  _target_: "src.dataset.capture24.Capture24DataModule"
+  data_dir: "${path.datadir}/Capture24/"
+  batch_size: 32
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  use_activity_info: ${use_activity_info}
+
+  freq: 25
+  name: ${dataset.name}
+
+base_channel_dim: 3
+activity_channel_dim: 1
+input_channels: ${eval:'4 if ${use_activity_info} else 3'}

@@ -11,12 +11,6 @@ def ptbxl_load_data(datadir: str):
     raise NotImplementedError()
 
 
-def get_ids(folds: list[int], summary: pd.DataFrame):
-    mapping = {ecg_id: i for i, ecg_id in enumerate(summary["ecg_id"].astype(str))}
-    ecg_ids = summary[summary["strat_fold"].isin(folds)]["ecg_id"].astype(str)
-    return [mapping[ecg_id] for ecg_id in ecg_ids]
-
-
 class PTBXLDataset(Dataset):
     def __init__(
         self,
@@ -92,6 +86,13 @@ class PTBXLDataModule(BaseDataModule):
 
         summary = pd.read_csv(data_dir + "ptbxl_database.csv")
         # TODO add exogenous variables
+
+        def get_ids(folds: list[int], summary: pd.DataFrame):
+            mapping = {
+                ecg_id: i for i, ecg_id in enumerate(summary["ecg_id"].astype(str))
+            }
+            ecg_ids = summary[summary["strat_fold"].isin(folds)]["ecg_id"].astype(str)
+            return [mapping[ecg_id] for ecg_id in ecg_ids]
 
         self.train_ids = get_ids(train_folds, summary)
         self.val_ids = get_ids(val_folds, summary)

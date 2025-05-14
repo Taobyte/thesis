@@ -8,6 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from typing import Tuple
 
+from src.datasets.utils import BaseDataModule
+
 
 def stratified_participant_split(
     df: pd.DataFrame, test_size=0.2, val_size=0.25, seed=42
@@ -75,21 +77,30 @@ class Capture24Dataset(Dataset):
         return look_back_window, prediction_window
 
 
-class Capture24DataModule(L.LightningDataModule):
+class Capture24DataModule(BaseDataModule):
     def __init__(
         self,
-        datadir: str,
+        data_dir: str,
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
+        use_activity_info: bool = False,
+        num_workers: int = 0,
+        freq: int = 25,
+        name: str = "capture24",
     ):
-        super().__init__()
-        self.data_dir = datadir
-        self.batch_size = batch_size
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
+        super().__init__(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            name=name,
+            freq=freq,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            use_activity_info=use_activity_info,
+        )
 
-        metadata = pd.read_csv(datadir + "metadata.csv")
+        metadata = pd.read_csv(data_dir + "metadata.csv")
 
         self.train_participants, self.val_participants, self.test_participants = (
             stratified_participant_split(metadata)

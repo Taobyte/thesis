@@ -75,7 +75,9 @@ def plot_ploty(
 def get_yaxis_name(dataset: str, use_heart_rate: bool = False):
     if dataset in ["dalia", "wildppg", "ieee"]:
         yaxis_name = "Heartrate" if use_heart_rate else "PPG"
-    elif dataset == "chapman":
+    elif dataset == "mhc6mwt":
+        yaxis_name = "Heartrate"
+    elif dataset in ["chapman", "ptbxl"]:
         yaxis_name = "ECG"
     elif dataset in ["ucihar", "usc"]:
         yaxis_name = "Acc & Gyro"

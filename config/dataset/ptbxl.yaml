@@ -17,5 +17,5 @@ datamodule:
   name: ${dataset.name}
 
 base_channel_dim: 12
-activity_channel_dim: 4
-input_channels: ${eval:'8 if ${use_activity_info} else 4'}
+activity_channel_dim: 4 #TODO
+input_channels: ${eval:'16 if ${use_activity_info} else 12'}
