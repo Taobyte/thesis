@@ -7,8 +7,14 @@ from torch.utils.data import Dataset
 from src.datasets.utils import BaseDataModule
 
 
-def ptb_load_data(datadir: str):
-    return None
+def ptbxl_load_data(datadir: str):
+    raise NotImplementedError()
+
+
+def get_ids(folds: list[int], summary: pd.DataFrame):
+    mapping = {ecg_id: i for i, ecg_id in enumerate(summary["ecg_id"].astype(str))}
+    ecg_ids = summary[summary["strat_fold"].isin(folds)]["ecg_id"].astype(str)
+    return [mapping[ecg_id] for ecg_id in ecg_ids]
 
 
 class PTBXLDataset(Dataset):
@@ -16,29 +22,28 @@ class PTBXLDataset(Dataset):
         self,
         look_back_window: int,
         prediction_window: int,
-        X: np.ndarray,
-        disease: np.ndarray,
+        data: np.ndarray,
         use_disease: bool = False,
     ):
-        self.X = X
-        self.disease = disease
+        self.n_records = len(data)
+        self.data = data
+        assert data.shape == (self.n_records, 1000, 12)
         self.use_disease = use_disease
-        self.n_participants = len(disease)
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
     def __len__(self) -> int:
-        return self.n_participants * (1000 - self.window + 1)
+        return self.n_records * (1000 - self.window + 1)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
         participant_idx = idx // (1000 - self.window + 1)
         window_pos = idx % (1000 - self.window + 1)
 
-        look_back_window = self.X[participant_idx][
+        look_back_window = self.data[participant_idx][
             window_pos : window_pos + self.look_back_window, :
         ]
-        prediction_window = self.X[participant_idx][
+        prediction_window = self.data[participant_idx][
             window_pos + self.look_back_window : window_pos + self.window, :
         ]
 
@@ -50,9 +55,10 @@ class PTBXLDataset(Dataset):
             )
             look_back_window = np.concatenate((look_back_window, disease_vec), axis=1)
 
-        return torch.from_numpy(look_back_window).float(), torch.from_numpy(
-            prediction_window
-        ).float()
+        look_back_window = torch.from_numpy(look_back_window).float()
+        prediction_window = torch.from_numpy(prediction_window).float()
+
+        return look_back_window, prediction_window
 
 
 class PTBXLDataModule(BaseDataModule):
@@ -69,6 +75,7 @@ class PTBXLDataModule(BaseDataModule):
         freq: int = 100,
         name: str = "ptbxl",
         num_workers: int = 0,
+        use_heart_rate: bool = False,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -81,33 +88,33 @@ class PTBXLDataModule(BaseDataModule):
             use_activity_info=use_disease,  # we feed in disease information for Chapman
         )
 
-        self.train_folds = train_folds
-        self.val_folds = val_folds
-        self.test_folds = test_folds
+        self.data = np.load(data_dir + "ptbxl.npy")
 
-        df = pd.read_csv(data_dir + "/ptbxl_database.csv")
+        summary = pd.read_csv(data_dir + "ptbxl_database.csv")
+        # TODO add exogenous variables
+
+        self.train_ids = get_ids(train_folds, summary)
+        self.val_ids = get_ids(val_folds, summary)
+        self.test_ids = get_ids(test_folds, summary)
 
     def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = PTBXLDataset(
                 self.look_back_window,
                 self.prediction_window,
-                self.X_train,
-                self.y_train,
+                self.data[self.train_ids],
                 use_disease=self.use_activity_info,
             )
             self.val_dataset = PTBXLDataset(
                 self.look_back_window,
                 self.prediction_window,
-                self.X_val,
-                self.y_val,
+                self.data[self.val_ids],
                 use_disease=self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = PTBXLDataset(
                 self.look_back_window,
                 self.prediction_window,
-                self.X_test,
-                self.y_test,
+                self.data[self.test_ids],
                 use_disease=self.use_activity_info,
             )

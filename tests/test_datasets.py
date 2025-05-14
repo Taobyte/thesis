@@ -36,6 +36,14 @@ dataset_params = {
         "n_activities": 4,
         "activity_flag_name": "use_disease",
     },
+    "ptbxl": {
+        "base_dim": 12,
+        "heart_rate": False,
+        "activity": False,  # TODO change later when exogenous variables are implemented
+        "is_categorical": True,
+        "n_activities": 100,  # TODO,
+        "activity_flag_name": "use_disease",
+    },
     "ucihar": {
         "base_dim": 9,  # gyro + acceleration + derived features
         "heart_rate": False,
@@ -152,3 +160,7 @@ def test_wildppg():
 
 def test_ucihar():
     _test_specific_dataset("ucihar", **dataset_params["ucihar"])
+
+
+def test_ptbxl():
+    _test_specific_dataset("ptbxl", **dataset_params["ptbxl"])

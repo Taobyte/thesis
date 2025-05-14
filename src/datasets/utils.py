@@ -384,9 +384,9 @@ def mhc6mwt_preprocess(datadir: str) -> None:
 
 def ptbxl_preprocess(datadir: str) -> None:
     print("Start processing PTB-XL files.")
+    # takes approx 21min to load & preprocess all waveforms
     path = Path(datadir)
     ts_dict = {}
-
     for p in tqdm(path.glob("**/*.dat")):
         record_id = str(p)[-12:-7]
         record = wfdb.rdrecord(str(p)[:-4])
