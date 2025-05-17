@@ -1,8 +1,8 @@
 name: "capture24"
 
 datamodule:
-  _target_: "src.dataset.capture24.Capture24DataModule"
-  data_dir: "${path.datadir}/Capture24/"
+  _target_: src.datasets.capture24_dataset.Capture24DataModule
+  data_dir: "${path.datadir}/Capture24/capture24_preprocessed/"
   batch_size: 32
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}

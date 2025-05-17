@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
-  - path: cluster
+  - path: local
   # - override hydra/sweeper: pattn_sweeper
 
 hydra:

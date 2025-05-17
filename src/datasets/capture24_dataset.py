@@ -1,10 +1,9 @@
 import numpy as np
 import pandas as pd
 import torch
-import lightning as L
 
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from pathlib import Path
 from typing import Tuple
 
@@ -36,19 +35,23 @@ class Capture24Dataset(Dataset):
         self,
         datadir: str,
         participants: list[str],
-        look_back_window: int = 10,
-        prediction_window: int = 5,
+        look_back_window: int = 100,
+        prediction_window: int = 50,
+        use_activity_info: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
-        allowed_pids = participants
+        self.use_activity_info = use_activity_info
+        self.input_channels = 4 if use_activity_info else 3
+        self.base_channel_dim = 3
 
+        allowed_pids = participants
         self.file_paths = [
             file_path
             for file_path in Path(datadir).glob("P*.npy")
-            if file_path.stem.split(".")[0] in allowed_pids
+            if str(file_path.stem) in allowed_pids
         ]
         self.data = [np.load(file_path, mmap_mode="r") for file_path in self.file_paths]
 
@@ -71,8 +74,12 @@ class Capture24Dataset(Dataset):
 
         window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
 
-        look_back_window = window[: self.look_back_window, 1:4]
-        prediction_window = window[self.look_back_window :, 1:4]
+        look_back_window = torch.tensor(
+            window[: self.look_back_window, : self.input_channels]
+        ).float()
+        prediction_window = torch.tensor(
+            window[self.look_back_window :, : self.base_channel_dim]
+        ).float()
 
         return look_back_window, prediction_window
 
@@ -102,9 +109,21 @@ class Capture24DataModule(BaseDataModule):
 
         metadata = pd.read_csv(data_dir + "metadata.csv")
 
-        self.train_participants, self.val_participants, self.test_participants = (
+        train_participants, val_participants, test_participants = (
             stratified_participant_split(metadata)
         )
+
+        self.train_participants = train_participants.tolist()
+        self.val_participants = val_participants.tolist()
+        self.test_participants = test_participants.tolist()
+
+        train_set = set(self.train_participants)
+        val_set = set(self.val_participants)
+        test_set = set(self.test_participants)
+
+        assert train_set.isdisjoint(val_set), "Train and Val sets are not disjoint"
+        assert train_set.isdisjoint(test_set), "Train and Test sets are not disjoint"
+        assert val_set.isdisjoint(test_set), "Val and Test sets are not disjoint"
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -113,12 +132,14 @@ class Capture24DataModule(BaseDataModule):
                 self.train_participants,
                 self.look_back_window,
                 self.prediction_window,
+                self.use_activity_info,
             )
             self.val_dataset = Capture24Dataset(
                 self.data_dir,
                 self.val_participants,
                 self.look_back_window,
                 self.prediction_window,
+                self.use_activity_info,
             )
         if stage == "test":
             self.test_dataset = Capture24Dataset(
@@ -126,13 +147,5 @@ class Capture24DataModule(BaseDataModule):
                 self.test_participants,
                 self.look_back_window,
                 self.prediction_window,
+                self.use_activity_info,
             )
-
-    def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.batch_size)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
