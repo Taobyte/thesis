@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import torch
 import pickle
 
 from torch.utils.data import Dataset
@@ -9,38 +10,29 @@ from typing import Tuple
 
 
 def get_train_test_split(
-    df: pd.Dataframe, ids: list[str]
+    df: pd.DataFrame, ids: list[str]
 ) -> Tuple[list[str], list[str], list[str]]:
-    # Drop rows with missing values in Gender or age
-    df_strat = df.dropna(subset=["Gender", "age", "recordId"]).copy()
+    df_strat = df.copy()
+    df_strat = df_strat[df_strat["recordId"].isin(ids)]
 
-    # Optional: bin age for better stratification (e.g., 10-year bins)
     df_strat["age_bin"] = pd.cut(
         df_strat["age"], bins=[0, 20, 30, 40, 50, 60, 70, 80, 100], labels=False
     )
 
-    # Combine Gender and age_bin for stratification
-    df_strat["strat_col"] = (
-        df_strat["Gender"].astype(str) + "_" + df_strat["age_bin"].astype(str)
-    )
-
-    # First split: Train+Val and Test (e.g., 80% / 20%)
     trainval_ids, test_ids = train_test_split(
         df_strat["recordId"],
         test_size=0.2,
         random_state=42,
-        stratify=df_strat["strat_col"],
+        stratify=df_strat["age_bin"],
     )
 
-    # Prepare DataFrame for second split
     trainval_df = df_strat[df_strat["recordId"].isin(trainval_ids)].copy()
 
-    # Second split: Train and Validation (e.g., 80% / 20% of trainval)
     train_ids, val_ids = train_test_split(
         trainval_df["recordId"],
-        test_size=0.25,  # 0.25 * 0.8 = 0.2 of total
+        test_size=0.25,
         random_state=42,
-        stratify=trainval_df["strat_col"],
+        stratify=trainval_df["age_bin"],
     )
 
     return train_ids, val_ids, test_ids
@@ -49,34 +41,47 @@ def get_train_test_split(
 class MHC6MWTDataset(Dataset):
     def __init__(
         self,
-        datadir: str,
         look_back_window: int,
         prediction_window: int,
         timeseries: list[np.ndarray],
         use_activity_info: bool = False,
     ):
-        self.datadir = datadir
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
-        self.window_length = look_back_window + prediction_window
+        self.window = look_back_window + prediction_window
         self.use_activity_info = use_activity_info
         self.base_channel_dim = 1
+        self.input_channels = 3 if use_activity_info else 1
 
-        self.cumsum = np.cumsum(
-            [
-                len(arr) - self.window_length + 1
-                for arr in timeseries
-                if len(arr) >= self.window_length
-            ]
-        )
+        self.data = timeseries
 
-        self.total_length = self.cumsum[-1]
+        self.lengths = [
+            len(self.data[i]) - self.window + 1 for i in range(len(self.data))
+        ]
 
-    def __len__(self):
+        self.cumulative_lengths = np.cumsum([0] + self.lengths)
+        self.total_length = self.cumulative_lengths[-1]
+
+    def __len__(self) -> int:
         return self.total_length
 
-    def __getitem__(self, index):
-        return super().__getitem__(index)
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        participant_idx = (
+            np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
+        )
+
+        pos_idx = idx - self.cumulative_lengths[participant_idx]
+
+        window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
+
+        look_back_window = torch.tensor(
+            window[: self.look_back_window, : self.input_channels]
+        ).float()
+        prediction_window = torch.tensor(
+            window[self.look_back_window :, : self.base_channel_dim]
+        ).float()
+
+        return look_back_window, prediction_window
 
 
 class MHC6MWTDataModule(BaseDataModule):
@@ -102,14 +107,22 @@ class MHC6MWTDataModule(BaseDataModule):
             use_activity_info=use_activity_info,
         )
 
-        with open(data_dir + "/mhc6mwt.pkl", "rb") as f:
+        with open(data_dir + "mhc6mwt.pkl", "rb") as f:
             data = pickle.load(f)
 
         ids = list(data.keys())
-        summary_df = pd.read_csv(data_dir + "/summary.parquet")
+        summary_df = pd.read_parquet(data_dir + "summary_table.parquet")
         train_ids, val_ids, test_ids = get_train_test_split(
             summary_df, ids
         )  # we only consider keys that are in the data
+
+        train_set = set(train_ids)
+        val_set = set(val_ids)
+        test_set = set(test_ids)
+
+        assert train_set.isdisjoint(val_set), "Train and Val sets are not disjoint"
+        assert train_set.isdisjoint(test_set), "Train and Test sets are not disjoint"
+        assert val_set.isdisjoint(test_set), "Val and Test sets are not disjoint"
 
         self.train_arrays = [
             data[record_id] for record_id in train_ids if record_id in data
@@ -124,14 +137,12 @@ class MHC6MWTDataModule(BaseDataModule):
     def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = MHC6MWTDataset(
-                self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.train_arrays,
                 self.use_activity_info,
             )
             self.val_dataset = MHC6MWTDataset(
-                self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.val_arrays,
@@ -139,7 +150,6 @@ class MHC6MWTDataModule(BaseDataModule):
             )
         if stage == "test":
             self.test_dataset = MHC6MWTDataset(
-                self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.test_arrays,
