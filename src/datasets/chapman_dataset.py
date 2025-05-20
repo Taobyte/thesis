@@ -12,6 +12,7 @@ from src.datasets.utils import BaseDataModule
 
 def chapman_load_data(datadir: str):
     data = loadmat(datadir + "chapman.mat")["whole_data"]
+
     df = pd.DataFrame(data)
     classes = df[1].apply(lambda x: x[0][0])
 
@@ -61,15 +62,17 @@ class ChapmanDataset(Dataset):
         prediction_window: int,
         X: np.ndarray,
         disease: np.ndarray,
-        use_disease: bool = False,
+        use_static_features: bool = False,
     ):
         self.X = X
         self.disease = disease
-        self.use_disease = use_disease
+        self.use_disease = use_static_features
         self.n_participants = len(disease)
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
+
+        assert self.window <= 1000
 
     def __len__(self) -> int:
         return self.n_participants * (1000 - self.window + 1)
@@ -105,10 +108,15 @@ class ChapmanDataModule(BaseDataModule):
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
-        use_disease: bool = False,
-        freq: int = 10,  # TODO
+        freq: int = 100,
         name: str = "chapman",
         num_workers: int = 0,
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 4,
+        dynamic_exogenous_variables: int = 0,
+        static_exogenous_variables: int = 4,
+        look_back_channel_dim: int = 4,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -118,7 +126,12 @@ class ChapmanDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_disease,  # we feed in disease information for Chapman
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         (
@@ -137,14 +150,14 @@ class ChapmanDataModule(BaseDataModule):
                 self.prediction_window,
                 self.X_train,
                 self.y_train,
-                use_disease=self.use_activity_info,
+                use_static_features=self.use_static_features,
             )
             self.val_dataset = ChapmanDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.X_val,
                 self.y_val,
-                use_disease=self.use_activity_info,
+                use_static_features=self.use_static_features,
             )
         if stage == "test":
             self.test_dataset = ChapmanDataset(
@@ -152,5 +165,5 @@ class ChapmanDataModule(BaseDataModule):
                 self.prediction_window,
                 self.X_test,
                 self.y_test,
-                use_disease=self.use_activity_info,
+                use_static_features=self.use_static_features,
             )

@@ -16,4 +16,6 @@ datamodule:
 
 base_channel_dim: 6 
 activity_channel_dim: 12
+static_exogenous_variables: 15 # 12 activity classes, AGE, HEIGHT, WEIGHT
+dynamic_exogenous_variables: 0 
 input_channels: ${eval:'18 if ${use_activity_info} else 6'} 

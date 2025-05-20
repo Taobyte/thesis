@@ -8,13 +8,21 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 from typing import Optional
 
-from src.utils import setup_wandb_logger, compute_square_window
+from src.utils import (
+    setup_wandb_logger,
+    compute_square_window,
+    compute_input_channel_dims,
+)
+from src.models.utils import get_model_kwargs
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
 OmegaConf.register_new_resolver(
     "suffix_if_true", lambda flag, suffix: suffix if flag else ""
+)
+OmegaConf.register_new_resolver(
+    "compute_input_channel_dims", compute_input_channel_dims
 )
 
 
@@ -23,25 +31,9 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    datamodule = instantiate(
-        config.dataset.datamodule,
-        batch_size=config.model.data.batch_size,
-    )
+    datamodule = instantiate(config.dataset.datamodule)
 
-    model_kwargs = {}
-    if config.model.name == "gp":
-        model_kwargs["inducing_points"] = datamodule.get_inducing_points(
-            config.model.n_points, config.model.strategy
-        )
-        model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
-    elif config.model.name == "xgboost":
-        lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
-        model_kwargs["lbw_train_dataset"] = lbw_train_dataset
-        model_kwargs["pw_train_dataset"] = pw_train_dataset
-        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
-        model_kwargs["lbw_val_dataset"] = lbw_val_dataset
-        model_kwargs["pw_val_dataset"] = pw_val_dataset
-
+    model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
         config.model.pl_model,

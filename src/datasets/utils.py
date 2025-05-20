@@ -1,3 +1,4 @@
+import glob
 import pandas as pd
 import numpy as np
 import pickle
@@ -30,7 +31,12 @@ class BaseDataModule(L.LightningDataModule):
         freq: int,
         look_back_window: int,
         prediction_window: int,
-        use_activity_info: bool,
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 6,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__()
 
@@ -43,7 +49,15 @@ class BaseDataModule(L.LightningDataModule):
 
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
-        self.use_activity_info = use_activity_info
+
+        self.use_dynamic_features = use_dynamic_features
+        self.use_static_features = use_static_features
+
+        self.dynamic_exogenous_variables = dynamic_exogenous_variables
+        self.static_exogenous_variables = static_exogenous_variables
+
+        self.target_channel_dim = target_channel_dim
+        self.look_back_channel_dim = look_back_channel_dim
 
         self.train_dataset = None
         self.val_dataset = None
@@ -298,6 +312,37 @@ def create_dalia_npy_files(datadir: str):
             )
 
     print("Finished processing dalia files.")
+
+    print("Start processing static participant features.")
+
+    participant_paths = glob.glob(
+        os.path.join(datadir, "**", "*_quest.csv"), recursive=True
+    )
+    series = []
+    for participant in participant_paths:
+        row = pd.read_csv(participant, header=None).T
+        row.columns = [el.split(" ")[1] for el in row.iloc[0]]
+        row = row.drop(row.index[0])
+        series.append(row)
+
+    df = pd.concat(series, ignore_index=True)
+    df["SUBJECT_ID"] = df["SUBJECT_ID"].str.replace("S", "", regex=True).astype(int)
+    df = df.sort_values("SUBJECT_ID").reset_index(drop=True)
+    # now we normalize the continuous values and create one-hot encodings
+    df[["AGE", "HEIGHT", "WEIGHT"]] = (
+        df[["AGE", "HEIGHT", "WEIGHT"]].astype(float)
+        - df[["AGE", "HEIGHT", "WEIGHT"]].astype(float).mean()
+    ) / (df[["AGE", "HEIGHT", "WEIGHT"]].astype(float).std() + 1e-8)
+    df["GENDER"] = df["GENDER"].str.strip().apply(lambda x: 0 if x == "m" else 1)
+    one_hot_skin = pd.get_dummies(df["SKIN"], prefix="skin") * 1
+    df = pd.concat([df, one_hot_skin], axis=1)
+    one_hot_sport = pd.get_dummies(df["SPORT"], prefix="sport") * 1
+    df = pd.concat([df, one_hot_sport], axis=1)
+    df = df.drop(["SKIN", "SPORT"], axis=1)
+    df["SUBJECT_ID"] = df["SUBJECT_ID"].str.strip()
+    df.to_csv(datadir + "/static_participant_features.csv")
+
+    print("Finished processing static participant features.")
 
 
 def ucihar_preprocess(datadir: str):

@@ -7,7 +7,7 @@ from sklearn.preprocessing import OneHotEncoder
 from src.datasets.utils import BaseDataModule
 
 
-def ucihar_load_data(datadir: str, participants: list[int], use_activity_info: bool):
+def ucihar_load_data(datadir: str, participants: list[int], use_static_features: bool):
     data = np.load(datadir + "ucihar_preprocessed.npz")
 
     encoder = OneHotEncoder(categories=[list(range(1, 7))], sparse_output=False)
@@ -17,7 +17,7 @@ def ucihar_load_data(datadir: str, participants: list[int], use_activity_info: b
         train_val_participants = data["train_val_subjects"]
         filter_vector = np.isin(train_val_participants, np.array(participants))
         series = X_train_val[filter_vector]
-        if use_activity_info:
+        if use_static_features:
             y_train_val = encoder.fit_transform(
                 data["y_train"][filter_vector].astype(int).reshape(-1, 1)
             )
@@ -26,7 +26,7 @@ def ucihar_load_data(datadir: str, participants: list[int], use_activity_info: b
     else:
         X_test = data["X_test"]
         series = X_test
-        if use_activity_info:
+        if use_static_features:
             y_test = encoder.fit_transform(data["y_test"].astype(int).reshape(-1, 1))
             y_expanded = np.repeat(y_test[:, np.newaxis, :], repeats=128, axis=1)
             series = np.concatenate((X_test, y_expanded), axis=-1)
@@ -41,17 +41,18 @@ class UCIHARDataset(Dataset):
         look_back_window: int,
         prediction_window: int,
         participants: list[int] = [1, 2, 3],
-        use_activity_info: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 9,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
         assert self.window <= 128
 
-        self.base_channel_dim = 9
-        self.use_activity_info = use_activity_info
+        self.target_channel_dim = target_channel_dim
+        self.use_static_features = use_static_features
 
-        self.X = ucihar_load_data(datadir, participants, use_activity_info)
+        self.X = ucihar_load_data(datadir, participants, use_static_features)
 
     def __len__(self) -> int:
         return len(self.X) * (128 - self.window + 1)
@@ -60,11 +61,11 @@ class UCIHARDataset(Dataset):
         row_idx = idx // (128 - self.window + 1)
         window_pos = idx % (128 - self.window + 1)
         window = self.X[row_idx, window_pos : window_pos + self.window]
-        x = torch.from_numpy(window[: self.look_back_window]).float()
-        y = torch.from_numpy(
-            window[self.look_back_window :, : self.base_channel_dim]
+        look_back_window = torch.from_numpy(window[: self.look_back_window]).float()
+        prediction_window = torch.from_numpy(
+            window[self.look_back_window :, : self.target_channel_dim]
         ).float()
-        return x, y
+        return look_back_window, prediction_window
 
 
 class UCIHARDataModule(BaseDataModule):
@@ -77,9 +78,14 @@ class UCIHARDataModule(BaseDataModule):
         prediction_window: int = 64,
         train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
         val_participants: list = [23, 25, 26, 27, 28, 29, 30],
-        use_activity_info: bool = False,
         freq: int = 50,
         name: str = "ucihar",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 6,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -89,7 +95,12 @@ class UCIHARDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         self.train_participants = train_participants
@@ -102,14 +113,14 @@ class UCIHARDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
-                self.use_activity_info,
+                self.use_static_features,
             )
             self.val_dataset = UCIHARDataset(
                 self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
-                self.use_activity_info,
+                self.use_static_features,
             )
         if stage == "test":
             self.test_dataset = UCIHARDataset(
@@ -117,5 +128,5 @@ class UCIHARDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 None,
-                self.use_activity_info,
+                self.use_static_features,
             )

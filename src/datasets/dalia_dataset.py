@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import torch
 
 from torch.utils.data import Dataset
@@ -12,8 +13,11 @@ def dalia_load_data(
     path: str,
     participants: list[int],
     use_heart_rate: bool,
-    use_activity_info: bool,
-) -> Tuple[list[np.ndarray], np.ndarray, np.ndarray]:
+    use_dynamic_features: bool,
+    use_static_features: bool,
+) -> Tuple[list[np.ndarray], pd.DataFrame]:
+    static_feature_df = pd.read_csv(path + "/static_participant_features.csv")
+
     loaded_series = []
     for i in participants:
         label = "S" + str(i)
@@ -21,19 +25,21 @@ def dalia_load_data(
         data = np.load(data_path)
         series = data["heart_rate"][:, np.newaxis] if use_heart_rate else data["bvp"]
 
-        if use_activity_info:
+        if use_dynamic_features:
             activity = data["acc_norm_ppg"][:, np.newaxis]
             if use_heart_rate:
                 activity = data["acc_norm_heart_rate"][:, np.newaxis]
             series = np.concatenate((series, activity), axis=1)
 
+        if use_static_features:
+            row = static_feature_df[static_feature_df["SUBJECT_ID"] == label]
+            static_features = row.values[:, 2:].astype(float)  # (1, 12)
+            repeated = np.repeat(static_features, repeats=len(series), axis=0)
+            series = np.concatenate((series, repeated), axis=1)
+
         loaded_series.append(series)
 
-    combined_series = np.concatenate(loaded_series, axis=0)
-    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-
-    return loaded_series, global_mean, global_std
+    return loaded_series
 
 
 class DaLiADataset(Dataset):
@@ -41,19 +47,26 @@ class DaLiADataset(Dataset):
         self,
         path: Path,
         participants: list[int],
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
         use_heart_rate: bool = False,
-        use_activity_info: bool = False,
         look_back_window: int = 32,
         prediction_window: int = 10,
+        target_channel_dim: int = 1,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window_length = look_back_window + prediction_window
         self.participants = participants
-        self.use_activity_info = use_activity_info
-        self.target_channel_dim = 1
-        self.data, self.global_mean, self.global_std = dalia_load_data(
-            path, participants, use_heart_rate, use_activity_info
+        self.use_dynamic_features = use_dynamic_features
+        self.use_static_features = use_static_features
+        self.target_channel_dim = target_channel_dim
+        self.data = dalia_load_data(
+            path,
+            participants,
+            use_heart_rate,
+            use_dynamic_features,
+            use_static_features,
         )
         self.lengths = [len(series) - self.window_length + 1 for series in self.data]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
@@ -80,7 +93,6 @@ class DaLiADataModule(BaseDataModule):
         data_dir: str,
         batch_size: int = 32,
         use_heart_rate: bool = False,
-        use_activity_info: bool = False,
         look_back_window: int = 128,
         prediction_window: int = 64,
         train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
@@ -89,6 +101,12 @@ class DaLiADataModule(BaseDataModule):
         num_workers: int = 0,
         freq: int = 25,
         name: str = "dalia",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 6,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -98,7 +116,12 @@ class DaLiADataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         self.use_heart_rate = use_heart_rate
@@ -112,25 +135,31 @@ class DaLiADataModule(BaseDataModule):
             self.train_dataset = DaLiADataset(
                 self.data_dir,
                 self.train_participants,
+                self.use_dynamic_features,
+                self.use_static_features,
                 self.use_heart_rate,
-                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
+                self.target_channel_dim,
             )
             self.val_dataset = DaLiADataset(
                 self.data_dir,
                 self.val_participants,
+                self.use_dynamic_features,
+                self.use_static_features,
                 self.use_heart_rate,
-                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
+                self.target_channel_dim,
             )
         if stage == "test":
             self.test_dataset = DaLiADataset(
                 self.data_dir,
                 self.test_participants,
+                self.use_dynamic_features,
+                self.use_static_features,
                 self.use_heart_rate,
-                self.use_activity_info,
                 self.look_back_window,
                 self.prediction_window,
+                self.target_channel_dim,
             )

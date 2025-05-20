@@ -6,7 +6,10 @@ from src.datasets.utils import BaseDataModule
 
 
 def ieee_load_data(
-    datadir: str, participants: list[int], use_heart_rate: bool, use_activity_info: bool
+    datadir: str,
+    participants: list[int],
+    use_heart_rate: bool,
+    use_dynamic_features: bool,
 ):
     loaded_series = []
     for participant in participants:
@@ -15,26 +18,19 @@ def ieee_load_data(
         acc = data["acc"]  # shape (W, 200, 1)
         bpm = data["bpms"]  # shape (W, 1)
 
-        if use_heart_rate and use_activity_info:
+        if use_heart_rate and use_dynamic_features:
             avg_acc = np.mean(acc, axis=1, keepdims=True).squeeze(-1)  # shape (W, 1)
             series = np.concatenate((bpm, avg_acc), axis=1)
-        elif use_heart_rate and not use_activity_info:
+        elif use_heart_rate and not use_dynamic_features:
             series = bpm
-        elif not use_heart_rate and use_activity_info:
+        elif not use_heart_rate and use_dynamic_features:
             series = np.concatenate((ppg, acc), axis=2)
         else:
             series = ppg
 
         loaded_series.append(series)
 
-    combined_series = np.concatenate(
-        [arr.reshape(-1, 1) for arr in loaded_series], axis=0
-    )
-
-    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-
-    return loaded_series, global_mean, global_std
+    return loaded_series
 
 
 class IEEEDataset(Dataset):
@@ -45,18 +41,19 @@ class IEEEDataset(Dataset):
         prediction_window: int,
         participants: list[int],
         use_heart_rate: bool = False,
-        use_activity_info: bool = False,
+        use_dynamic_features: bool = False,
+        target_channel_dim: int = 1,
     ):
         self.datadir = datadir
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
         self.window_length = look_back_window + prediction_window
         self.use_heart_rate = use_heart_rate
-        self.use_activity_info = use_activity_info
-        self.base_channel_dim = 1
+        self.use_dynamic_features = use_dynamic_features
+        self.target_channel_dim = target_channel_dim
 
-        self.data, self.global_mean, self.global_std = ieee_load_data(
-            datadir, participants, use_heart_rate, use_activity_info
+        self.data = ieee_load_data(
+            datadir, participants, use_heart_rate, use_dynamic_features
         )
 
         assert self.window_length <= 200, (
@@ -106,7 +103,7 @@ class IEEEDataset(Dataset):
 
         look_back_window = torch.from_numpy(look_back_window).float()
         prediction_window = torch.from_numpy(
-            prediction_window[:, : self.base_channel_dim]
+            prediction_window[:, : self.target_channel_dim]
         ).float()
 
         return look_back_window, prediction_window
@@ -124,9 +121,14 @@ class IEEEDataModule(BaseDataModule):
         val_participants: list[int] = [15, 16, 17, 18],
         test_participants: list[int] = [19, 20, 21, 22],
         use_heart_rate: bool = False,
-        use_activity_info: bool = False,
         freq: int = 25,
         name: str = "ieee",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -136,7 +138,12 @@ class IEEEDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         self.use_heart_rate = use_heart_rate
@@ -153,7 +160,8 @@ class IEEEDataModule(BaseDataModule):
                 self.prediction_window,
                 self.train_participants,
                 self.use_heart_rate,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.target_channel_dim,
             )
             self.val_dataset = IEEEDataset(
                 self.data_dir,
@@ -161,7 +169,8 @@ class IEEEDataModule(BaseDataModule):
                 self.prediction_window,
                 self.val_participants,
                 self.use_heart_rate,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.target_channel_dim,
             )
         if stage == "test":
             self.test_dataset = IEEEDataset(
@@ -170,5 +179,6 @@ class IEEEDataModule(BaseDataModule):
                 self.prediction_window,
                 self.test_participants,
                 self.use_heart_rate,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.target_channel_dim,
             )

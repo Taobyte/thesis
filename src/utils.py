@@ -84,3 +84,18 @@ def compute_square_window(seq_len, max_window=4):
     max_k = int(np.sqrt(seq_len))
     max_k = min(max_k, max_window)
     return [max_k, max_k]
+
+
+def compute_input_channel_dims(
+    target_channel_dim: int,
+    dynamic_exogenous_variables: int,
+    static_exogenous_variables: int,
+    use_dynamic_features: bool,
+    use_static_features: bool,
+) -> int:
+    dims = target_channel_dim
+    if use_dynamic_features:
+        dims += dynamic_exogenous_variables
+    if use_static_features:
+        dims += static_exogenous_variables
+    return dims

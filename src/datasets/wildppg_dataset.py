@@ -27,8 +27,11 @@ def nan_helper(y):
 
 
 def wildppg_load_data(
-    datadir: str, participants: list[str], use_heart_rate: bool, use_activity_info: bool
-) -> Tuple[list[np.ndarray], float, float]:
+    datadir: str,
+    participants: list[str],
+    use_heart_rate: bool,
+    use_dynamic_features: bool,
+) -> list[np.ndarray]:
     data_all = loadmat(datadir + "WildPPG.mat")
 
     arrays = []
@@ -54,11 +57,11 @@ def wildppg_load_data(
         ppg = ppg[mask_ppg]
         if use_heart_rate:
             series = hr  # (W, 1)
-            if use_activity_info:
+            if use_dynamic_features:
                 series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
         else:
             series = ppg[:, :, np.newaxis]  # shape (W, 200, 1)
-            if use_activity_info:
+            if use_dynamic_features:
                 repeated_activity = np.repeat(activity, repeats=200, axis=1)[
                     :, :, np.newaxis
                 ]  # shape (W, 200, 1)
@@ -67,13 +70,7 @@ def wildppg_load_data(
 
         arrays.append(series)
 
-    combined_series = np.concatenate(
-        [arr.reshape(-1, arr.shape[-1]) for arr in arrays], axis=0
-    )
-    global_mean = np.mean(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-    global_std = np.std(combined_series, axis=0, keepdims=True)[np.newaxis, :, :]
-
-    return arrays, global_mean, global_std
+    return arrays
 
 
 class WildPPGDataset(Dataset):
@@ -84,18 +81,18 @@ class WildPPGDataset(Dataset):
         look_back_window: int = 320,
         prediction_window: int = 128,
         participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-        use_activity_info: bool = False,
+        use_dynamic_features: bool = False,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.arrays, self.global_mean, self.global_std = wildppg_load_data(
-            datadir, participants, use_heart_rate, use_activity_info
+        self.arrays = wildppg_load_data(
+            datadir, participants, use_heart_rate, use_dynamic_features
         )
 
         self.base_channel_dim = 1
         self.use_heart_rate = use_heart_rate
-        self.use_activity_info = use_activity_info
+        self.use_dynamic_features = use_dynamic_features
         assert self.window <= 200  # window lengths of WildPPG is 200
         if use_heart_rate:
             self.lengths = [(len(arr) - self.window + 1) for arr in self.arrays]
@@ -133,7 +130,6 @@ class WildPPGDataModule(BaseDataModule):
         self,
         data_dir: str,
         use_heart_rate: bool = False,
-        use_activity_info: bool = False,
         batch_size: int = 32,
         num_workers: int = 0,
         look_back_window: int = 128,
@@ -143,6 +139,12 @@ class WildPPGDataModule(BaseDataModule):
         test_participants: list[str] = [9, 12, 13, 14, 15],
         freq: int = 25,
         name: str = "wildppg",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -152,8 +154,14 @@ class WildPPGDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
+
         self.use_heart_rate = use_heart_rate
 
         self.train_participants = train_participants
@@ -168,7 +176,7 @@ class WildPPGDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
-                self.use_activity_info,
+                self.use_dynamic_features,
             )
             self.val_dataset = WildPPGDataset(
                 self.data_dir,
@@ -176,7 +184,7 @@ class WildPPGDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
-                self.use_activity_info,
+                self.use_dynamic_features,
             )
         if stage == "test":
             self.test_dataset = WildPPGDataset(
@@ -185,5 +193,5 @@ class WildPPGDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
-                self.use_activity_info,
+                self.use_dynamic_features,
             )

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import torch
+import ast
 
 from torch.utils.data import Dataset
 
@@ -26,6 +27,8 @@ class PTBXLDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
+
+        assert self.window <= 1000
 
     def __len__(self) -> int:
         return self.n_records * (1000 - self.window + 1)
@@ -62,14 +65,18 @@ class PTBXLDataModule(BaseDataModule):
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
-        use_disease: bool = False,
         train_folds: list[int] = [1, 2, 3, 4, 5],
         val_folds: list[int] = [6, 7],
         test_folds: list[int] = [8, 9, 10],
         freq: int = 100,
         name: str = "ptbxl",
         num_workers: int = 0,
-        use_heart_rate: bool = False,
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 6,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -79,13 +86,39 @@ class PTBXLDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_disease,  # we feed in disease information for Chapman
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         self.data = np.load(data_dir + "ptbxl.npy")
 
         summary = pd.read_csv(data_dir + "ptbxl_database.csv")
-        # TODO add exogenous variables
+        scp_statements = pd.read_csv(data_dir + "scp_statements.csv")
+
+        scp_mapping = dict(
+            zip(scp_statements["Unnamed: 0"], scp_statements["diagnostic_class"])
+        )
+
+        diseases = scp_statements["Unnamed: 0"].iloc[:44].tolist()
+        summary["filtered"] = summary["scp_codes"].apply(
+            lambda x: {k: v for k, v in ast.literal_eval(x).items() if k in diseases}
+        )
+
+        summary["scp_code_processed"] = summary["filtered"].apply(
+            lambda x: scp_mapping[max(x, key=x.get)] if len(x) > 0 else "UNKNOWN"
+        )
+
+        summary["age"] = (summary["age"] - summary["age"].mean()) / (
+            summary["age"].std() + 1e-8
+        )
+
+        import pdb
+
+        pdb.set_trace()
 
         def get_ids(folds: list[int], summary: pd.DataFrame):
             mapping = {

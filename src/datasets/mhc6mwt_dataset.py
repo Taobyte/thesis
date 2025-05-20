@@ -112,6 +112,9 @@ class MHC6MWTDataModule(BaseDataModule):
 
         ids = list(data.keys())
         summary_df = pd.read_parquet(data_dir + "summary_table.parquet")
+        import pdb
+
+        pdb.set_trace()
         train_ids, val_ids, test_ids = get_train_test_split(
             summary_df, ids
         )  # we only consider keys that are in the data

@@ -14,11 +14,30 @@ import torch
 import lightning as L
 import numpy as np
 
+from omegaconf import DictConfig
 from typing import Dict, Tuple
 from collections import defaultdict
 
 from src.metrics import Evaluator
 from src.plotting import plot_prediction_wandb
+
+
+def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
+    model_kwargs = {}
+    if config.model.name == "gp":
+        model_kwargs["inducing_points"] = datamodule.get_inducing_points(
+            config.model.n_points, config.model.strategy
+        )
+        model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
+    elif config.model.name == "xgboost":
+        lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
+        model_kwargs["lbw_train_dataset"] = lbw_train_dataset
+        model_kwargs["pw_train_dataset"] = pw_train_dataset
+        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
+        model_kwargs["lbw_val_dataset"] = lbw_val_dataset
+        model_kwargs["pw_val_dataset"] = pw_val_dataset
+
+    return model_kwargs
 
 
 def local_z_norm(
@@ -43,7 +62,7 @@ def local_z_denorm(
 
 
 class BaseLightningModule(L.LightningModule):
-    def __init__(self, wandb_project: str = "TODO", n_trials: int = 10):
+    def __init__(self, wandb_project: str = "c_keusch/thesis", n_trials: int = 10):
         super().__init__()
 
         self.n_trials = n_trials

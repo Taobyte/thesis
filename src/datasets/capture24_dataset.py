@@ -37,15 +37,28 @@ class Capture24Dataset(Dataset):
         participants: list[str],
         look_back_window: int = 100,
         prediction_window: int = 50,
-        use_activity_info: bool = False,
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 3,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 2,
+        look_back_channel_dim: int = 3,
+        metadata: pd.DataFrame = None,
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
-        self.use_activity_info = use_activity_info
-        self.input_channels = 4 if use_activity_info else 3
-        self.base_channel_dim = 3
+        self.use_dynamic_features = use_dynamic_features
+        self.use_static_features = use_static_features
+        self.target_channel_dim = target_channel_dim
+        self.dynamic_exogenous_variables = dynamic_exogenous_variables
+        self.static_exogenous_variables = static_exogenous_variables
+        self.look_back_channel_dim = look_back_channel_dim
+
+        self.static_features = (
+            metadata[metadata["pid"].isin(participants)].drop(columns=["pid"]).values
+        )
 
         allowed_pids = participants
         self.file_paths = [
@@ -71,14 +84,27 @@ class Capture24Dataset(Dataset):
         )
 
         pos_idx = idx - self.cumulative_lengths[participant_idx]
+        if self.use_dynamic_features:
+            window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
+        else:
+            window = self.data[participant_idx][
+                pos_idx : pos_idx + self.window, : self.target_channel_dim
+            ]
 
-        window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
+        # load in static variables AGE & SEX
+        if self.use_static_features:
+            static_features_repeats = np.repeat(
+                self.static_features[participant_idx][np.newaxis, :],
+                repeats=len(window),
+                axis=0,
+            )
+            window = np.concatenate((window, static_features_repeats), axis=1)
 
         look_back_window = torch.tensor(
-            window[: self.look_back_window, : self.input_channels]
+            window[: self.look_back_window, : self.look_back_channel_dim]
         ).float()
         prediction_window = torch.tensor(
-            window[self.look_back_window :, : self.base_channel_dim]
+            window[self.look_back_window :, : self.target_channel_dim]
         ).float()
 
         return look_back_window, prediction_window
@@ -91,10 +117,15 @@ class Capture24DataModule(BaseDataModule):
         batch_size: int = 32,
         look_back_window: int = 128,
         prediction_window: int = 64,
-        use_activity_info: bool = False,
         num_workers: int = 0,
         freq: int = 25,
         name: str = "capture24",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -104,7 +135,12 @@ class Capture24DataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         metadata = pd.read_csv(data_dir + "metadata.csv")
@@ -112,6 +148,13 @@ class Capture24DataModule(BaseDataModule):
         train_participants, val_participants, test_participants = (
             stratified_participant_split(metadata)
         )
+
+        onehot = pd.get_dummies(metadata["age"], prefix="age") * 1
+        metadata = pd.concat((metadata, onehot), axis=1)
+        metadata["sex"] = metadata["sex"].apply(lambda x: 0 if x == "F" else 1)
+        metadata = metadata.sort_values("pid")
+        metadata = metadata.drop(columns=["age", "strata"])
+        self.metadata = metadata
 
         self.train_participants = train_participants.tolist()
         self.val_participants = val_participants.tolist()
@@ -132,14 +175,26 @@ class Capture24DataModule(BaseDataModule):
                 self.train_participants,
                 self.look_back_window,
                 self.prediction_window,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.dynamic_exogenous_variables,
+                self.static_exogenous_variables,
+                self.look_back_channel_dim,
+                self.metadata,
             )
             self.val_dataset = Capture24Dataset(
                 self.data_dir,
                 self.val_participants,
                 self.look_back_window,
                 self.prediction_window,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.dynamic_exogenous_variables,
+                self.static_exogenous_variables,
+                self.look_back_channel_dim,
+                self.metadata,
             )
         if stage == "test":
             self.test_dataset = Capture24Dataset(
@@ -147,5 +202,11 @@ class Capture24DataModule(BaseDataModule):
                 self.test_participants,
                 self.look_back_window,
                 self.prediction_window,
-                self.use_activity_info,
+                self.use_dynamic_features,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.dynamic_exogenous_variables,
+                self.static_exogenous_variables,
+                self.look_back_channel_dim,
+                self.metadata,
             )

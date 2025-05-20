@@ -14,4 +14,6 @@ datamodule:
 
 base_channel_dim: 1
 activity_channel_dim: 2
+dynamic_exogenous_variables: 0 # we have "dynamic" features DISTANCE & NUMBEROFSTEPS, but we dont normalize them
+static_exogenous_variables: 6 # Continuous: AGE, Categorical: SEX (3), PHYSICAL_ACTIVITY (7)
 input_channels: ${eval:'3 if ${use_activity_info} else 1'}

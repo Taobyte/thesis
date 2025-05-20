@@ -76,6 +76,8 @@ class USCDataset(Dataset):
         self.cumulative_lengths = np.cumsum([0] + outer_lengths)
         self.total_length = self.cumulative_lengths[-1]
 
+        # TODO load in static exogenous variables
+
     def __len__(self) -> int:
         return self.total_length
 
