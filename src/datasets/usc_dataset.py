@@ -10,7 +10,9 @@ from typing import Tuple
 from src.datasets.utils import BaseDataModule
 
 
-def usc_load_data(datadir: str, participants: list[int], use_activity_info: bool):
+def usc_load_data(
+    datadir: str, participants: list[int], use_static_features: bool
+) -> list[list[Tuple[np.ndarray, float, float, float]]]:
     encoder = OneHotEncoder(categories=[list(range(1, 13))], sparse_output=False)
     participant_data = []
     for participant in participants:
@@ -20,7 +22,7 @@ def usc_load_data(datadir: str, participants: list[int], use_activity_info: bool
         for mat_path in participant_mat_paths:
             data = loadmat(mat_path)
             sensor_reading = data["sensor_readings"]
-            if use_activity_info:
+            if use_static_features:
                 assert "activity_number" or "activity_numbr" in data, (
                     f"activity number not in {data.keys()}"
                 )
@@ -41,7 +43,11 @@ def usc_load_data(datadir: str, participants: list[int], use_activity_info: bool
                     ),
                     axis=1,
                 )
-            part_data.append(sensor_reading)
+            age = data["age"].astype(float)[0]
+            height = int(data["height"][0][:3])
+            weight = int(data["weight"][0][:2])
+
+            part_data.append((sensor_reading, age, height, weight))
 
         participant_data.append(part_data)
 
@@ -55,28 +61,44 @@ class USCDataset(Dataset):
         look_back_window: int = 10,
         prediction_window: int = 5,
         participants: list[int] = [1, 2, 3, 4, 5, 6, 7, 8],
-        use_activity_info: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 6,
+        look_back_channel_dim: int = 6,
+        static_z_norm: list[float] = None,
     ):
         super().__init__()
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window_length = look_back_window + prediction_window
-        self.base_channel_dim = 6  # 3 channels for acceleration and 3 channels for gyro
+        self.target_channel_dim = (
+            target_channel_dim  # 3 channels for acceleration and 3 channels for gyro
+        )
+        self.look_back_channel_dim = look_back_channel_dim
         self.participants = participants
 
         self.part_cum_sum = []
-        self.participant_data = usc_load_data(data_dir, participants, use_activity_info)
+        self.participant_data = usc_load_data(
+            data_dir, participants, use_static_features
+        )
         for participant_idx in range(len(self.participant_data)):
             lengths = [
                 len(series) - self.window_length + 1
-                for series in self.participant_data[participant_idx]
+                for (series, _, _, _) in self.participant_data[participant_idx]
             ]
             self.part_cum_sum.append(np.cumsum([0] + lengths))
         outer_lengths = [cumsum[-1] for cumsum in self.part_cum_sum]
         self.cumulative_lengths = np.cumsum([0] + outer_lengths)
         self.total_length = self.cumulative_lengths[-1]
 
-        # TODO load in static exogenous variables
+        self.use_static_features = use_static_features
+        (
+            self.age_mean,
+            self.age_std,
+            self.height_mean,
+            self.height_std,
+            self.weight_mean,
+            self.weight_std,
+        ) = static_z_norm
 
     def __len__(self) -> int:
         return self.total_length
@@ -93,13 +115,22 @@ class USCDataset(Dataset):
 
         series_pos = idx - self.part_cum_sum[participant_idx][file_idx]
 
-        mat_file = self.participant_data[participant_idx][file_idx]
+        mat_file, age, height, weight = self.participant_data[participant_idx][file_idx]
 
-        look_back_window = mat_file[series_pos : series_pos + self.look_back_window, :]
-        prediction_window = mat_file[
-            (series_pos + self.look_back_window) : (series_pos + self.window_length),
-            : self.base_channel_dim,
-        ]
+        window = mat_file[series_pos : series_pos + self.window_length, :]
+
+        if self.use_static_features:
+            age = (age - self.age_mean) / (self.age_std + 1e-8)
+            height = (height - self.height_mean) / (self.height_std + 1e-8)
+            weight = (weight - self.weight_mean) / (self.weight_std + 1e-8)
+            features = np.array([age, height, weight])
+            features = features[np.newaxis, :]
+            repeats = np.repeat(features, self.window_length, axis=0)
+
+            window = np.concatenate((window, repeats), axis=1)
+
+        look_back_window = window[: self.look_back_window, : self.look_back_channel_dim]
+        prediction_window = window[self.look_back_window :, : self.target_channel_dim]
 
         look_back_window = torch.tensor(look_back_window).float()
         prediction_window = torch.tensor(prediction_window).float()
@@ -117,10 +148,15 @@ class USCDataModule(BaseDataModule):
         train_participants: list[int] = [1, 2, 4, 5, 7, 10, 11, 14],
         val_participants: list[int] = [3, 6, 8],
         test_participants: list[int] = [9, 12, 13],
-        use_activity_info: bool = False,
         num_workers: int = 0,
         freq: int = 100,
         name: str = "usc",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -130,12 +166,42 @@ class USCDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        # compute static feature mean and std
+        age = []
+        height = []
+        weight = []
+        for participant in range(1, 15):
+            participant_dir = Path(data_dir) / f"Subject{participant}"
+            participant_mat_paths = participant_dir.glob("*.mat")
+            data = loadmat(next(participant_mat_paths))
+            age.append(data["age"].astype(float)[0])
+            height.append(int(data["height"][0][:3]))
+            weight.append(int(data["weight"][0][:2]))
+
+        age = np.array(age)
+        height = np.array(height)
+        weight = np.array(weight)
+
+        self.static_z_norm = [
+            age.mean(),
+            age.std(),
+            height.mean(),
+            height.std(),
+            weight.mean(),
+            weight.std(),
+        ]
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -144,14 +210,20 @@ class USCDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.train_participants,
-                self.use_activity_info,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
+                self.static_z_norm,
             )
             self.val_dataset = USCDataset(
                 self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
                 self.val_participants,
-                self.use_activity_info,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
+                self.static_z_norm,
             )
         if stage == "test":
             self.test_dataset = USCDataset(
@@ -159,18 +231,8 @@ class USCDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.test_participants,
-                self.use_activity_info,
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
+                self.static_z_norm,
             )
-
-
-if __name__ == "__main__":
-    module = USCDataModule("C:/Users/cleme/ETH/Master/Thesis/data/USC/USC-HAD/")
-    module.setup("fit")
-
-    t_d = module.train_dataloader()
-
-    tensor = next(iter(t_d))
-
-    import pdb
-
-    pdb.set_trace()

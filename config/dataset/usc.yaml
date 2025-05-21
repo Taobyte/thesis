@@ -7,15 +7,17 @@ datamodule:
   train_participants: [1, 2, 4, 5, 7, 10, 11, 14]
   val_participants: [3, 6, 8]
   test_participants: [9, 12, 13] 
-  use_activity_info: ${use_activity_info}
   num_workers: ${num_workers}
   batch_size: 32
 
   freq: 100
   name: ${dataset.name}
 
-base_channel_dim: 6 
-activity_channel_dim: 12
-static_exogenous_variables: 15 # 12 activity classes, AGE, HEIGHT, WEIGHT
-dynamic_exogenous_variables: 0 
-input_channels: ${eval:'18 if ${use_activity_info} else 6'} 
+  use_dynamic_features: ${use_dynamic_features}
+  use_static_features: ${use_static_features}
+
+  target_channel_dim: 6 
+  dynamic_exogenous_variables: 0 
+  static_exogenous_variables: 15 # 12 activity classes, AGE, HEIGHT, WEIGHT 
+  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
+

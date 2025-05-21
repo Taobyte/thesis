@@ -8,22 +8,22 @@ from torch.utils.data import Dataset
 from src.datasets.utils import BaseDataModule
 
 
-def ptbxl_load_data(datadir: str):
-    raise NotImplementedError()
-
-
 class PTBXLDataset(Dataset):
     def __init__(
         self,
         look_back_window: int,
         prediction_window: int,
         data: np.ndarray,
-        use_disease: bool = False,
+        static_features: np.ndarray,
+        use_static_features: bool = False,
     ):
         self.n_records = len(data)
         self.data = data
+        self.static_features = static_features
+
         assert data.shape == (self.n_records, 1000, 12)
-        self.use_disease = use_disease
+
+        self.use_static_features = use_static_features
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
@@ -44,9 +44,9 @@ class PTBXLDataset(Dataset):
             window_pos + self.look_back_window : window_pos + self.window, :
         ]
 
-        if self.use_disease:
+        if self.use_static_features:
             disease_vec = np.repeat(
-                self.disease[participant_idx][np.newaxis, :],
+                self.static_features[participant_idx][np.newaxis, :],
                 self.look_back_window,
                 axis=0,
             )
@@ -116,20 +116,26 @@ class PTBXLDataModule(BaseDataModule):
             summary["age"].std() + 1e-8
         )
 
-        import pdb
-
-        pdb.set_trace()
-
-        def get_ids(folds: list[int], summary: pd.DataFrame):
+        def get_ids(folds: list[int], summary: pd.DataFrame) -> list[int]:
             mapping = {
                 ecg_id: i for i, ecg_id in enumerate(summary["ecg_id"].astype(str))
             }
             ecg_ids = summary[summary["strat_fold"].isin(folds)]["ecg_id"].astype(str)
             return [mapping[ecg_id] for ecg_id in ecg_ids]
 
+        one_hot = pd.get_dummies(summary["scp_code_processed"], prefix="disease") * 1
+        self.static_features = pd.concat((summary[["ecg_id", "age"]], one_hot), axis=1)
+
         self.train_ids = get_ids(train_folds, summary)
         self.val_ids = get_ids(val_folds, summary)
         self.test_ids = get_ids(test_folds, summary)
+
+    def get_static_features(self, ids: list[int]) -> np.ndarray:
+        df = self.static_features.copy()
+        df = df[df["ecg_id"].isin(ids)]
+        df = df.sort_values("ecg_id")
+        df = df.drop(columns=["ecg_id"])
+        return df.values
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -137,18 +143,21 @@ class PTBXLDataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.data[self.train_ids],
-                use_disease=self.use_activity_info,
+                self.get_static_features(self.train_ids),
+                use_static_features=self.use_static_features,
             )
             self.val_dataset = PTBXLDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.data[self.val_ids],
-                use_disease=self.use_activity_info,
+                self.get_static_features(self.val_ids),
+                use_static_features=self.use_static_features,
             )
         if stage == "test":
             self.test_dataset = PTBXLDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.data[self.test_ids],
-                use_disease=self.use_activity_info,
+                self.get_static_features(self.test_ids),
+                use_static_features=self.use_static_features,
             )

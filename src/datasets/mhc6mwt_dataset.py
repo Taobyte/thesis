@@ -44,16 +44,20 @@ class MHC6MWTDataset(Dataset):
         look_back_window: int,
         prediction_window: int,
         timeseries: list[np.ndarray],
-        use_activity_info: bool = False,
+        static_features: np.ndarray,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        look_back_channel_dim: int = 1,
     ):
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.use_activity_info = use_activity_info
-        self.base_channel_dim = 1
-        self.input_channels = 3 if use_activity_info else 1
+        self.use_static_features = use_static_features
+        self.target_channel_dim = target_channel_dim
+        self.look_back_channel_dim = look_back_channel_dim
 
         self.data = timeseries
+        self.static_features = static_features
 
         self.lengths = [
             len(self.data[i]) - self.window + 1 for i in range(len(self.data))
@@ -74,11 +78,19 @@ class MHC6MWTDataset(Dataset):
 
         window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
 
+        if self.use_static_features:
+            repeated = np.repeat(
+                self.static_features[participant_idx][np.newaxis, :],
+                self.window,
+                axis=0,
+            )
+            window = np.concatenate((window, repeated), axis=1)
+
         look_back_window = torch.tensor(
-            window[: self.look_back_window, : self.input_channels]
+            window[: self.look_back_window, : self.look_back_channel_dim]
         ).float()
         prediction_window = torch.tensor(
-            window[self.look_back_window :, : self.base_channel_dim]
+            window[self.look_back_window :, : self.target_channel_dim]
         ).float()
 
         return look_back_window, prediction_window
@@ -92,9 +104,14 @@ class MHC6MWTDataModule(BaseDataModule):
         num_workers: int = 8,
         look_back_window: int = 5,
         prediction_window: int = 3,
-        use_activity_info: bool = False,
         freq: int = 25,
         name: str = "mhc6mwt",
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        target_channel_dim: int = 1,
+        dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -104,24 +121,52 @@ class MHC6MWTDataModule(BaseDataModule):
             freq=freq,
             look_back_window=look_back_window,
             prediction_window=prediction_window,
-            use_activity_info=use_activity_info,
+            use_dynamic_features=use_dynamic_features,
+            use_static_features=use_static_features,
+            target_channel_dim=target_channel_dim,
+            dynamic_exogenous_variables=dynamic_exogenous_variables,
+            static_exogenous_variables=static_exogenous_variables,
+            look_back_channel_dim=look_back_channel_dim,
         )
 
         with open(data_dir + "mhc6mwt.pkl", "rb") as f:
             data = pickle.load(f)
 
         ids = list(data.keys())
-        summary_df = pd.read_parquet(data_dir + "summary_table.parquet")
-        import pdb
+        summary = pd.read_parquet(data_dir + "summary_table.parquet")
 
-        pdb.set_trace()
         train_ids, val_ids, test_ids = get_train_test_split(
-            summary_df, ids
+            summary, ids
         )  # we only consider keys that are in the data
+
+        # static features
+        summary["age"] = (summary["age"] - summary["age"].mean()) / (
+            summary["age"].std() + 1e-8
+        )
+        phys_activity_one_hot = (
+            pd.get_dummies(summary["phys_activity"], prefix="phys_act", dummy_na=True)
+            * 1
+        )
+        sex_one_hot = (
+            pd.get_dummies(
+                summary["BiologicalSex"],
+                prefix="sex",
+                dummy_na=True,
+            )
+            * 1
+        )
+        self.static_features = pd.concat(
+            (summary[["recordId", "age"]], phys_activity_one_hot, sex_one_hot),
+            axis=1,
+        )
 
         train_set = set(train_ids)
         val_set = set(val_ids)
         test_set = set(test_ids)
+
+        self.train_ids = train_ids
+        self.val_ids = val_ids
+        self.test_ids = test_ids
 
         assert train_set.isdisjoint(val_set), "Train and Val sets are not disjoint"
         assert train_set.isdisjoint(test_set), "Train and Test sets are not disjoint"
@@ -137,24 +182,40 @@ class MHC6MWTDataModule(BaseDataModule):
             data[record_id] for record_id in test_ids if record_id in data
         ]
 
+    def get_static_features(self, ids: list[str]) -> np.ndarray:
+        df = self.static_features.copy()
+        df = df[df["recordId"].isin(ids)]
+        df = df.sort_values("recordId")
+        df = df.drop(columns=["recordId"])
+        return df.values
+
     def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = MHC6MWTDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.train_arrays,
-                self.use_activity_info,
+                self.get_static_features(self.train_ids),
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
             )
             self.val_dataset = MHC6MWTDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.val_arrays,
-                self.use_activity_info,
+                self.get_static_features(self.val_ids),
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
             )
         if stage == "test":
             self.test_dataset = MHC6MWTDataset(
                 self.look_back_window,
                 self.prediction_window,
                 self.test_arrays,
-                self.use_activity_info,
+                self.get_static_features(self.test_ids),
+                self.use_static_features,
+                self.target_channel_dim,
+                self.look_back_channel_dim,
             )

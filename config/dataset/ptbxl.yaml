@@ -18,8 +18,8 @@ datamodule:
   use_static_features: ${use_static_features}
 
   target_channel_dim: 12 
-  dynamic_exogenous_variables: 4 # dynamic activity information is locally normalized
-  static_exogenous_variables: 4 # Continuous: AGE, HEIGHT, WEIGHT | Binary: SEX
+  dynamic_exogenous_variables: 0 
+  static_exogenous_variables: 7 # Continuous: AGE | Categorical: disease classes (6) NORM, MI, UNKNOWN, STTC, HYP, CD
   look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
 
 
