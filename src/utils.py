@@ -16,7 +16,6 @@ def create_group_run_name(
     prediction_window: int,
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
-
     dataset_to_signal_type = {
         "dalia": hr_or_ppg,
         "wildppg": hr_or_ppg,

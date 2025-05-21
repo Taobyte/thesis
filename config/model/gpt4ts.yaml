@@ -9,8 +9,8 @@ model:
   stride: 1
   d_ff: 128
   d_model: 128
-  enc_in: ${dataset.input_channels}
-  c_out: ${dataset.input_channels}
+  enc_in: ${dataset.datamodule.look_back_channel_dim}
+  c_out: ${dataset.datamodule.look_back_channel_dim}
   gpt_layers: 6
   embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   freq: 'm'

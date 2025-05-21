@@ -5,7 +5,7 @@ model:
   _target_: src.models.adamshyper.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
-  channels: ${dataset.input_channels} 
+  channels: ${dataset.datamodule.look_back_channel_dim} 
   d_model: 512
   individual: False
   hyper_num: [50, 20, 10]

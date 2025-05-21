@@ -16,7 +16,7 @@ use_heart_rate: True
 use_static_features: True 
 use_dynamic_features: True
 
-use_activity_info: False
+use_activity_info: False # TODO remove this
 
 seed: 123
 overfit: False

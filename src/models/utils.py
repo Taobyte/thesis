@@ -41,23 +41,37 @@ def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> d
 
 
 def local_z_norm(
-    x: torch.Tensor, mean: torch.Tensor = None, std: torch.Tensor = None
+    x: torch.Tensor,
+    local_norm_channels: int,
+    mean: torch.Tensor = None,
+    std: torch.Tensor = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    _, _, C = (
-        x.shape
-    )  # we need channel dim, because channel dims vary for look_back_window and prediction_window
     if mean is None or std is None:
+        # here we normalize the look back window
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True)
-    x_norm = (x - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
+        x_norm = x
+        x_norm[:, :, :local_norm_channels] = (
+            x_norm[:, :, :local_norm_channels] - mean[:, :, :local_norm_channels]
+        ) / (std[:, :, :local_norm_channels] + 1e-8)
+    else:
+        # here we normalize the prediction window
+        _, _, C = x.shape
+        x_norm = (x - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
+
     return x_norm.float(), mean.float(), std.float()
 
 
 def local_z_denorm(
-    x_norm: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
+    x_norm: torch.Tensor,
+    local_norm_channels: int,
+    mean: torch.Tensor,
+    std: torch.Tensor,
 ) -> torch.Tensor:
     _, _, C = x_norm.shape
-    x_denorm = x_norm * std[:, :, :C] + mean[:, :, :C]
+    C = min(C, local_norm_channels)
+    x_denorm = x_norm
+    x_denorm = x_denorm[:, :, :C] * std[:, :, :C] + mean[:, :, :C]
     return x_denorm.float()
 
 
@@ -69,6 +83,13 @@ class BaseLightningModule(L.LightningModule):
         self.wandb_project = wandb_project
 
         self.evaluator = Evaluator()
+
+        self.look_back_channel_dim = None
+        self.target_channel_dim = None
+        self.use_static_features = None
+        self.use_dynamic_features = None
+        self.static_exogenous_variables = None
+        self.dynamic_exogenous_variables = None
 
     def model_forward(self, look_back_window: torch.Tensor):
         raise NotImplementedError
@@ -83,12 +104,29 @@ class BaseLightningModule(L.LightningModule):
     ) -> float:
         raise NotImplementedError
 
+    def on_fit_start(self):
+        datamodule = self.trainer.datamodule
+        self.look_back_channel_dim = datamodule.look_back_channel_dim
+        self.target_channel_dim = datamodule.target_channel_dim
+        self.use_static_features = datamodule.use_static_features
+        self.use_dynamic_features = datamodule.use_dynamic_features
+        self.static_exogenous_variables = datamodule.static_exogenous_variables
+        self.dynamic_exogenous_variables = datamodule.dynamic_exogenous_variables
+
+        self.local_norm_channels = (
+            datamodule.target_channel_dim + datamodule.dynamic_exogenous_variables
+        )
+
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
         look_back_window, prediction_window = batch
 
-        look_back_window_norm, mean, std = local_z_norm(look_back_window)
-        prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
+        look_back_window_norm, mean, std = local_z_norm(
+            look_back_window, self.local_norm_channels
+        )
+        prediction_window_norm, _, _ = local_z_norm(
+            prediction_window, self.local_norm_channels, mean, std
+        )
 
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
@@ -99,8 +137,12 @@ class BaseLightningModule(L.LightningModule):
         # normalize data
         look_back_window, prediction_window = batch
 
-        look_back_window_norm, mean, std = local_z_norm(look_back_window)
-        prediction_window_norm, _, _ = local_z_norm(prediction_window, mean, std)
+        look_back_window_norm, mean, std = local_z_norm(
+            look_back_window, self.local_norm_channels
+        )
+        prediction_window_norm, _, _ = local_z_norm(
+            prediction_window, self.local_norm_channels, mean, std
+        )
 
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
@@ -145,12 +187,14 @@ class BaseLightningModule(L.LightningModule):
             for type, idx in zipped:
                 look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
                 look_back_window = look_back_window.unsqueeze(0).to(self.device)
-                look_back_window_norm, mean, std = local_z_norm(look_back_window)
+                look_back_window_norm, mean, std = local_z_norm(
+                    look_back_window, self.local_norm_channels
+                )
                 target = target.unsqueeze(0)
                 pred = self.model_forward(look_back_window_norm)[
                     :, :, : target.shape[-1]
                 ]
-                pred_denorm = local_z_denorm(pred, mean, std)
+                pred_denorm = local_z_denorm(pred, self.local_norm_channels, mean, std)
                 assert pred_denorm.shape == target.shape
 
                 if hasattr(self.trainer.datamodule, "use_heart_rate"):
@@ -175,7 +219,9 @@ class BaseLightningModule(L.LightningModule):
         look_back_window, prediction_window = batch
         self.batch_size.append(look_back_window.shape[0])
 
-        look_back_window_norm, mean, std = local_z_norm(look_back_window)
+        look_back_window_norm, mean, std = local_z_norm(
+            look_back_window, self.local_norm_channels
+        )
 
         # Prediction
         preds = self.model_forward(look_back_window_norm)
@@ -185,7 +231,7 @@ class BaseLightningModule(L.LightningModule):
         assert preds.shape == prediction_window.shape
 
         # Metric Calculation
-        denormalized_preds = local_z_denorm(preds, mean, std)
+        denormalized_preds = local_z_denorm(preds, self.local_norm_channels, mean, std)
         metrics, current_metrics = self.evaluator(
             prediction_window, denormalized_preds, look_back_window
         )

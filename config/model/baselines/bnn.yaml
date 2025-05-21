@@ -4,8 +4,8 @@ model:
   _target_: src.models.bnn.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  base_channel_dim: ${dataset.base_channel_dim}
-  input_channels: ${dataset.input_channels}
+  base_channel_dim: ${dataset.datamodule.target_channel_dim}
+  input_channels: ${dataset.datamodule.look_back_channel_dim}
   hid_dim: 10
   n_hid_layers: 5
   prior_scale: 5.0
