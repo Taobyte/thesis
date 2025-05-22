@@ -8,6 +8,7 @@ datamodule:
   batch_size: ${model.data.batch_size}
   num_workers: ${num_workers}
 
+  random_state: ${seed}
   freq: 100 
   name: ${dataset.name}
 

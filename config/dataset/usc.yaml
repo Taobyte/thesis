@@ -4,9 +4,9 @@ datamodule:
   data_dir: "${path.datadir}/USC-HAD/" 
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: [1, 2, 4, 5, 7, 10, 11, 14]
-  val_participants: [3, 6, 8]
-  test_participants: [9, 12, 13] 
+  train_participants: ${experiment.usc.train_participants} 
+  val_participants: ${experiment.usc.val_participants} 
+  test_participants: ${experiment.usc.test_participants} 
   num_workers: ${num_workers}
   batch_size: 32
 

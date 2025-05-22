@@ -15,6 +15,7 @@ def create_group_run_name(
     prediction_window: int,
     use_dynamic_features: bool,
     use_static_features: bool,
+    fold_nr: int = 0,
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
     dataset_to_signal_type = {
@@ -31,6 +32,7 @@ def create_group_run_name(
 
     signal_type = dataset_to_signal_type[dataset_name]
 
+    # static and dynamic features
     features = ""
     if use_dynamic_features and use_static_features:
         features = "df_sf"
@@ -39,10 +41,18 @@ def create_group_run_name(
     elif not use_dynamic_features and use_static_features:
         features = "sf"
 
-    group_name = f"{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
-    run_name = f"{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    # fold info for dalia, wildppg, ieee
+    fold_datasets = ["dalia", "wildppg", "ieee", "ucihar", "usc"]
+    fold = ""
+    if dataset_name in fold_datasets:
+        fold = f"fold_{fold_nr}"
+
+    group_name = f"{fold}_{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    run_name = f"{fold}_{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
 
     tags = [dataset_name, model_name, signal_type, features]
+    if dataset_name in fold_datasets:
+        tags.append(fold)
 
     return group_name, run_name, tags
 
@@ -62,7 +72,12 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         config.prediction_window,
         config.use_dynamic_features,
         config.use_static_features,
+        config.experiment.fold_nr,
     )
+
+    import pdb
+
+    pdb.set_trace()
 
     wandb_logger = (
         WandbLogger(

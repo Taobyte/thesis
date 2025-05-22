@@ -10,14 +10,14 @@ from scipy.io import loadmat
 from src.datasets.utils import BaseDataModule
 
 
-def chapman_load_data(datadir: str):
+def chapman_load_data(datadir: str, random_state: int = 42):
     data = loadmat(datadir + "chapman.mat")["whole_data"]
 
     df = pd.DataFrame(data)
     classes = df[1].apply(lambda x: x[0][0])
 
     (X_train, y_train), (X_val, y_val), (X_test, y_test), _ = stratified_split_onehot(
-        df, classes
+        df, classes, random_state=random_state
     )
 
     return X_train, y_train, X_val, y_val, X_test, y_test
@@ -29,17 +29,17 @@ def stratified_split_onehot(
     train_size=0.7,
     val_size=0.15,
     test_size=0.15,
-    seed=42,
+    random_state=42,
 ):
     assert abs(train_size + val_size + test_size - 1.0) < 1e-6, "Splits must sum to 1."
 
     X_temp, X_test, y_temp, y_test = train_test_split(
-        data, labels, test_size=test_size, stratify=labels, random_state=seed
+        data, labels, test_size=test_size, stratify=labels, random_state=random_state
     )
 
     val_ratio = val_size / (train_size + val_size)
     X_train, X_val, y_train, y_val = train_test_split(
-        X_temp, y_temp, test_size=val_ratio, stratify=y_temp, random_state=seed
+        X_temp, y_temp, test_size=val_ratio, stratify=y_temp, random_state=random_state
     )
 
     encoder = OneHotEncoder(sparse_output=False)
@@ -117,6 +117,7 @@ class ChapmanDataModule(BaseDataModule):
         dynamic_exogenous_variables: int = 0,
         static_exogenous_variables: int = 4,
         look_back_channel_dim: int = 4,
+        random_state: int = 42,
     ):
         super().__init__(
             data_dir=data_dir,

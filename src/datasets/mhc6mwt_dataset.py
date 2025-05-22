@@ -10,7 +10,7 @@ from typing import Tuple
 
 
 def get_train_test_split(
-    df: pd.DataFrame, ids: list[str]
+    df: pd.DataFrame, ids: list[str], random_state: int
 ) -> Tuple[list[str], list[str], list[str]]:
     df_strat = df.copy()
     df_strat = df_strat[df_strat["recordId"].isin(ids)]
@@ -22,7 +22,7 @@ def get_train_test_split(
     trainval_ids, test_ids = train_test_split(
         df_strat["recordId"],
         test_size=0.2,
-        random_state=42,
+        random_state=random_state,
         stratify=df_strat["age_bin"],
     )
 
@@ -31,7 +31,7 @@ def get_train_test_split(
     train_ids, val_ids = train_test_split(
         trainval_df["recordId"],
         test_size=0.25,
-        random_state=42,
+        random_state=random_state,
         stratify=trainval_df["age_bin"],
     )
 
@@ -112,6 +112,7 @@ class MHC6MWTDataModule(BaseDataModule):
         dynamic_exogenous_variables: int = 1,
         static_exogenous_variables: int = 0,
         look_back_channel_dim: int = 1,
+        random_state: int = 42,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -136,7 +137,7 @@ class MHC6MWTDataModule(BaseDataModule):
         summary = pd.read_parquet(data_dir + "summary_table.parquet")
 
         train_ids, val_ids, test_ids = get_train_test_split(
-            summary, ids
+            summary, ids, random_state
         )  # we only consider keys that are in the data
 
         # static features

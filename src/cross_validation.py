@@ -3,22 +3,11 @@ import pandas as pd
 import numpy as np
 import argparse
 import os
-import gzip
-import shutil
-import random
-import torch
-import lightning as L
-import wfdb
 import re
 
-from sklearn.model_selection import StratifiedKFold, KFold
-from einops import rearrange
-from numpy.lib.stride_tricks import sliding_window_view
-from scipy import signal
-from scipy.io import loadmat
 from pathlib import Path
-from tqdm import tqdm
-from typing import Tuple
+from sklearn.model_selection import StratifiedKFold, KFold
+from scipy.io import loadmat
 
 
 def get_dalia_folds(datadir: str):
@@ -73,6 +62,69 @@ def get_dalia_folds(datadir: str):
         print(f"train_participants: {fold['train_participants']}")
         print(f"val_participants:   {fold['val_participants']}")
         print(f"test_participants:  {fold['test_participants']}")
+
+
+def get_usc_folds(datadir: str):
+    age = []
+    height = []
+    weight = []
+    for participant in range(1, 15):
+        participant_dir = Path(datadir) / f"Subject{participant}"
+        participant_mat_paths = participant_dir.glob("*.mat")
+        data = loadmat(next(participant_mat_paths))
+        age.append(data["age"].astype(float)[0])
+        height.append(int(data["height"][0][:3]))
+        weight.append(int(data["weight"][0][:2]))
+
+    age = np.array(age)
+    height = np.array(height)
+    weight = np.array(weight)
+
+    df = pd.DataFrame(
+        {
+            "participant": list(range(1, len(age) + 1)),
+            "age": age,
+            "height": height,
+            "weight": weight,
+        }
+    )
+
+    df["age_bin"] = pd.qcut(df["age"], q=3, labels=False)
+    df["weight_bin"] = pd.qcut(df["weight"], q=3, labels=False, duplicates="drop")
+    df["strata"] = df["age_bin"].astype(str) + "_" + df["weight_bin"].astype(str)
+
+    X = df["participant"]
+    # y = df["age_bin"]
+    y = df["strata"]
+
+    skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+    folds = []
+
+    for fold_idx, (train_val_idx, test_idx) in enumerate(skf.split(X, y)):
+        test_ids = X.iloc[test_idx].tolist()
+        train_val_ids = X.iloc[train_val_idx].tolist()
+
+        val_ids = train_val_ids[:2]
+        train_ids = train_val_ids[2:]
+
+        folds.append(
+            {
+                "fold": fold_idx,
+                "train_participants": sorted(train_ids),
+                "val_participants": sorted(val_ids),
+                "test_participants": sorted(test_ids),
+            }
+        )
+
+    for fold in folds:
+        print(f"\nFOLD {fold['fold']}")
+        print(f"train_participants: {fold['train_participants']}")
+        print(f"val_participants:   {fold['val_participants']}")
+        print(f"test_participants:  {fold['test_participants']}")
+
+    import pdb
+
+    pdb.set_trace()
 
 
 def get_wildppg_folds(datadir: str):
@@ -191,7 +243,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dataset",
-        choices=["ieee", "capture24", "ucihar", "dalia", "ptbxl", "mhc6mwt", "wildppg"],
+        choices=["ieee", "ucihar", "dalia", "mhc6mwt", "wildppg", "usc"],
         required=True,
         help="You have to choose from [dalia, ucihar, ieee, capture24, ptbxl, mhc6mwt, wildppg]",
     )
@@ -202,11 +254,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.dataset == "capture24":
-        raise NotImplementedError()
-        # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/"
-        # create_capture24_npy_files(args.datadir)
-    elif args.dataset == "dalia":
+    if args.dataset == "dalia":
         get_dalia_folds(args.datadir)
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
     elif args.dataset == "wildppg":
@@ -219,7 +267,9 @@ if __name__ == "__main__":
         # datadir = (
         #      "C:/Users/cleme/ETH/Master/Thesis/data/UCIHAR/UCI HAR Dataset/UCI HAR Dataset/"
         # )
-    elif args.dataset == "ptbxl":
+    elif args.dataset == "usc":
+        get_usc_folds(args.datadir)
+        # "C:/Users/cleme/ETH/Master/Thesis/data/euler/USC-HAD/"
         raise NotImplementedError()
         # "C:/Users/cleme/ETH/Master/Thesis/data/PTB/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3/records100/"
     elif args.dataset == "mhc6mwt":
