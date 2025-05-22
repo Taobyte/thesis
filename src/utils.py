@@ -45,10 +45,10 @@ def create_group_run_name(
     fold_datasets = ["dalia", "wildppg", "ieee", "ucihar", "usc"]
     fold = ""
     if dataset_name in fold_datasets:
-        fold = f"fold_{fold_nr}"
+        fold = f"fold_{fold_nr}_"
 
-    group_name = f"{fold}_{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
-    run_name = f"{fold}_{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    group_name = f"{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    run_name = f"{fold}{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
 
     tags = [dataset_name, model_name, signal_type, features]
     if dataset_name in fold_datasets:
