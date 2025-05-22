@@ -4,9 +4,9 @@ datamodule:
   data_dir: "${path.datadir}/IEEEPPG/Training_data/Training_data/ieee_preprocessed/"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: [0, 1, 2, 3, 4, 5, 6]
-  val_participants: [8, 9]
-  test_participants: [7, 10, 11]
+  train_participants: ${experiment.ieee.train_participants} 
+  val_participants: ${experiment.ieee.val_participants} 
+  test_participants: ${experiment.ieee.test_participants}
   use_heart_rate: ${use_heart_rate}
   batch_size: ${model.data.batch_size}
   num_workers: ${num_workers}

@@ -402,7 +402,9 @@ def mhc6mwt_preprocess(datadir: str) -> None:
         # some rows contained endDates < startDate
         acc_test = acc_test[acc_test["startDate"] <= acc_test["endDate"]]
 
-        acc_test = acc_test[["startDate", "endDate", "distance", "numberOfSteps"]]
+        acc_test = acc_test[
+            ["startDate", "endDate", "distance", "numberOfSteps"]
+        ]  # distance - > avg speed
         acc_test["seconds"] = (
             (acc_test["endDate"] - acc_test["startDate"]).dt.total_seconds().astype(int)
         )

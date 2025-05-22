@@ -110,7 +110,9 @@ def dir_acc(
     last_look_back = look_back_window[
         :, -1, :C
     ]  # filter out the activity info channels
-    ground_truth_slope = np.sign(targets[:, 0, :] - last_look_back)  # (B, 1, C)
+    ground_truth_slope = np.sign(
+        targets[:, 0, :] - last_look_back
+    )  # (B, 1, C) TODO: check 0 case
     prediction_slope = np.sign(preds[:, 0, :] - last_look_back)  # (B, 1, C)
 
     return np.mean(ground_truth_slope == prediction_slope)

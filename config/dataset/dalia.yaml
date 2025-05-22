@@ -5,9 +5,9 @@ datamodule:
   data_dir: "${path.datadir}/dalia_preprocessed"
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: [2, 3, 4, 5, 6, 7, 8, 12, 15]
-  val_participants: [9, 10] # 2 for validation
-  test_participants: [1, 11, 13, 14, 15] 
+  train_participants: ${experiment.dalia.train_participants} 
+  val_participants: ${experiment.dalia.val_participants} 
+  test_participants: ${experiment.dalia.test_participants} 
   num_workers: ${num_workers}
   batch_size: ${model.data.batch_size}
 
