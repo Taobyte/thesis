@@ -214,12 +214,9 @@ if __name__ == "__main__":
     preds = np.array([1, 2, 3]).reshape(1, -1, 1)
     targets = np.array([-1, 3, 4]).reshape(1, -1, 1)
     look_back_window = np.array([2]).reshape(1, -1, 1)
-    import pdb
 
     preds = np.random.normal(size=(1, 3, 2))
     targets = np.random.normal(size=(1, 3, 2))
     look_back_window = np.random.normal(size=(1, 3, 4))
-
-    pdb.set_trace()
 
     print(dir_acc(preds, targets, look_back_window))

@@ -75,10 +75,6 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         config.experiment.fold_nr,
     )
 
-    import pdb
-
-    pdb.set_trace()
-
     wandb_logger = (
         WandbLogger(
             name=run_name,
@@ -90,6 +86,10 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         if config.use_wandb
         else DummyLogger()
     )
+    print("WanDB Setup complete.")
+    print(f"Run name: {run_name}")
+    print(f"Group name: {group_name}")
+    print(f"Tags: {tags}")
 
     return wandb_logger, run_name
 

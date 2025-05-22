@@ -122,10 +122,6 @@ def get_usc_folds(datadir: str):
         print(f"val_participants:   {fold['val_participants']}")
         print(f"test_participants:  {fold['test_participants']}")
 
-    import pdb
-
-    pdb.set_trace()
-
 
 def get_wildppg_folds(datadir: str):
     # IEEE has 12 participants, but no additional infos about these
