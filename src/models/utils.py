@@ -48,9 +48,11 @@ def local_z_norm(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if mean is None or std is None:
         # here we normalize the look back window
+        _, _, C = x.shape
+        assert local_norm_channels <= C
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True)
-        x_norm = x
+        x_norm = x.clone()
         x_norm[:, :, :local_norm_channels] = (
             x_norm[:, :, :local_norm_channels] - mean[:, :, :local_norm_channels]
         ) / (std[:, :, :local_norm_channels] + 1e-8)
@@ -59,7 +61,7 @@ def local_z_norm(
         _, _, C = x.shape
         x_norm = (x - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
 
-    return x_norm.float(), mean.float(), std.float()
+    return x_norm.float().detach(), mean.float().detach(), std.float().detach()
 
 
 def local_z_denorm(
@@ -69,8 +71,10 @@ def local_z_denorm(
     std: torch.Tensor,
 ) -> torch.Tensor:
     _, _, C = x_norm.shape
-    C = min(C, local_norm_channels)
-    x_denorm = x_norm
+    C = min(
+        C, local_norm_channels
+    )  # for look back window, this will be local_norm_channels and for prediction window it will be C
+    x_denorm = x_norm.copy()
     x_denorm = x_denorm[:, :, :C] * std[:, :, :C] + mean[:, :, :C]
     return x_denorm.float()
 
