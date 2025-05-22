@@ -9,7 +9,7 @@ model:
   use_norm: True # instance normalization in forward function of the model
   alpha: 1 
   kernel_size: 3  
-  n_channels: ${dataset.look_back_channel_dim}
+  n_channels: ${dataset.datamodule.look_back_channel_dim}
   d_model: 512
   wv: "db1"
   factor: 1 # TODO: find out what this is doing
