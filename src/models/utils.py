@@ -74,7 +74,7 @@ def local_z_denorm(
     C = min(
         C, local_norm_channels
     )  # for look back window, this will be local_norm_channels and for prediction window it will be C
-    x_denorm = x_norm.copy()
+    x_denorm = x_norm.clone()
     x_denorm = x_denorm[:, :, :C] * std[:, :, :C] + mean[:, :, :C]
     return x_denorm.float()
 
