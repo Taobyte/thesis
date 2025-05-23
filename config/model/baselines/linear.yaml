@@ -13,6 +13,7 @@ pl_model:
   _target_: src.models.linear.Linear
   learning_rate: 0.01
   loss: "MSE"
+  use_scheduler: True
 
 trainer:
   max_epochs: 10

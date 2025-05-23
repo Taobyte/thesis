@@ -4,8 +4,11 @@ model:
   _target_: src.models.kalmanfilter.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  base_channel_dim: ${dataset.datamodule.target_channel_dim}
-  input_channels: ${dataset.datamodule.look_back_channel_dim}
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  hidden_dim: 32
+  use_dynamic_features: ${use_dynamic_features}
+  dynamic_exogenous_variables: ${dataset.datamodule.dynamic_exogenous_variables}
 
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter
