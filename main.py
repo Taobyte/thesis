@@ -49,14 +49,12 @@ def main(config: DictConfig) -> Optional[float]:
                 patience=config.model.trainer.patience,
             )
         )
-    if config.use_checkpoint_callback:
-        checkpoint_callback = ModelCheckpoint(
-            monitor="val_loss",
-            filename=run_name + "-{epoch}-{step}",
-            save_top_k=1,  # Also saves best model if you want
-        )
-
-        callbacks.append(checkpoint_callback)
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        filename=run_name + "-{epoch}-{step}",
+        save_top_k=1,  # Also saves best model if you want
+    )
+    callbacks.append(checkpoint_callback)
 
     # multi gpu training
     multi_gpu_dict = {}
@@ -88,8 +86,11 @@ def main(config: DictConfig) -> Optional[float]:
         return last_val_loss
     else:
         print("Start Evaluation.")
-        best_ckpt_path = os.path.join(config.path.basedir, "checkpoints", "best.ckpt")
+        best_ckpt_path = (
+            checkpoint_callback.best_model_path
+        )  # TODO not correct at the moment!
         if os.path.exists(best_ckpt_path):
+            print(f"Best checkpoint found! best_ckpt_path: {best_ckpt_path}")
             trainer.test(datamodule=datamodule, ckpt_path="best")
         else:
             print("Best checkpoint not found, testing with current model.")
