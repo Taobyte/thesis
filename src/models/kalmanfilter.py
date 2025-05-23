@@ -70,12 +70,13 @@ class Model(torch.nn.Module):
         # pdb.set_trace()
         for t in range(self.look_back_window):
             # add dynamic features to hidden state
-            hidden_state[:, -self.dynamic_exogenous_variables :] = observation[
-                :,
-                t,
-                self.target_channel_dim : self.target_channel_dim
-                + self.dynamic_exogenous_variables,
-            ]
+            if self.use_dynamic_features:
+                hidden_state[:, -self.dynamic_exogenous_variables :] = observation[
+                    :,
+                    t,
+                    self.target_channel_dim : self.target_channel_dim
+                    + self.dynamic_exogenous_variables,
+                ]
 
             F_t = self.F[t]
             H_t = self.H[t]
