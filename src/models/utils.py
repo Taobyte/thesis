@@ -49,6 +49,7 @@ def local_z_norm(
     if mean is None or std is None:
         # here we normalize the look back window
         _, _, C = x.shape
+
         assert local_norm_channels <= C
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True)
@@ -118,7 +119,9 @@ class BaseLightningModule(L.LightningModule):
         self.dynamic_exogenous_variables = datamodule.dynamic_exogenous_variables
 
         self.local_norm_channels = (
-            datamodule.target_channel_dim + datamodule.dynamic_exogenous_variables
+            (datamodule.target_channel_dim + datamodule.dynamic_exogenous_variables)
+            if self.use_dynamic_features
+            else datamodule.target_channel_dim
         )
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):

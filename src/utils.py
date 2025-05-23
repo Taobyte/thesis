@@ -50,7 +50,9 @@ def create_group_run_name(
     group_name = f"{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
     run_name = f"{fold}{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
 
-    tags = [dataset_name, model_name, signal_type, features]
+    tags = [dataset_name, model_name, signal_type]
+    if features != "":
+        tags.append(features)
     if dataset_name in fold_datasets:
         tags.append(fold)
 
