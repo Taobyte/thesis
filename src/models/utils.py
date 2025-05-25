@@ -81,11 +81,17 @@ def local_z_denorm(
 
 
 class BaseLightningModule(L.LightningModule):
-    def __init__(self, wandb_project: str = "c_keusch/thesis", n_trials: int = 10):
+    def __init__(
+        self,
+        wandb_project: str = "c_keusch/thesis",
+        n_trials: int = 10,
+        tune: bool = False,
+    ):
         super().__init__()
 
         self.n_trials = n_trials
         self.wandb_project = wandb_project
+        self.tune = tune
 
         self.evaluator = Evaluator()
 

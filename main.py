@@ -96,10 +96,7 @@ def main(config: DictConfig) -> Optional[float]:
             datamodule = instantiate(fold_config.dataset.datamodule)
             model_kwargs = get_model_kwargs(config, datamodule)
             model = instantiate(config.model.model, **model_kwargs)
-            pl_model = instantiate(
-                config.model.pl_model,
-                model=model,
-            )
+            pl_model = instantiate(config.model.pl_model, model=model, tune=True)
 
             print(f"Starting fold {i}")
             trainer.fit(pl_model, datamodule=datamodule)

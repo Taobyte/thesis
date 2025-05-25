@@ -148,7 +148,10 @@ class KalmanFilter(BaseLightningModule):
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
         assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
+        if self.tune:
+            loss = torch.nn.L1Loss(preds, prediction_window)
+        else:
+            loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
