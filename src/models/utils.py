@@ -95,8 +95,6 @@ class BaseLightningModule(L.LightningModule):
 
         self.evaluator = Evaluator()
 
-        self.min_val_loss = torch.inf
-
         self.look_back_channel_dim = None
         self.target_channel_dim = None
         self.use_static_features = None

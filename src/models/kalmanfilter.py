@@ -121,9 +121,13 @@ class Model(torch.nn.Module):
 
 class KalmanFilter(BaseLightningModule):
     def __init__(
-        self, model: torch.nn.Module, loss: str = "MSE", learning_rate: float = 0.001
+        self,
+        model: torch.nn.Module,
+        loss: str = "MSE",
+        learning_rate: float = 0.001,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
         self.model = model
         self.criterion = get_loss_fn(loss)
