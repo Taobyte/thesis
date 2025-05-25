@@ -103,7 +103,9 @@ def main(config: DictConfig) -> Optional[float]:
 
             print(f"Starting fold {i}")
             trainer.fit(pl_model, datamodule=datamodule)
-            val_results = trainer.validate(pl_model, datamodule=datamodule)
+            val_results = trainer.validate(
+                datamodule=datamodule
+            )  # use best model to validate
             last_val_loss = val_results[0]["val_loss_epoch"]
             val_losses.append(last_val_loss)
             print(f"Finished fold {i}, val_loss = {last_val_loss:.4f}")
