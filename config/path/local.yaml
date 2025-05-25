@@ -1,3 +1,4 @@
 basedir: "C:/Users/cleme/ETH/Master/Thesis/logs/"
 datadir: "C:/Users/cleme/ETH/Master/Thesis/data/euler"
 llamadir: "C:/Users/cleme/ETH/Master/Thesis/llama_weights/"
+config_path: "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config"

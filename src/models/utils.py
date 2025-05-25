@@ -89,6 +89,8 @@ class BaseLightningModule(L.LightningModule):
 
         self.evaluator = Evaluator()
 
+        self.min_val_loss = torch.inf
+
         self.look_back_channel_dim = None
         self.target_channel_dim = None
         self.use_static_features = None
@@ -154,6 +156,7 @@ class BaseLightningModule(L.LightningModule):
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
         )
+
         return loss
 
     def test_step(self, batch, batch_idx):

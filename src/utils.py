@@ -16,6 +16,7 @@ def create_group_run_name(
     use_dynamic_features: bool,
     use_static_features: bool,
     fold_nr: int = 0,
+    fold_datasets: list[str] = None,
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
     dataset_to_signal_type = {
@@ -41,8 +42,6 @@ def create_group_run_name(
     elif not use_dynamic_features and use_static_features:
         features = "sf"
 
-    # fold info for dalia, wildppg, ieee
-    fold_datasets = ["dalia", "wildppg", "ieee", "ucihar", "usc"]
     fold = ""
     if dataset_name in fold_datasets:
         fold = f"fold_{fold_nr}_"
@@ -59,12 +58,33 @@ def create_group_run_name(
     return group_name, run_name, tags
 
 
+def get_optuna_name(
+    dataset_name: str,
+    model_name: str,
+    use_heart_rate: bool,
+    look_back_window: int,
+    prediction_window: int,
+    use_dynamic_features: bool,
+    use_static_features: bool,
+    fold_nr: int = 0,
+    fold_datasets: list[str] = None,
+):
+    group_name, _, _ = create_group_run_name(
+        dataset_name,
+        model_name,
+        use_heart_rate,
+        look_back_window,
+        prediction_window,
+        use_dynamic_features,
+        use_static_features,
+        fold_nr,
+        fold_datasets,
+    )
+    return f"optuna_{group_name}"
+
+
 def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
-
-    # print(config_dict)
-    if config.tune:
-        config.use_wandb = False
 
     group_name, run_name, tags = create_group_run_name(
         config.dataset.name,
@@ -75,7 +95,13 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         config.use_dynamic_features,
         config.use_static_features,
         config.experiment.fold_nr,
+        config.fold_datasets,
     )
+
+    # print(config_dict)
+    if config.tune:
+        config.use_wandb = False
+        return DummyLogger(), run_name
 
     wandb_logger = (
         WandbLogger(

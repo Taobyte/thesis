@@ -86,6 +86,15 @@ class XGBoost(BaseLightningModule):
 
         # results = self.model.evals_results()
 
+    # we need this for the tuner
+    def on_validation_end(self):
+        preds = self.model.predict(self.X_val)
+        preds = rearrange(preds, "B (T C) -> B T C", C=self.base_channel_dim)
+        preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
+        targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
+        loss = self.criterion(preds, targets)
+        self.log("val_loss", loss, on_epoch=True, on_step=False, logger=True)
+
     # for now, these functions are not used, because we don't use batched training
 
     def model_specific_train_step(self, look_back_window, prediction_window):
@@ -106,7 +115,7 @@ class XGBoost(BaseLightningModule):
         preds = self.model_forward(look_back_window)
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
-        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
+        self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
     def configure_optimizers(self):

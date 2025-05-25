@@ -6,6 +6,8 @@ defaults:
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
+fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"]
+
 hydra:
   run:
     dir: ${path.basedir}/outputs

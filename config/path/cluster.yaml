@@ -1,4 +1,4 @@
 basedir: "/cluster/project/holz/ckeusch"
 datadir:  "/cluster/project/holz/ckeusch/euler"
 llamadir: "/cluster/project/holz/ckeusch/llama_weights" 
-
+config_path: "/cluster/home/ckeusch/thesis/config"

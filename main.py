@@ -12,15 +12,14 @@ from src.utils import (
     setup_wandb_logger,
     compute_square_window,
     compute_input_channel_dims,
+    get_optuna_name,
 )
 from src.models.utils import get_model_kwargs
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
-OmegaConf.register_new_resolver(
-    "suffix_if_true", lambda flag, suffix: suffix if flag else ""
-)
+OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
 OmegaConf.register_new_resolver(
     "compute_input_channel_dims", compute_input_channel_dims
 )
@@ -49,12 +48,13 @@ def main(config: DictConfig) -> Optional[float]:
                 patience=config.model.trainer.patience,
             )
         )
-    checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
-        filename=run_name + "-{epoch}-{step}",
-        save_top_k=1,  # Also saves best model if you want
-    )
-    callbacks.append(checkpoint_callback)
+    if config.use_checkpoint_callback:
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            filename=run_name + "-{epoch}-{step}",
+            save_top_k=1,  # Also saves best model if you want
+        )
+        callbacks.append(checkpoint_callback)
 
     # multi gpu training
     multi_gpu_dict = {}
@@ -74,17 +74,49 @@ def main(config: DictConfig) -> Optional[float]:
         **multi_gpu_dict,
     )
 
-    print("Start Training.")
-    trainer.fit(pl_model, datamodule=datamodule)
-    print("End Training.")
-
     if config.tune:
-        val_results = trainer.validate(pl_model, datamodule=datamodule)
+        import numpy as np
+        from hydra.core.global_hydra import GlobalHydra
+        from hydra import initialize_config_module, compose
 
-        last_val_loss = val_results[0]["val_loss_epoch"]
-        # return val loss for tuner
-        return last_val_loss
+        # loop over all folds and return average val loss performance
+        val_losses = []
+        for i in range(3):
+            if config.dataset.name in config.fold_datasets:
+                fold_name = f"fold_{i}"
+                overrides = [f"experiment={fold_name}"]
+            else:
+                overrides = [f"seed={i}"]
+
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+            with initialize_config_module(config_module="config"):
+                fold_config = compose(config_name="config.yaml", overrides=overrides)
+
+            datamodule = instantiate(fold_config.dataset.datamodule)
+            model_kwargs = get_model_kwargs(config, datamodule)
+            model = instantiate(config.model.model, **model_kwargs)
+            pl_model = instantiate(
+                config.model.pl_model,
+                model=model,
+            )
+
+            print(f"Starting fold {i}")
+            trainer.fit(pl_model, datamodule=datamodule)
+            val_results = trainer.validate(pl_model, datamodule=datamodule)
+            last_val_loss = val_results[0]["val_loss_epoch"]
+            val_losses.append(last_val_loss)
+            print(f"Finished fold {i}, val_loss = {last_val_loss:.4f}")
+
+        avg_val_loss = float(np.mean(val_losses))
+        print(f"Average validation loss across folds: {avg_val_loss:.4f}")
+        return avg_val_loss
+
     else:
+        print("Start Training.")
+        trainer.fit(pl_model, datamodule=datamodule)
+        print("End Training.")
+
         print("Start Evaluation.")
         best_ckpt_path = (
             checkpoint_callback.best_model_path
