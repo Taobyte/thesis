@@ -1,7 +1,5 @@
 import torch
 
-from einops import rearrange
-
 from src.losses import get_loss_fn
 from src.models.utils import BaseLightningModule
 
