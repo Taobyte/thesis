@@ -53,8 +53,9 @@ class XGBoost(BaseLightningModule):
         loss: str = "MSE",
         base_channel_dim: int = 1,
         model: torch.nn.Module = None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
         self.base_channel_dim = base_channel_dim
         self.model = model.model
@@ -92,11 +93,14 @@ class XGBoost(BaseLightningModule):
         preds = rearrange(preds, "B (T C) -> B T C", C=self.base_channel_dim)
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
-        loss = self.criterion(preds, targets)
+        if self.tune:
+            mae_criterion = torch.nn.L1Loss()
+            loss = mae_criterion(preds, targets)
+        else:
+            loss = self.criterion(preds, targets)
         self.log("val_loss", loss, on_epoch=True, on_step=False, logger=True)
 
     # for now, these functions are not used, because we don't use batched training
-
     def model_specific_train_step(self, look_back_window, prediction_window):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")

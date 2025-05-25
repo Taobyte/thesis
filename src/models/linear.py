@@ -10,8 +10,9 @@ class Linear(BaseLightningModule):
         learning_rate: float = 0.01,
         loss: str = "MSE",
         use_scheduler: bool = False,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
         self.criterion = get_loss_fn(loss)
         self.learning_rate = learning_rate
@@ -28,7 +29,11 @@ class Linear(BaseLightningModule):
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
-        loss = self.criterion(preds, prediction_window)
+        if self.tune:
+            mae_criterion = torch.nn.L1Loss()
+            loss = mae_criterion(preds, prediction_window)
+        else:
+            loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 

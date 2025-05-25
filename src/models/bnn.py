@@ -89,9 +89,13 @@ class Model(PyroModule):
 
 class BayesianNeuralNetwork(BaseLightningModule):
     def __init__(
-        self, model: PyroModule, learning_rate: int = 0.01, num_samples: int = 500
+        self,
+        model: PyroModule,
+        learning_rate: int = 0.01,
+        num_samples: int = 500,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.automatic_optimization = False  # we optimize the BNN using pyro
         self.model = model
 
@@ -126,8 +130,12 @@ class BayesianNeuralNetwork(BaseLightningModule):
     def model_specific_val_step(self, look_back_window, prediction_window):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
-
-        loss = self.svi.evaluate_loss(look_back_window, prediction_window)
+        if self.tune:
+            preds = self.model_forward(look_back_window)
+            mae_criterion = torch.nn.L1Loss()
+            loss = mae_criterion(preds, prediction_window)
+        else:
+            loss = self.svi.evaluate_loss(look_back_window, prediction_window)
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return None
 

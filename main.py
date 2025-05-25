@@ -100,9 +100,12 @@ def main(config: DictConfig) -> Optional[float]:
 
             print(f"Starting fold {i}")
             trainer.fit(pl_model, datamodule=datamodule)
-            val_results = trainer.validate(
-                datamodule=datamodule
-            )  # use best model to validate
+            if config.model.name not in ["xgboost", "bnn"]:
+                val_results = trainer.validate(
+                    datamodule=datamodule, ckpt_path="best"
+                )  # use best model to validate
+            else:
+                val_results = trainer.validate(pl_model, datamodule=datamodule)
             last_val_loss = val_results[0]["val_loss_epoch"]
             val_losses.append(last_val_loss)
             print(f"Finished fold {i}, val_loss = {last_val_loss:.4f}")
@@ -117,11 +120,7 @@ def main(config: DictConfig) -> Optional[float]:
         print("End Training.")
 
         print("Start Evaluation.")
-        best_ckpt_path = (
-            checkpoint_callback.best_model_path
-        )  # TODO not correct at the moment!
-        if os.path.exists(best_ckpt_path):
-            print(f"Best checkpoint found! best_ckpt_path: {best_ckpt_path}")
+        if config.model.name not in ["xgboost", "bnn"]:
             trainer.test(datamodule=datamodule, ckpt_path="best")
         else:
             print("Best checkpoint not found, testing with current model.")
