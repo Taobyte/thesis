@@ -1,24 +1,14 @@
-import math
 import torch
 import gpytorch
-import torch.nn as nn
-import torch.nn.functional as F
 
 from einops import rearrange
 from gpytorch.models import ApproximateGP
-from gpytorch.means import ConstantMean, LinearMean
-from gpytorch.kernels import MaternKernel, ScaleKernel
 from gpytorch.variational import (
-    VariationalStrategy,
-    CholeskyVariationalDistribution,
     LMCVariationalStrategy,
 )
-from gpytorch.distributions import MultivariateNormal
-from gpytorch.models.deep_gps import DeepGPLayer, DeepGP
-from gpytorch.mlls import DeepApproximateMLL, VariationalELBO
+from gpytorch.mlls import VariationalELBO
 from gpytorch.likelihoods import MultitaskGaussianLikelihood
 
-from torch.optim import SGD
 from typing import Tuple
 
 from src.models.utils import BaseLightningModule

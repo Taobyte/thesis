@@ -3,13 +3,23 @@ n_points: 1000 # number of inducing points
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
-  _target_: src.models.gp.GPModel
-  num_latents: 1 
+  _target_: src.models.dklgp.DKLGPModel
+  # GP model
+  num_latents: 3
   num_tasks: ${prediction_window}
+  kernel: "matern"
+  use_linear_trend: True 
+  periodic_type: ""
+  # Feature Extractor
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  hidden_dim: 8
+  out_dim: 16
+  dropout: 0.0
 
 pl_model: 
-  _target_: src.models.gp.GaussianProcess
+  _target_: src.models.dklgp.DKLGP
   learning_rate: 0.001
+  use_scheduler: False
 
 trainer:
   use_early_stopping: True

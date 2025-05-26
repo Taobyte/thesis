@@ -24,7 +24,7 @@ from src.plotting import plot_prediction_wandb
 
 def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
     model_kwargs = {}
-    if config.model.name == "gp":
+    if config.model.name in ["gp", "dklgp"]:
         model_kwargs["inducing_points"] = datamodule.get_inducing_points(
             config.model.n_points, config.model.strategy
         )

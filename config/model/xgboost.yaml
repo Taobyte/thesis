@@ -2,11 +2,9 @@ name: "xgboost"
 
 model:
   _target_: src.models.xgboost.XGBoostModel
-  learning_rate: 0.05
-
   objective: "reg:squarederror"
+  learning_rate: 0.05
   n_estimators: 300
-
   max_depth: 4
   reg_alpha: 1
   reg_lambda: 1 
@@ -16,11 +14,11 @@ model:
 pl_model:
   _target_: src.models.xgboost.XGBoost
   loss: "MSE"
-  base_channel_dim: ${dataset.base_channel_dim}
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
 trainer:
   max_epochs: 0 # we don't train here, because we use the flattened dataset at once and don't use batched training
   use_early_stopping: False
 
 data:
-  batch_size: 32
+  batch_size: 256

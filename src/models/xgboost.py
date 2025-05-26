@@ -51,13 +51,13 @@ class XGBoost(BaseLightningModule):
     def __init__(
         self,
         loss: str = "MSE",
-        base_channel_dim: int = 1,
+        target_channel_dim: int = 1,
         model: torch.nn.Module = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.base_channel_dim = base_channel_dim
+        self.target_channel_dim = target_channel_dim
         self.model = model.model
         self.X_train = rearrange(model.lbw_train_dataset, "B T C -> B (T C)")
         self.y_train = rearrange(model.pw_train_dataset, "B T C -> B (T C)")
@@ -71,7 +71,7 @@ class XGBoost(BaseLightningModule):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         look_back_window = look_back_window.detach().cpu().numpy()
         preds = self.model.predict(look_back_window)
-        preds = rearrange(preds, "B (T C) -> B T C", C=self.base_channel_dim)
+        preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         # we need to have a pytorch tensor for evaluation
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         return preds
@@ -81,16 +81,14 @@ class XGBoost(BaseLightningModule):
             self.X_train,
             self.y_train,
             eval_set=[(self.X_val, self.y_val)],
-            # early_stopping_rounds=10,  # optional: stop if no improvement for 10 rounds
-            # verbose=True,  # print eval results
+            # early_stopping_rounds=10, TODO: does not work for some reason
+            verbose=False,
         )
-
-        # results = self.model.evals_results()
 
     # we need this for the tuner
     def on_validation_end(self):
         preds = self.model.predict(self.X_val)
-        preds = rearrange(preds, "B (T C) -> B T C", C=self.base_channel_dim)
+        preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
         if self.tune:
