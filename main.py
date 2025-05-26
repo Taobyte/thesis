@@ -97,6 +97,19 @@ def main(config: DictConfig) -> Optional[float]:
             model = instantiate(config.model.model, **model_kwargs)
             pl_model = instantiate(config.model.pl_model, model=model, tune=True)
 
+            trainer = L.Trainer(
+                logger=wandb_logger,
+                max_epochs=config.model.trainer.max_epochs,
+                callbacks=callbacks,
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                overfit_batches=1 if config.overfit else 0.0,
+                limit_test_batches=10 if config.overfit else None,
+                default_root_dir=config.path.basedir,
+                num_sanity_val_steps=0,
+                **multi_gpu_dict,
+            )
+
             print(f"Starting fold {i}")
             trainer.fit(pl_model, datamodule=datamodule)
             if config.model.name not in ["xgboost", "bnn"]:

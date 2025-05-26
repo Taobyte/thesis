@@ -17,7 +17,7 @@ pl_model:
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
 trainer:
-  max_epochs: 0 # we don't train here, because we use the flattened dataset at once and don't use batched training
+  max_epochs: 1 # we don't train here, because we use the flattened dataset at once and don't use batched training
   use_early_stopping: False
 
 data:

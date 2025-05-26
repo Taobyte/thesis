@@ -76,7 +76,8 @@ class XGBoost(BaseLightningModule):
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         return preds
 
-    def on_fit_end(self):
+    # we use this hack!
+    def on_train_epoch_start(self):
         self.model.fit(
             self.X_train,
             self.y_train,
@@ -84,41 +85,26 @@ class XGBoost(BaseLightningModule):
             # early_stopping_rounds=10, TODO: does not work for some reason
             verbose=False,
         )
-
-    # we need this for the tuner
-    def on_validation_end(self):
+        # we need this for the optuna tuner
         preds = self.model.predict(self.X_val)
-        preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
+
         if self.tune:
             mae_criterion = torch.nn.L1Loss()
             loss = mae_criterion(preds, targets)
         else:
             loss = self.criterion(preds, targets)
-        self.log("val_loss", loss, on_epoch=True, on_step=False, logger=True)
 
-    # for now, these functions are not used, because we don't use batched training
-    def model_specific_train_step(self, look_back_window, prediction_window):
-        look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
-        prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
-        self.model = xgb.train(
-            self.xgboost_kwargs,
-            dtrain=xgb.DMatrix(look_back_window, prediction_window),
-            xgb_model=self.model,
+        self.final_val_loss = loss
+
+    def training_step(self, batch, batch_idx):
+        return None
+
+    def validation_step(self, batch, batch_idx):
+        self.log(
+            "val_loss", self.final_val_loss, on_epoch=True, on_step=True, logger=True
         )
-        preds = self.model.predict(xgb.DMatrix(look_back_window))
-        assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
-        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
-        return loss
-
-    def model_specific_val_step(self, look_back_window, prediction_window):
-        preds = self.model_forward(look_back_window)
-        assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
-        self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
-        return loss
 
     def configure_optimizers(self):
         return None
