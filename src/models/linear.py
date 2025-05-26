@@ -10,6 +10,7 @@ class Linear(BaseLightningModule):
         learning_rate: float = 0.01,
         loss: str = "MSE",
         use_scheduler: bool = False,
+        weight_decay: float = 1e-4,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -17,6 +18,7 @@ class Linear(BaseLightningModule):
         self.criterion = get_loss_fn(loss)
         self.learning_rate = learning_rate
         self.use_scheduler = use_scheduler
+        self.weight_decay = weight_decay
 
     def model_forward(self, look_back_window):
         return self.model(look_back_window)
@@ -38,7 +40,11 @@ class Linear(BaseLightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+        )
 
         if self.use_scheduler:
             scheduler = torch.optim.lr_scheduler.StepLR(

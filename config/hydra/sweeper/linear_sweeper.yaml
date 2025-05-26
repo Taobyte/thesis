@@ -1,0 +1,6 @@
+defaults:
+ -  shared_sweeper
+
+params:
+  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-1))
+  model.pl_model.weight_decay: tag(log, interval(1e-6, 1e-2))
