@@ -6,15 +6,18 @@ model:
   _target_: src.models.gp.GPModel
   num_latents: 3 
   num_tasks: ${prediction_window}
-  kernel: "matern"  # can be "rbf", "matern", "periodic" or "sm" spectral mixutre kernel
+  kernel: "matern"  # can be "rbf", "matern", "rq" or "sm" spectral mixutre kernel
+  periodic_type: "" # can be "additive", "multiplicative" or "" for no periodic kernel
+  use_linear_trend: False
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
   learning_rate: 0.001
 
 trainer:
-  use_early_stopping: False
+  use_early_stopping: True
   max_epochs: 10
+  patience: 2
 
 data: 
   batch_size: 256

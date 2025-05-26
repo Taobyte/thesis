@@ -1,4 +1,3 @@
-import os
 import hydra
 import lightning as L
 
@@ -90,7 +89,7 @@ def main(config: DictConfig) -> Optional[float]:
 
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
-            with initialize_config_module(config_module="config"):
+            with initialize_config_module(version_base="1.1", config_module="config"):
                 fold_config = compose(config_name="config.yaml", overrides=overrides)
 
             datamodule = instantiate(fold_config.dataset.datamodule)

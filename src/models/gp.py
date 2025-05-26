@@ -36,6 +36,8 @@ class GPModel(ApproximateGP):
         num_latents=3,
         num_tasks=3,
         kernel: str = "rbf",
+        use_linear_trend: bool = False,
+        periodic_type: str = "",
     ):
         self.num_latents = num_latents
         self.num_tasks = num_tasks
@@ -71,43 +73,46 @@ class GPModel(ApproximateGP):
             batch_shape=torch.Size([num_latents]),
         )
 
-        if kernel == "periodic":
-            base_kernel = gpytorch.kernels.PeriodicKernel(
-                batch_shape=torch.Size([num_latents]),
-                ard_num_dims=inducing_points.shape[-1],
+        if kernel == "rbf":
+            kernel = gpytorch.kernels.RBFKernel(batch_shape=torch.Size([num_latents]))
+        elif kernel == "matern":
+            kernel = gpytorch.kernels.MaternKernel(
+                nu=2.5, batch_shape=torch.Size([num_latents])
             )
-        elif kernel == "rbf":
-            base_kernel = gpytorch.kernels.RBFKernel(
+        elif kernel == "rq":
+            kernel = gpytorch.kernels.RQKernel(batch_shape=torch.Sihe([num_latents]))
+        else:
+            raise NotImplementedError()
+
+        #         elif kernel == "sm":
+        #             kernel = gpytorch.kernels.SpectralMixtureKernel(
+        #                 num_mixtures=12,
+        #                 batch_shape=torch.Size([num_latents]),
+        #                 ard_num_dims=inducing_points.shape[-1],
+        #             )
+        if periodic_type == "multiplicative":
+            periodic_kernel = gpytorch.kernels.PeriodicKernel(
                 batch_shape=torch.Size([num_latents])
             )
-        elif kernel == "matern":
-            base_kernel = gpytorch.kernels.MaternKernel(
-                nu=2.5, batch_shape=torch.Size([num_latents])
+            kernel *= periodic_kernel
+        elif periodic_type == "additive":
+            periodic_kernel = gpytorch.kernels.PeriodicKernel(
+                batch_shape=torch.Size([num_latents])
             )
-        elif kernel == "sm":
-            base_kernel = gpytorch.kernels.SpectralMixtureKernel(
-                num_mixtures=12,
-                batch_shape=torch.Size([num_latents]),
-                ard_num_dims=inducing_points.shape[-1],
-            )
+            kernel += periodic_kernel
 
-        # hardcode kernel
-        base_kernel = (
-            gpytorch.kernels.LinearKernel()
-            + gpytorch.kernels.MaternKernel(
-                nu=2.5, batch_shape=torch.Size([num_latents])
+        if use_linear_trend:
+            kernel += gpytorch.kernels.LinearKernel(
+                batch_shape=torch.Sihe([num_latents])
             )
-            + gpytorch.kernels.PeriodicKernel(
-                batch_shape=torch.Size([num_latents]),
-                ard_num_dims=inducing_points.shape[-1],
-            )
-        )
 
         if kernel in ["sm"]:
-            self.covar_module = base_kernel  # spectralMixture kernel should not be combined with scalekernel
+            self.covar_module = (
+                kernel  # spectralMixture kernel should not be combined with scalekernel
+            )
         else:
             self.covar_module = gpytorch.kernels.ScaleKernel(
-                base_kernel, batch_shape=torch.Size([num_latents])
+                kernel, batch_shape=torch.Size([num_latents])
             )
 
     def forward(self, x):
@@ -149,7 +154,7 @@ class GaussianProcess(BaseLightningModule):
         preds = self.model(look_back_window)
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
         loss = -self.mll(preds, prediction_window)
-        mae_loss = self.mae_loss(preds, prediction_window)
+        mae_loss = self.mae_loss(preds.mean, prediction_window)
         return loss, mae_loss
 
     def model_specific_train_step(self, look_back_window, prediction_window):
