@@ -80,7 +80,7 @@ class GPModel(ApproximateGP):
                 nu=2.5, batch_shape=torch.Size([num_latents])
             )
         elif kernel == "rq":
-            kernel = gpytorch.kernels.RQKernel(batch_shape=torch.Sihe([num_latents]))
+            kernel = gpytorch.kernels.RQKernel(batch_shape=torch.Size([num_latents]))
         else:
             raise NotImplementedError()
 
@@ -103,7 +103,7 @@ class GPModel(ApproximateGP):
 
         if use_linear_trend:
             kernel += gpytorch.kernels.LinearKernel(
-                batch_shape=torch.Sihe([num_latents])
+                batch_shape=torch.Size([num_latents])
             )
 
         if kernel in ["sm"]:

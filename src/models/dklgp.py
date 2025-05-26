@@ -5,7 +5,6 @@ import math
 import torch.nn as nn
 
 from torch.optim.lr_scheduler import MultiStepLR
-from torch.optim import SGD
 from gpytorch.likelihoods import MultitaskGaussianLikelihood
 from einops import rearrange
 
@@ -117,6 +116,8 @@ class DKLGP(BaseLightningModule):
             self.likelihood, model.gp_layer, num_data=train_dataset_length
         )
 
+        self.learning_rate = learning_rate
+
     def model_forward(self, look_back_window: torch.Tensor):
         T = self.trainer.datamodule.prediction_window
         look_back_window = rearrange(
@@ -147,24 +148,7 @@ class DKLGP(BaseLightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = SGD(
-            [
-                {
-                    "params": self.model.feature_extractor.parameters(),
-                    "weight_decay": 1e-4,
-                },
-                {
-                    "params": self.model.gp_layer.hyperparameters(),
-                    "lr": self.learning_rate * 0.01,
-                },
-                {"params": self.model.gp_layer.variational_parameters()},
-                {"params": self.likelihood.parameters()},
-            ],
-            lr=self.learning_rate,
-            momentum=0.9,
-            nesterov=True,
-            weight_decay=0,
-        )
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
         scheduler = MultiStepLR(
             optimizer,
             milestones=[0.5 * self.trainer.max_epochs, 0.75 * self.trainer.max_epochs],

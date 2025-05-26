@@ -16,8 +16,8 @@ hydra:
 look_back_window: 5
 prediction_window: 3
 use_heart_rate: True
-use_static_features: True 
-use_dynamic_features: True
+use_static_features: False
+use_dynamic_features: False
 
 seed: 123
 overfit: False

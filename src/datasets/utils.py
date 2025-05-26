@@ -59,7 +59,11 @@ class BaseDataModule(L.LightningDataModule):
         self.target_channel_dim = target_channel_dim
         self.look_back_channel_dim = look_back_channel_dim
 
-        self.local_z_norm_channel = target_channel_dim + dynamic_exogenous_variables
+        self.local_norm_channels = (
+            target_channel_dim + dynamic_exogenous_variables
+            if use_dynamic_features
+            else target_channel_dim
+        )
 
         self.train_dataset = None
         self.val_dataset = None
@@ -150,10 +154,10 @@ class BaseDataModule(L.LightningDataModule):
         pws = []
         for look_back_window, prediction_window in dataloader:
             look_back_window, mean, std = local_z_norm(
-                look_back_window, self.local_z_norm_channel
+                look_back_window, self.local_norm_channels
             )
             prediction_window, _, _ = local_z_norm(
-                prediction_window, self.local_z_norm_channel, mean, std
+                prediction_window, self.local_norm_channels, mean, std
             )
             look_back_window = look_back_window.detach().cpu().numpy()
             prediction_window = prediction_window.detach().cpu().numpy()

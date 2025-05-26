@@ -124,11 +124,7 @@ class BaseLightningModule(L.LightningModule):
         self.static_exogenous_variables = datamodule.static_exogenous_variables
         self.dynamic_exogenous_variables = datamodule.dynamic_exogenous_variables
 
-        self.local_norm_channels = (
-            (datamodule.target_channel_dim + datamodule.dynamic_exogenous_variables)
-            if self.use_dynamic_features
-            else datamodule.target_channel_dim
-        )
+        self.local_norm_channels = datamodule.local_norm_channels
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data

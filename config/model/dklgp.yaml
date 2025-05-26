@@ -1,4 +1,4 @@
-name: "gp"
+name: "dklgp"
 n_points: 1000 # number of inducing points
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
@@ -6,9 +6,6 @@ model:
   _target_: src.models.gp.GPModel
   num_latents: 1 
   num_tasks: ${prediction_window}
-  kernel: "rq"  # can be "rbf", "matern", "rq" or "sm" spectral mixutre kernel
-  periodic_type: "additive" # can be "additive", "multiplicative" or "" for no periodic kernel
-  use_linear_trend: 1
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
