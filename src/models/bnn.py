@@ -128,13 +128,13 @@ class BayesianNeuralNetwork(BaseLightningModule):
         return None
 
     def model_specific_val_step(self, look_back_window, prediction_window):
-        look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
-        prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
         if self.tune:
             preds = self.model_forward(look_back_window)
             mae_criterion = torch.nn.L1Loss()
             loss = mae_criterion(preds, prediction_window)
         else:
+            look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
+            prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
             loss = self.svi.evaluate_loss(look_back_window, prediction_window)
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return None

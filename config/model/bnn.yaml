@@ -16,7 +16,7 @@ model:
 pl_model: 
   _target_: src.models.bnn.BayesianNeuralNetwork
   learning_rate: 0.01
-  num_samples: 500
+  num_samples: 10
 
 trainer:
   max_epochs: 5
