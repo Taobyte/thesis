@@ -69,7 +69,7 @@ def get_optuna_name(
     fold_nr: int = 0,
     fold_datasets: list[str] = None,
 ):
-    group_name, _, _ = create_group_run_name(
+    group_name, _, tags = create_group_run_name(
         dataset_name,
         model_name,
         use_heart_rate,
@@ -80,7 +80,8 @@ def get_optuna_name(
         fold_nr,
         fold_datasets,
     )
-    return f"optuna_{group_name}"
+    # tags[1] stores the models name
+    return f"optuna_{tags[1]}_{group_name}"
 
 
 def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:

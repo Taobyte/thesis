@@ -16,7 +16,7 @@ from src.models.utils import BaseLightningModule
 
 
 class TimeSeriesFeatureExtractor(nn.Module):
-    def __init__(self, input_channels: int, hidden_dim: int = 64, out_dim: int = 128):
+    def __init__(self, input_channels: int, hidden_dim: int = 8, out_dim: int = 16):
         super().__init__()
         self.net = nn.Sequential(
             nn.Conv1d(input_channels, hidden_dim, kernel_size=3, padding=1),
