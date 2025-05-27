@@ -1573,6 +1573,10 @@ class ElasTST(BaseLightningModule):
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         loss = self._shared_step(look_back_window, prediction_window)
+        if self.tune:
+            preds = self.model_forward(look_back_window)
+            mae_criterion = torch.nn.L1Loss()
+            loss = mae_criterion(preds, prediction_window)
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 

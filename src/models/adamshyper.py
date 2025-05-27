@@ -1378,9 +1378,11 @@ class AdaMSHyper(BaseLightningModule):
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds, constraint_loss = self.model(look_back_window)
-        mse_loss = self.criterion(
-            preds[:, :, : prediction_window.shape[-1]], prediction_window
-        )
+        preds = preds[:, :, : prediction_window.shape[-1]]
+        mse_loss = self.criterion(preds, prediction_window)
+        if self.tune:
+            mae_criterion = torch.nn.L1Loss()
+            mse_loss = mae_criterion(preds, prediction_window)
         self.log("val_loss", mse_loss, on_step=True, on_epoch=True, logger=True)
         self.log_dict(
             {
