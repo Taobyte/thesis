@@ -253,8 +253,6 @@ class TimesBlock(nn.Module):
         )
 
     def forward(self, x):
-        import pdb
-
         # pdb.set_trace()
         B, T, N = x.size()
         period_list, period_weight = FFT_for_Period(x, self.k)
@@ -426,17 +424,20 @@ class TimesNet(BaseLightningModule):
         preds = preds[:, :, : prediction_window.shape[-1]]  # remove activity channels
 
         assert preds.shape == prediction_window.shape
-
         loss = self.criterion(preds, prediction_window)
-        return loss
+        mae_criterion = torch.nn.L1Loss()
+        mae_loss = mae_criterion(preds, prediction_window)
+        return loss, mae_loss
 
     def model_specific_train_step(self, look_back_window, prediction_window) -> float:
-        loss = self._shared_step(look_back_window, prediction_window)
+        loss, _ = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window) -> float:
-        val_loss = self._shared_step(look_back_window, prediction_window)
+        val_loss, mae_loss = self._shared_step(look_back_window, prediction_window)
+        if self.tune:
+            val_loss = mae_loss
         self.log("val_loss", val_loss, on_step=True, on_epoch=True, logger=True)
         return val_loss
 

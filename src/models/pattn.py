@@ -224,17 +224,21 @@ class PAttn(BaseLightningModule):
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
-        return loss
+        mae_criterion = torch.nn.L1Loss()
+        mae_loss = mae_criterion(preds, prediction_window)
+        return loss, mae_loss
 
     def model_specific_train_step(self, look_back_window, prediction_window):
-        loss = self._shared_step(look_back_window, prediction_window)
+        loss, _ = self._shared_step(look_back_window, prediction_window)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
-        loss = self._shared_step(look_back_window, prediction_window)
+        loss, mae_loss = self._shared_step(look_back_window, prediction_window)
+        if self.tune:
+            loss = mae_loss
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
