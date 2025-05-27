@@ -15,7 +15,7 @@ model:
   stride: 8 
   top_k: 5 # tune calculate lags parameter top_k = 5 does not work for small window lengths
   llama_model_path: ${path.llamadir}
-  description: "" # TODO: change to ${dataset.description}
+  description: ${dataset.description} # TODO: change to ${dataset.description}
 
 pl_model:
   _target_: src.models.timellm.TimeLLM

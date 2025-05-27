@@ -33,6 +33,8 @@ model_to_name = {
     "xgboost": "XGBoost",
 }
 
+datset_to_name = {"dalia": "DaLiA", "wildppg": "WildPPG", "ieee": "IEEE"}
+
 
 def process_results(
     dataset: str,
@@ -102,9 +104,19 @@ def process_results(
         processed_metrics_std[k] = std
     df = pd.DataFrame.from_dict(processed_metrics_mean)
     df_std = pd.DataFrame.from_dict(processed_metrics_std)
-    order = ["linear", "kalmanfilter", "gp", "xgboost", "simpletm", "pattn"]
+    order = [
+        "linear",
+        "kalmanfilter",
+        "gp",
+        "xgboost",
+        "simpletm",
+        "pattn",
+        "adamshyper",
+        "gpt4ts",
+    ]
     df = df[order]
     df_std = df_std[order]
+    df = df.round(decimals=3)
 
     font_weights = []
     for i in range(len(df)):
@@ -114,15 +126,14 @@ def process_results(
         )  # i == 2 is cross correlation
         weights = ["normal"] * len(row)
         weights[bold_idx] = "bold"
-        weights.insert(0, "normal")
+        # weights.insert(0, "normal")
         font_weights.append(weights)
 
-    font_weights = [weight for row in font_weights for weight in row]
+    font_weights = np.array(font_weights)
     import pdb
 
     pdb.set_trace()
 
-    df = df.round(decimals=3)
     df.columns = [model_to_name[column] for column in df.columns]
     df_std.columns = [model_to_name[column] for column in df_std.columns]
 
@@ -142,17 +153,20 @@ def process_results(
                 values=[[metric_to_name[i] for i in df.index]]
                 + [
                     [
-                        f"{mean:.3f} ± {std:.3f}"
-                        for mean, std in zip(df[column], df_std[column])
+                        f"<b>{mean:.3f} ± {std:.3f}</b>"
+                        if weight == "bold"
+                        else f"{mean:.3f} ± {std:.3f}"
+                        for mean, std, weight in zip(
+                            df[column], df_std[column], font_weights[:, i]
+                        )
                     ]
-                    for column in df.columns
+                    for i, column in enumerate(df.columns)
                 ],
                 fill_color="lavender",
                 align="left",
                 font=dict(
                     size=11,
                     color="black",
-                    weight=font_weights,
                 ),
             ),
         ),
@@ -161,7 +175,7 @@ def process_results(
     )
     # Final layout
     fig.update_layout(
-        title_text=f"Model Performance Metrics for {dataset.capitalize()} \n"
+        title_text=f"Model Performance Metrics for {datset_to_name[dataset]} \n"
         f"(Lookback: {look_back_window}, Prediction: {prediction_window}, \n"
         f"HR: {use_heart_rate}, Dynamic Features: {use_dynamic_features}, Static Features: {use_static_features})",
         title_x=0.5,  # Center the title
