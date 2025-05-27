@@ -2,10 +2,10 @@ defaults:
  -  shared_sweeper
 
 params:
-  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-1))
-  model.pl_model.num_samples: choice(10, 25, 50)
+  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
+  model.pl_model.num_samples: choice(10, 50, 100)
   
   model.model.hid_dim: choice(4, 8, 16, 32, 64, 128) 
   model.model.n_hid_layers: int(interval(2,8)) 
-  model.model.prior_scale: interval(0.1, 10.0)
+  model.model.prior_scale: tag(log(interval(0.1, 2.0))
   model.model.output_noise_sigma: tag(log, interval(1e-5, 1.0)) 
