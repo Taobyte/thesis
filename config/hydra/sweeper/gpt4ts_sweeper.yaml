@@ -2,11 +2,12 @@ defaults:
  -  shared_sweeper
 
 params:
-  model.trainer.max_epochs: choice(10, 20, 30, 40)
+  model.trainer.max_epochs: 50
+  model.trainer.use_early_stopping: True
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
 
   model.model.d_model: choice(64, 128, 256, 512)
   model.model.d_ff: choice(64, 128, 256, 512)
   model.model.gpt_layers: choice(2, 4, 6, 8)
 
-  model.data.batch_size: choice(32, 64, 128)
+  #model.data.batch_size: choice(32, 64, 128)

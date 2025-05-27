@@ -3,13 +3,14 @@ defaults:
 
 params:
   model.trainer.max_epochs: 50
+  model.trainer.use_early_stopping: True
 
   model.pl_model.learning_rate: tag(log, interval(1e-4, 5e-2))
 
-  model.model.d_model: choice(128, 256, 512)
+  model.model.d_model: choice(32, 64, 128, 256, 512)
   model.model.dropout: interval(0.0, 0.3)
   model.model.geomattn_dropout: interval(0.1, 0.6)
-  model.model.d_ff: choice(32, 64, 128)
+  model.model.d_ff: choice(32, 64, 128, 256, 512)
   
   # model.data.batch_size: choice(32, 64, 128, 256)
 

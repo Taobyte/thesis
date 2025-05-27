@@ -34,6 +34,7 @@ pl_model:
 
 trainer:
   use_early_stopping: False
+  patience: 5
   max_epochs: 50
 
 data:
