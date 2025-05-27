@@ -9,7 +9,7 @@ model:
   d_model: 512
   individual: False
   hyper_num: [50, 20, 10]
-  inner_size: 5
+  inner_size: 4
   # window_size: [4,4] does not work if look_back_window < 4
   window_size: ${compute_square_window:${look_back_window}}
   CSCM: 'Bottleneck_Construct'
@@ -17,14 +17,14 @@ model:
 
 pl_model: 
   _target_: src.models.adamshyper.AdaMSHyper
-  learning_rate: 0.0001
+  learning_rate: 0.009212182593254093
   # itr: 1 
   loss: 'MSE'
   lradj: 'type1' # adjust learning rate
   use_amp: False
 
 trainer:
-  max_epochs: 10
+  max_epochs: 50
   use_early_stopping: True
   patience: 5
 

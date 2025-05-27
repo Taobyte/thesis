@@ -8,7 +8,7 @@ model:
   patch_size: 1
   stride: 1
   d_ff: 128
-  d_model: 128
+  d_model: 64
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   c_out: ${dataset.datamodule.look_back_channel_dim}
   gpt_layers: 6
@@ -18,7 +18,7 @@ model:
 
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
-  learning_rate: 0.002
+  learning_rate: 0.0024543152601071328
   loss: 'MSE'
   lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
   # lradj: "none"
