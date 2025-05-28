@@ -6,17 +6,17 @@ model:
   prediction_window: ${prediction_window}
   e_layers: 2
   top_k: 5
-  d_model: 32 # chosen according to min(max(2^log(C), d_min), d_max) Long-term: (d_min=32, d_max=512) |  Short-term: (d_min=16, d_max=64) 
-  d_ff: 32
+  d_model: 256 # chosen according to min(max(2^log(C), d_min), d_max) Long-term: (d_min=32, d_max=512) |  Short-term: (d_min=16, d_max=64) 
+  d_ff: 64
   num_kernels: 6
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   c_out: ${dataset.datamodule.look_back_channel_dim}
-  dropout: 0.0
+  dropout: 0.06096252710090079
 
 
 pl_model: 
   _target_: src.models.timesnet.TimesNet
-  learning_rate: 0.001
+  learning_rate: 0.00047234604979889814
   loss_fn: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
   lradj: "type1"
   beta_1: 0.9
@@ -24,7 +24,7 @@ pl_model:
   # use_amp: False
 
 trainer: 
-  max_epochs: 5
+  max_epochs: 50
   use_early_stopping: True
   patience: 5
 
