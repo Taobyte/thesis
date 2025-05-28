@@ -14,9 +14,12 @@ class Evaluator:
             # "abs_target_sum": abs_target_sum(targets),
             # "abs_target_mean": abs_target_mean(targets),
             # "MAPE": mape(targets, preds),
-            # "sMAPE": smape(targets, preds),
+            "sMAPE": smape(targets, preds),
             "cross_correlation": correlation(preds, targets),
-            "dir_acc": dir_acc(preds, targets, look_back_window),
+            "dir_acc_full": dir_acc_full_horizon(preds, targets, look_back_window),
+            "dir_acc_single": dir_acc_improved_single_step(
+                preds, targets, look_back_window
+            ),
         }
 
         # metrics["RMSE"] = np.sqrt(metrics["MSE"])
@@ -91,31 +94,91 @@ class Evaluator:
         return mean_metrics, metrics
 
 
-def dir_acc(
-    preds: np.ndarray, targets: np.ndarray, look_back_window: np.ndarray
+def dir_acc_improved_single_step(
+    preds: np.ndarray,
+    targets: np.ndarray,
+    look_back_window: np.ndarray,
+    epsilon: float = 1e-6,
 ) -> float:
     """
-    Computes the percentage of correct directional predictions (up/down movement)
+    Computes the percentage of correct directional predictions (up/down/no movement)
     between the last observed value and the predicted/true future value.
 
     Args:
         preds: Model predictions shape (B, T, C)
         targets: Ground truth values shape (B, T, C)
         look_back_window: Input history window shape (B, L, C)
+        epsilon: A small tolerance to consider a change as 'zero'.
 
     Returns:
         Accuracy score between 0 and 1 where 1 = perfect direction prediction
     """
     _, _, C = targets.shape
-    last_look_back = look_back_window[
-        :, -1, :C
-    ]  # filter out the activity info channels
-    ground_truth_slope = np.sign(
-        targets[:, 0, :] - last_look_back
-    )  # (B, 1, C) TODO: check 0 case
-    prediction_slope = np.sign(preds[:, 0, :] - last_look_back)  # (B, 1, C)
+    last_look_back = look_back_window[:, -1, :C]
 
-    return np.mean(ground_truth_slope == prediction_slope)
+    # Calculate actual changes
+    true_change = targets[:, 0, :] - last_look_back
+    pred_change = preds[:, 0, :] - last_look_back
+
+    # Determine direction based on epsilon
+    # +1 for increase, -1 for decrease, 0 for no significant change
+    ground_truth_direction = np.zeros_like(true_change, dtype=int)
+    ground_truth_direction[true_change > epsilon] = 1
+    ground_truth_direction[true_change < -epsilon] = -1
+
+    prediction_direction = np.zeros_like(pred_change, dtype=int)
+    prediction_direction[pred_change > epsilon] = 1
+    prediction_direction[pred_change < -epsilon] = -1
+
+    return np.mean(ground_truth_direction == prediction_direction)
+
+
+def dir_acc_full_horizon(
+    preds: np.ndarray,
+    targets: np.ndarray,
+    look_back_window: np.ndarray,
+    epsilon: float = 1e-6,
+) -> float:
+    """
+    Computes the percentage of correct directional predictions (up/down/no movement)
+    for each step within the prediction horizon.
+
+    Args:
+        preds: Model predictions shape (B, T, C)
+        targets: Ground truth values shape (B, T, C)
+        look_back_window: Input history window shape (B, L, C)
+        epsilon: A small tolerance to consider a change as 'zero'.
+
+    Returns:
+        Accuracy score between 0 and 1 where 1 = perfect direction prediction
+    """
+    B, T, C = targets.shape
+
+    # Initialize previous values for directional calculation
+    # For the first step (t=0) of the prediction, the 'previous' value is the last look-back value.
+    prev_targets = np.concatenate(
+        (look_back_window[:, -1:, :C], targets[:, :-1, :]), axis=1
+    )
+    prev_preds = np.concatenate(
+        (look_back_window[:, -1:, :C], preds[:, :-1, :]), axis=1
+    )
+
+    # Calculate changes for all steps in the prediction horizon
+    true_changes = targets - prev_targets
+    pred_changes = preds - prev_preds
+
+    # Determine direction based on epsilon for true changes
+    ground_truth_direction = np.zeros_like(true_changes, dtype=int)
+    ground_truth_direction[true_changes > epsilon] = 1
+    ground_truth_direction[true_changes < -epsilon] = -1
+
+    # Determine direction based on epsilon for predicted changes
+    prediction_direction = np.zeros_like(pred_changes, dtype=int)
+    prediction_direction[pred_changes > epsilon] = 1
+    prediction_direction[pred_changes < -epsilon] = -1
+
+    # Compare directions across all elements and calculate mean accuracy
+    return np.mean(ground_truth_direction == prediction_direction)
 
 
 def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
@@ -212,11 +275,18 @@ def smape(target: np.ndarray, forecast: np.ndarray) -> float:
 
 if __name__ == "__main__":
     preds = np.array([1, 2, 3]).reshape(1, -1, 1)
-    targets = np.array([-1, 3, 4]).reshape(1, -1, 1)
+    targets = np.array([-1, 3, 2]).reshape(1, -1, 1)
     look_back_window = np.array([2]).reshape(1, -1, 1)
+    import matplotlib.pyplot as plt
 
-    preds = np.random.normal(size=(1, 3, 2))
-    targets = np.random.normal(size=(1, 3, 2))
-    look_back_window = np.random.normal(size=(1, 3, 4))
+    time = list(range(4))
+    plt.plot(time, np.concatenate((look_back_window[0, :, 0], preds[0, :, 0])))
+    plt.plot(time, np.concatenate((look_back_window[0, :, 0], targets[0, :, 0])))
+    plt.show()
 
-    print(dir_acc(preds, targets, look_back_window))
+    # preds = np.random.normal(size=(1, 3, 2))
+    # targets = np.random.normal(size=(1, 3, 2))
+    # look_back_window = np.random.normal(size=(1, 3, 4))
+
+    print(dir_acc_full_horizon(preds, targets, look_back_window))
+    print(dir_acc_improved_single_step(preds, targets, look_back_window))
