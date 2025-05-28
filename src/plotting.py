@@ -5,6 +5,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+from scipy import signal
 from lightning.pytorch.loggers import WandbLogger
 
 
@@ -115,6 +116,7 @@ def plot_prediction_wandb(
     last_look_back = np.array([look_back_window[-1]])
     target = np.concatenate((last_look_back, target))
     prediction = np.concatenate((last_look_back, prediction))
+    residual = target - prediction
 
     if use_heart_rate:
         t_lookback = np.arange(-(len(look_back_window) - 1), 1) * 2
@@ -126,19 +128,48 @@ def plot_prediction_wandb(
         t_future = np.linspace(0, len(target) / freq, len(target))
 
     colors = sns.color_palette("colorblind", 3)
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(20, 12))
 
-    ax.plot(t_lookback, look_back_window, color=colors[0], label="Lookback")
-    ax.plot(t_future, target, color=colors[1], label="Ground Truth")
-    ax.plot(t_future, prediction, color=colors[2], label="Prediction")
+    # prediction plot
+    ax[0].plot(t_lookback, look_back_window, color=colors[0], label="Lookback")
+    ax[0].plot(t_future, target, color=colors[1], label="Ground Truth")
+    ax[0].plot(t_future, prediction, color=colors[2], label="Prediction")
 
     title = f"{metric_name} {type} {metric_value:.3f}"
-    ax.set_title(title, fontsize=14)
-    ax.set_xlabel("Seconds", fontsize=12)
-    ax.set_ylabel(yaxis_name, fontsize=12)
+    ax[0].set_title(title, fontsize=14)
+    ax[0].set_xlabel("Seconds", fontsize=12)
+    ax[0].set_ylabel(yaxis_name, fontsize=12)
 
-    ax.legend(loc="upper left", fontsize=10, frameon=True)
-    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    ax[0].legend(loc="upper left", fontsize=10, frameon=True)
+    ax[0].grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+
+    # spectogram plots
+    if use_heart_rate and dataset in ["dalia", "wildppg", "ieee"]:
+        freq = 0.5  # we have 8 seconds windows with 2 second shifts
+
+    f, t, Sxx = signal.spectrogram(target, freq)
+    ax[1].pcolormesh(t, f, 10 * np.log10(Sxx), shading="gouraud")
+    ax[1].set_title("Spectrogram of Actual HR")
+    ax[1].set_ylabel("Frequency [Hz]")
+    # Limit to relevant HR frequencies. 0-2 Hz covers 0-120 BPM, which is usually sufficient
+    # for HR, given your freq is 0.5 Hz, the Nyquist frequency is 0.25 Hz.
+    # So frequencies above 0.25 Hz cannot be reliably represented.
+    ax[1].set_ylim([0, freq / 2])  # Nyquist frequency
+
+    # Spectrogram for Predicted HR
+    f_pred, t_pred, Sxx_pred = signal.spectrogram(prediction, freq)
+    ax[2].pcolormesh(t_pred, f_pred, 10 * np.log10(Sxx_pred), shading="gouraud")
+    ax[2].set_title("Spectrogram of Predicted HR")
+    ax[2].set_ylabel("Frequency [Hz]")
+    ax[2].set_ylim([0, freq / 2])
+
+    # Spectrogram for Residuals
+    f_res, t_res, Sxx_res = signal.spectrogram(residual, freq)
+    ax[3].pcolormesh(t_res, f_res, 10 * np.log10(Sxx_res), shading="gouraud")
+    ax[3].set_title("Spectrogram of Residuals")
+    ax[3].set_ylabel("Frequency [Hz]")
+    ax[3].set_xlabel("Time [sec]")
+    ax[3].set_ylim([0, freq / 2])  # Nyquist frequency
 
     plt.tight_layout()
 

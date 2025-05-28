@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import xgboost as xgb
 
 from xgboost import XGBRegressor
 from einops import rearrange
