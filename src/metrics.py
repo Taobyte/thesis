@@ -45,7 +45,7 @@ class Evaluator:
         Returns
         -------
         Dict[String, float]
-            the mean metric values of the batch
+            the metric values of the batch
         """
         seq_metrics = {}
 

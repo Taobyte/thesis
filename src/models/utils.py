@@ -14,12 +14,17 @@ import torch
 import lightning as L
 import numpy as np
 
+from einops import rearrange
 from omegaconf import DictConfig
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from collections import defaultdict
 
 from src.metrics import Evaluator
-from src.plotting import plot_prediction_wandb
+from src.plotting import (
+    plot_prediction_wandb,
+    plot_metric_histogram,
+    plot_entire_series,
+)
 
 
 def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
@@ -86,12 +91,14 @@ class BaseLightningModule(L.LightningModule):
         wandb_project: str = "c_keusch/thesis",
         n_trials: int = 10,
         tune: bool = False,
+        name: str = None,
     ):
         super().__init__()
 
         self.n_trials = n_trials
         self.wandb_project = wandb_project
         self.tune = tune
+        self.name = name
 
         self.evaluator = Evaluator()
 
@@ -102,7 +109,45 @@ class BaseLightningModule(L.LightningModule):
         self.static_exogenous_variables = None
         self.dynamic_exogenous_variables = None
 
-    def model_forward(self, look_back_window: torch.Tensor):
+    @property
+    def has_probabilistic_forecast(self) -> bool:
+        """
+        Indicates whether the model provides probabilistic forecasts (mean and std).
+        This property should be overridden in subclasses for probabilistic models.
+        """
+        return self.name in ["gp", "dklgp", "bnn"]  # Example logic for the property
+
+    def model_forward(
+        self, look_back_window: torch.Tensor
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Performs a forward pass through the model to generate predictions for the
+        prediction window.
+
+        The behavior and return type of this method depend on whether the model
+        is a point forecaster or a probabilistic forecaster.
+
+        Args:
+            look_back_window (torch.Tensor): A tensor representing the
+                look-back window. Its shape is expected to be (B, T_lb, C_lb),
+                where B is the batch size, T_lb is the length of the look-back
+                window, and C_lb is the number of input channels.
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                - If the model is a **point forecaster** (e.g., `self.has_probabilistic_forecast` is False):
+                  Returns a single `torch.Tensor` of shape (B, L, C),
+                  representing the point forecast (mean prediction) for the
+                  prediction window.
+                - If the model is a **probabilistic forecaster** (e.g., `self.has_probabilistic_forecast` is True):
+                  Returns a `tuple` containing two `torch.Tensor`s:
+                    - The first tensor is the **mean prediction** for the
+                      prediction window, of shape (B, L, C).
+                    - The second tensor is the **standard deviation** (or
+                      some other measure of uncertainty, e.g., variance or
+                      log-variance) of the predictions for the prediction window,
+                      also of shape (B, L, C).
+        """
         raise NotImplementedError
 
     def model_specific_train_step(
@@ -125,6 +170,10 @@ class BaseLightningModule(L.LightningModule):
         self.dynamic_exogenous_variables = datamodule.dynamic_exogenous_variables
 
         self.local_norm_channels = datamodule.local_norm_channels
+
+    def on_fit_end(self):
+        pass
+        # self.compute_shap_values()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
@@ -179,6 +228,10 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
+        # plot metric histograms
+        for metric_name, v in self.metric_full.items():
+            plot_metric_histogram(self.logger, metric_name, v)
+
         # plot best, worst and median
         for metric_name, v in self.metric_full.items():
             sorted_indices = np.argsort(v)
@@ -201,10 +254,22 @@ class BaseLightningModule(L.LightningModule):
                     look_back_window, self.local_norm_channels
                 )
                 target = target.unsqueeze(0)
-                pred = self.model_forward(look_back_window_norm)[
-                    :, :, : target.shape[-1]
-                ]
-                pred_denorm = local_z_denorm(pred, self.local_norm_channels, mean, std)
+                if self.has_probabilistic_forecast:
+                    pred_mean, pred_std = self.model_forward(look_back_window_norm)
+                    pred_mean = pred_mean[:, :, : target.shape[-1]]
+                    pred_denorm = local_z_denorm(
+                        pred_mean, self.local_norm_channels, mean, std
+                    )
+                    pred_std = pred_std[:, :, : target.shape[-1]] * std
+                else:
+                    pred = self.model_forward(look_back_window_norm)[
+                        :, :, : target.shape[-1]
+                    ]
+                    pred_denorm = local_z_denorm(
+                        pred, self.local_norm_channels, mean, std
+                    )
+                    pred_std = None
+
                 assert pred_denorm.shape == target.shape
 
                 if hasattr(self.trainer.datamodule, "use_heart_rate"):
@@ -223,7 +288,18 @@ class BaseLightningModule(L.LightningModule):
                     use_heart_rate=use_heart_rate,
                     freq=self.trainer.datamodule.freq,
                     dataset=self.trainer.datamodule.name,
+                    pred_denorm_std=pred_std,
                 )
+
+        # plot the whole timeseries with the metrics
+        datamodule = self.trainer.datamodule
+        plot_entire_series(
+            self.logger,
+            datamodule.test_dataset.data,
+            self.metric_full,
+            datamodule.look_back_window,
+            datamodule.prediction_window,
+        )
 
     def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch
@@ -234,7 +310,10 @@ class BaseLightningModule(L.LightningModule):
         )
 
         # Prediction
-        preds = self.model_forward(look_back_window_norm)
+        if self.has_probabilistic_forecast:
+            preds, _ = self.model_forward(look_back_window_norm)
+        else:
+            preds = self.model_forward(look_back_window_norm)
 
         preds = preds[:, :, : prediction_window.shape[-1]]
 
@@ -262,3 +341,56 @@ class BaseLightningModule(L.LightningModule):
         for key, value in metrics_dict.items():
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
         return metrics
+
+    # sadly does NOT work, because I locally normalize and SHAP assume global normalization of the data!
+    def compute_shap_values(self):
+        import shap
+
+        class ModelWrapper(torch.nn.Module):
+            def __init__(self, model, look_back_channel_dim):
+                super().__init__()
+                self.model = model
+                self.look_back_channel_dim = look_back_channel_dim
+
+            def forward(self, x):
+                x = rearrange(x, "B (T C) -> B T C", C=self.look_back_channel_dim)
+                output = self.model(x)
+                output = rearrange(output, "B T C -> B (T C)")
+                return output
+
+        # self.model.eval()
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_to_explain = ModelWrapper(
+            self.model, self.trainer.datamodule.look_back_channel_dim
+        )
+
+        background_tensor = self.trainer.datamodule.get_inducing_points(
+            strategy="kmeans", mode="train"
+        )
+        background_tensor = background_tensor.to(device).requires_grad_(True)
+        background_tensor = rearrange(background_tensor, "B T C -> B (T C)")
+        explain_tensor = self.trainer.datamodule.get_inducing_points(
+            strategy="kmeans", mode="test"
+        )
+        explain_tensor = explain_tensor.to(device).requires_grad_(True)
+        explain_tensor = rearrange(explain_tensor, "B T C -> B (T C)")
+
+        out = model_to_explain(explain_tensor)
+        print(out.requires_grad)
+
+        explainer = shap.DeepExplainer(model_to_explain, background_tensor)
+
+        shap_values = explainer.shap_values(explain_tensor)
+
+        print(f"Computed SHAP values. Type: {type(shap_values)}")
+        if isinstance(shap_values, list):
+            print(
+                f"Number of output explanations (flattened output nodes): {len(shap_values)}"
+            )
+            if len(shap_values) > 0:
+                print(f"Shape of first SHAP values array: {shap_values[0].shape}")
+                # Expected: (num_explain_samples, look_back_window_length, num_input_channels)
+        else:  # For single output models, it might be a direct numpy array
+            print(f"Shape of SHAP values array: {shap_values.shape}")
+
+        print(f"Explainer Expected Value: {explainer.expected_value}")

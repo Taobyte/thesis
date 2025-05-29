@@ -93,35 +93,67 @@ class BaseDataModule(L.LightningDataModule):
             shuffle=False,
         )
 
-    # used for Gaussian Process model
-
+    # used for Gaussian Process model & shap calculation
     def get_inducing_points(
-        self, num_inducing: int = 500, strategy: str = "random"
+        self, num_inducing: int = 500, strategy: str = "random", mode: str = "train"
     ) -> torch.Tensor:
-        # Ensure the train dataset is ready
-        self.setup(stage="fit")
+        """
+        Selects a subset of data points to serve as inducing points for sparse Gaussian Process
+        (GP) models or other methods that require a representative subset of the input space.
 
-        assert self.train_dataset is not None, "Train dataset is not initialized."
+        This function supports two strategies: random sampling and K-Means clustering.
 
-        dataset_length = len(self.train_dataset)
+        Args:
+            num_inducing: The desired number of inducing points.
+            strategy: The strategy to use for selecting inducing points.
+                      Supported values are "random" for random sampling or "kmeans" for K-Means clustering.
+            mode: Specifies which dataset to draw inducing points from.
+                  Can be "train" for the training set or "test" for the test set.
+                  Note: For "kmeans" strategy, it typically operates on the training data
+                  to learn a representative set of points from the distribution the model
+                  is trained on.
+
+        Returns:
+            A `torch.Tensor` of shape `(num_inducing, Time, Channels)` containing the selected
+            inducing points. Each channel is z-normalized.
+        """
+
+        # Ensure the train/test dataset is ready
+        if mode == "train":
+            self.setup(stage="fit")
+            assert self.train_dataset is not None, "Train dataset is not initialized."
+        else:
+            self.setup(stage="test")
+            assert self.test_dataset is not None, "Train dataset is not initialized."
+        dataset = self.train_dataset if mode == "train" else self.test_dataset
+        dataset_length = len(dataset)
+
         assert dataset_length >= num_inducing, (
             f"Cannot sample {num_inducing} inducing points from dataset of size {dataset_length}"
         )
         if strategy == "random":
             indices = random.sample(range(dataset_length), num_inducing)
-            inducing_points = [self.train_dataset[i][0] for i in indices]
+            inducing_points = [dataset[i][0] for i in indices]
 
-            inducing_points_tensor = torch.stack(inducing_points, dim=0)
-            inducing_points_tensor = rearrange(inducing_points, "B T C -> B (T C)")
+            inducing_points_tensor = torch.stack(inducing_points, dim=0).requires_grad_(
+                True
+            )
+            # inducing_points_tensor = rearrange(inducing_points, "B T C -> B (T C)")
         else:
             # use KMeans clustering
-            inducing_points = 0
             from sklearn.cluster import KMeans
 
-            train_x, _ = self.get_train_dataset()
+            train_x, _ = (
+                self.get_train_dataset() if mode == "train" else self.get_test_dataset()
+            )
             train_x = rearrange(train_x, "B T C -> B (T C)")
             kmeans = KMeans(n_clusters=num_inducing).fit(train_x)
-            inducing_points_tensor = torch.tensor(kmeans.cluster_centers_)
+            inducing_points_tensor = torch.tensor(
+                kmeans.cluster_centers_, requires_grad=True
+            )
+            inducing_points_tensor = rearrange(
+                inducing_points_tensor, "B (T C) -> B T C", C=self.look_back_channel_dim
+            )
 
         return inducing_points_tensor
 
@@ -146,7 +178,7 @@ class BaseDataModule(L.LightningDataModule):
         elif mode == "val":
             dataloader = self.val_dataloader()
         else:
-            raise NotImplementedError()
+            dataloader = self.test_dataloader()
 
         from src.models.utils import local_z_norm
 
@@ -183,6 +215,9 @@ class BaseDataModule(L.LightningDataModule):
 
     def get_val_dataset(self) -> np.ndarray:
         return self._get_dataset("val")
+
+    def get_test_dataset(self) -> np.ndarray:
+        return self._get_dataset("test")
 
 
 def create_ieee_npz_files(datadir: str):

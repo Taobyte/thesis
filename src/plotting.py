@@ -1,76 +1,115 @@
 import numpy as np
 import torch
 import wandb
-import seaborn as sns
 import matplotlib.pyplot as plt
+import plotly.io as pio
 import plotly.graph_objects as go
+import plotly.colors as pcolors
+import seaborn as sns
 
-from scipy import signal
 from lightning.pytorch.loggers import WandbLogger
+from plotly.subplots import make_subplots
 
+
+metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
+name_to_title = {
+    "MSE": "MSE",
+    "MAE": "MAE",
+    "cross_correlation": "Pearson Correlation",
+    "dir_acc_full": "Dir Acc Full",
+    "dir_acc_single": "Dir Acc Single",
+    "sMAPE": "sMAPE",
+}
 
 sns.set_theme(style="whitegrid")
 
-metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
-name_to_title = {"MSE": "MSE", "MAE": "MAE", "cross_correlation": "Pearson"}
 
-
-def plot_ploty(
-    t_lookback,
-    t_future,
-    look_back_window,
-    target,
-    prediction,
-    metric_name,
-    metric_value,
-    type,
-    yaxis_name,
-    wandb_logger,
+def plot_entire_series(
+    logger: WandbLogger,
+    data: list[np.ndarray],
+    metrics: dict,
+    look_back_window: int,
+    prediction_window: int,
 ):
-    fig = go.Figure()
+    # n_metrics = len(metrics)
+    n_metrics = 3  # only plot mse
+    subplot_titles = ["Ground Truth Time Series"] + [
+        name_to_title[metric_name] for metric_name in ["MSE", "MAE", "dir_acc_single"]
+    ]
+    colors = pcolors.qualitative.Plotly
+    row_heights = [0.7] + [0.3 / n_metrics for _ in range(n_metrics)]
 
-    fig.add_trace(
-        go.Scatter(
-            x=t_lookback,
-            y=look_back_window,
-            mode="lines",
-            name="Lookback",
-            line=dict(color="#0000ff"),
+    window_length = look_back_window + prediction_window
+    lengths = [len(s) - window_length + 1 for s in data]
+    cum_lengths = np.cumsum([0] + lengths)
+
+    assert cum_lengths[-1] == len(metrics["MSE"])
+
+    n_series = len(data)
+    for j in range(n_series):
+        print(f"Plotting entire series {j + 1}")
+        fig = make_subplots(
+            rows=1 + n_metrics,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=row_heights,
+            subplot_titles=subplot_titles,
         )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=t_future,
-            y=target,
-            mode="lines",
-            name="Ground Truth",
-            line=dict(color="#ffa000"),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=t_future,
-            y=prediction,
-            mode="lines",
-            name="Prediction",
-            line=dict(
-                color="#ff0069",
+        series = data[j][:, 0]
+        n = len(series)
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(n)),
+                y=series,
+                mode="lines",
+                name="Actual Value",
+                line=dict(color=colors[0]),
             ),
+            row=1,
+            col=1,
         )
-    )
 
-    title = f"{name_to_title[metric_name]}: {metric_value}"
+        for i, metric_name in enumerate(["MSE", "MAE", "dir_acc_single"]):
+            mse_metric = np.array(
+                metrics[metric_name][cum_lengths[j] : cum_lengths[j + 1]]
+            )
 
-    fig.update_layout(
-        title=title,
-        xaxis_title="Seconds",
-        yaxis_title=yaxis_name,
-        legend=dict(x=0.01, y=0.99, borderwidth=1),
-    )
+            mse_plot = np.zeros(n)
+            assert len(mse_metric) < len(mse_plot)
+            mse_plot[look_back_window - 1 : look_back_window - 1 + len(mse_metric)] = (
+                mse_metric
+            )
 
-    wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Plotly(fig)})
+            fig.add_trace(
+                go.Bar(
+                    x=list(range(n)),
+                    y=mse_plot,
+                    name=name_to_title[metric_name],
+                    marker_color=colors[i + 1],
+                    opacity=1.0,
+                ),
+                row=i + 2,
+                col=1,
+            )
+
+        logger.experiment.log(
+            {f"entire_series/series_vs_metric_{j}": wandb.Html(pio.to_html(fig))}
+        )
+
+
+def plot_metric_histogram(logger: WandbLogger, metric_name: str, data: list[float]):
+    print(f"Plotting histogram for {metric_name}")
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.hist(data, bins=50, edgecolor="black", alpha=0.7)  # Adjust bins as needed
+    ax.set_title(f"Distribution of {name_to_title.get(metric_name, metric_name)}")
+    ax.set_xlabel(name_to_title.get(metric_name, metric_name))
+    ax.set_ylabel("Frequency")
+    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+
+    logger.experiment.log({f"{metric_name}/histogram": wandb.Image(fig)})
+    plt.close(fig)
 
 
 def get_yaxis_name(dataset: str, use_heart_rate: bool = False):
@@ -101,6 +140,7 @@ def plot_prediction_wandb(
     use_heart_rate: bool = False,
     freq: int = 25,
     dataset: str = "dalia",
+    pred_denorm_std: torch.Tensor = None,
 ):
     # make sure to always plot only the first channel
     look_back_window = x.cpu().detach().numpy()[0, :, 0]
@@ -116,7 +156,6 @@ def plot_prediction_wandb(
     last_look_back = np.array([look_back_window[-1]])
     target = np.concatenate((last_look_back, target))
     prediction = np.concatenate((last_look_back, prediction))
-    residual = target - prediction
 
     if use_heart_rate:
         t_lookback = np.arange(-(len(look_back_window) - 1), 1) * 2
@@ -128,48 +167,42 @@ def plot_prediction_wandb(
         t_future = np.linspace(0, len(target) / freq, len(target))
 
     colors = sns.color_palette("colorblind", 3)
-    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(20, 12))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
-    # prediction plot
-    ax[0].plot(t_lookback, look_back_window, color=colors[0], label="Lookback")
-    ax[0].plot(t_future, target, color=colors[1], label="Ground Truth")
-    ax[0].plot(t_future, prediction, color=colors[2], label="Prediction")
+    ax.plot(t_lookback, look_back_window, color=colors[0], label="Lookback")
+    ax.plot(t_future, target, color=colors[1], label="Ground Truth")
+    ax.plot(t_future, prediction, color=colors[2], label="Prediction")
+
+    if pred_denorm_std is not None:
+        pred_denorm_std_np = pred_denorm_std.cpu().detach().numpy()[0, :, 0]
+
+        std_full = np.concatenate(
+            (np.array([pred_denorm_std_np[0]]), pred_denorm_std_np)
+        )
+
+        z_score = 1.96  # For 95% CI
+        lower_bound = prediction - z_score * std_full
+        upper_bound = prediction + z_score * std_full
+
+        ax.fill_between(
+            t_future,
+            lower_bound,
+            upper_bound,
+            color=colors[2],
+            alpha=0.2,
+            label="95% Confidence Interval",
+        )
+
+    # Add a vertical line to mark the transition from look-back to prediction
+    ax.axvline(x=0, color="gray", linestyle=":", linewidth=1, label="Forecast Start")
 
     title = f"{metric_name} {type} {metric_value:.3f}"
-    ax[0].set_title(title, fontsize=14)
-    ax[0].set_xlabel("Seconds", fontsize=12)
-    ax[0].set_ylabel(yaxis_name, fontsize=12)
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("Seconds", fontsize=12)
+    ax.set_ylabel(yaxis_name, fontsize=12)
 
-    ax[0].legend(loc="upper left", fontsize=10, frameon=True)
-    ax[0].grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-
-    # spectogram plots
-    if use_heart_rate and dataset in ["dalia", "wildppg", "ieee"]:
-        freq = 0.5  # we have 8 seconds windows with 2 second shifts
-
-    f, t, Sxx = signal.spectrogram(target, freq)
-    ax[1].pcolormesh(t, f, 10 * np.log10(Sxx), shading="gouraud")
-    ax[1].set_title("Spectrogram of Actual HR")
-    ax[1].set_ylabel("Frequency [Hz]")
-    # Limit to relevant HR frequencies. 0-2 Hz covers 0-120 BPM, which is usually sufficient
-    # for HR, given your freq is 0.5 Hz, the Nyquist frequency is 0.25 Hz.
-    # So frequencies above 0.25 Hz cannot be reliably represented.
-    ax[1].set_ylim([0, freq / 2])  # Nyquist frequency
-
-    # Spectrogram for Predicted HR
-    f_pred, t_pred, Sxx_pred = signal.spectrogram(prediction, freq)
-    ax[2].pcolormesh(t_pred, f_pred, 10 * np.log10(Sxx_pred), shading="gouraud")
-    ax[2].set_title("Spectrogram of Predicted HR")
-    ax[2].set_ylabel("Frequency [Hz]")
-    ax[2].set_ylim([0, freq / 2])
-
-    # Spectrogram for Residuals
-    f_res, t_res, Sxx_res = signal.spectrogram(residual, freq)
-    ax[3].pcolormesh(t_res, f_res, 10 * np.log10(Sxx_res), shading="gouraud")
-    ax[3].set_title("Spectrogram of Residuals")
-    ax[3].set_ylabel("Frequency [Hz]")
-    ax[3].set_xlabel("Time [sec]")
-    ax[3].set_ylim([0, freq / 2])  # Nyquist frequency
+    ax.legend(loc="upper left", fontsize=10, frameon=True)
+    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
 
     plt.tight_layout()
 

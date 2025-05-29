@@ -32,7 +32,8 @@ class GPModel(ApproximateGP):
         self.num_latents = num_latents
         self.num_tasks = num_tasks
         self.train_dataset_length = train_dataset_length
-
+        # we first have to rearrange the inducing points to have only two dimensions
+        inducing_points = rearrange(inducing_points, "B T C -> B (T C)")
         inducing_points = inducing_points.unsqueeze(0).expand(num_latents, -1, -1)
 
         # We have to mark the CholeskyVariationalDistribution as batch
@@ -131,8 +132,9 @@ class GaussianProcess(BaseLightningModule):
             look_back_window, "B T C -> B (T C)"
         )  # GPytorch assumes flattened channels
         preds = self.model(look_back_window)
-        preds = rearrange(preds.mean, "B (T C) -> B T C", T=T)
-        return preds
+        mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
+        std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
+        return mean, std
 
     def _shared_step(
         self, look_back_window, prediction_window

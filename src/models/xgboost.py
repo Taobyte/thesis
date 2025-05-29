@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import wandb
+import xgboost as xgb
 
 from xgboost import XGBRegressor
 from einops import rearrange
@@ -75,6 +77,54 @@ class XGBoost(BaseLightningModule):
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         return preds
 
+    def log_feature_importance(self):
+        # Get feature importances
+        booster = self.model.get_booster()
+        importance = booster.get_score(importance_type="gain")  # or 'weight', 'cover'
+
+        # Sort and prepare for logging
+        importance = dict(
+            sorted(importance.items(), key=lambda item: item[1], reverse=True)
+        )
+
+        table = wandb.Table(
+            data=[[k, v] for k, v in importance.items()],
+            columns=["Feature", "Importance"],
+        )
+        self.logger.experiment.log(
+            {
+                "XGBoost Feature Importance": wandb.plot.bar(
+                    table, "Feature", "Importance", title="XGBoost Feature Importance"
+                )
+            }
+        )
+
+    def log_tree_plots(self):
+        import matplotlib.pyplot as plt
+
+        num_trees_to_plot = 5
+        for i in range(num_trees_to_plot):
+            print(f"Plotting tree {i}")
+            fig, ax = plt.subplots(figsize=(20, 12))
+
+            xgb.plot_tree(
+                self.model,
+                num_trees=i,
+                ax=ax,
+                rankdir="LR",
+            )
+            ax.set_title(f"XGBoost Tree {i}", fontsize=16)
+            plt.tight_layout()
+
+            # Log the image to WandB using your Lightning logger's experiment
+            self.logger.experiment.log(
+                {
+                    f"xgboost/tree_structure/tree_{i}": wandb.Image(
+                        fig, caption=f"Tree {i}"
+                    )
+                },
+            )
+
     # we use this hack!
     def on_train_epoch_start(self):
         self.model.fit(
@@ -96,6 +146,9 @@ class XGBoost(BaseLightningModule):
             loss = self.criterion(preds, targets)
 
         self.final_val_loss = loss
+
+        self.log_feature_importance()
+        # self.log_tree_plots()
 
     def training_step(self, batch, batch_idx):
         return None

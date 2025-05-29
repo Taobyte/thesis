@@ -114,11 +114,15 @@ class BayesianNeuralNetwork(BaseLightningModule):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         preds = self.predictive(look_back_window)  # (n_samples, B, T*C)
         mean_preds = preds["obs"].mean(dim=0)  # (B, T*C)
+        std_preds = preds["obs"].std(dim=0)
 
         reshaped_mean_preds = rearrange(
             mean_preds, "B (T C) -> B T C", C=self.model.base_channel_dim
         )
-        return reshaped_mean_preds
+        reshaped_std_preds = rearrange(
+            std_preds, "B (T C) -> B T C", C=self.model.base_channel_dim
+        )
+        return reshaped_mean_preds, reshaped_std_preds
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")

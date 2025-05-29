@@ -33,10 +33,7 @@ def main(config: DictConfig) -> Optional[float]:
 
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
-    pl_model = instantiate(
-        config.model.pl_model,
-        model=model,
-    )
+    pl_model = instantiate(config.model.pl_model, model=model, name=config.model.name)
 
     callbacks = []
     if config.model.trainer.use_early_stopping:
@@ -67,7 +64,7 @@ def main(config: DictConfig) -> Optional[float]:
         enable_progress_bar=True,
         enable_model_summary=False,
         overfit_batches=1 if config.overfit else 0.0,
-        limit_test_batches=10 if config.overfit else None,
+        # limit_test_batches=10 if config.overfit else None,
         default_root_dir=config.path.basedir,
         num_sanity_val_steps=0,
         **multi_gpu_dict,
