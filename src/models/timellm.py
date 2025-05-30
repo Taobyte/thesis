@@ -12,6 +12,7 @@ from transformers import (
     LlamaModel,
     LlamaTokenizer,
 )
+from transformers import BitsAndBytesConfig
 
 from src.models.utils import BaseLightningModule
 
@@ -454,6 +455,9 @@ class Model(nn.Module):
         self.llama_config.output_attentions = True
         self.llama_config.output_hidden_states = True
         try:
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16
+            )
             self.llm_model = LlamaModel.from_pretrained(
                 # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
                 # 'huggyllama/llama-7b',
@@ -461,6 +465,7 @@ class Model(nn.Module):
                 trust_remote_code=True,
                 local_files_only=True,
                 config=self.llama_config,
+                quantization_config=bnb_config,
                 # load_in_4bit=True
             )
         except EnvironmentError:  # downloads model from HF is not already done
