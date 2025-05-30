@@ -492,6 +492,8 @@ class Model(nn.Module):
             pad_token = "[PAD]"
             self.tokenizer.add_special_tokens({"pad_token": pad_token})
             self.tokenizer.pad_token = pad_token
+
+        # here the layers of the LLM are being frozen!
         for param in self.llm_model.parameters():
             param.requires_grad = False
         self.description = description
@@ -500,37 +502,27 @@ class Model(nn.Module):
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
         self.num_tokens = 1000
-        # 32b -> 16b
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
-        self.mapping_layer = self.mapping_layer.half()
-        # 32b -> 16b
-        self.mapping_layer = self.mapping_layer.half()
         self.reprogramming_layer = ReprogrammingLayer(
             d_model, n_heads, self.d_ff, self.d_llm
         )
-        self.reprogramming_layer = self.reprogramming_layer.half()
-        # 32b -> 16b
         self.patch_embedding = PatchEmbedding(
             d_model, self.patch_len, self.stride, dropout, seq_len
         )
-        self.patch_embedding = self.patch_embedding.half()
 
         self.patch_nums = max(
             (seq_len - self.patch_len) // self.stride + 2, 1
         )  # use max to ensure not negative values at least 1 patch number
         self.head_nf = self.d_ff * self.patch_nums
 
-        # 32b -> 16b
         self.output_projection = FlattenHead(
             enc_in,
             self.head_nf,
             self.pred_len,
             head_dropout=dropout,
         )
-        self.output_projection = self.output_projection.half()
 
         self.normalize_layers = Normalize(enc_in, affine=False)
-        self.normalize_layers = self.normalize_layers.half()
 
     def forward(self, x_enc):
         x_enc = self.normalize_layers(x_enc, "norm")
@@ -683,7 +675,7 @@ class TimeLLM(BaseLightningModule):
 
     def _shared_step(self, look_back_window, prediction_window):
         # change to bfloat16
-        look_back_window = look_back_window.to(torch.bfloat16)
+        # look_back_window = look_back_window.to(torch.bfloat16)
         # prediction_window = prediction_window.to(torch.bfloat16)
 
         preds = self.model_forward(look_back_window)
