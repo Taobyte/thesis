@@ -1,4 +1,5 @@
 import hydra
+import torch
 import lightning as L
 
 from hydra.utils import instantiate
@@ -26,6 +27,21 @@ OmegaConf.register_new_resolver(
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig) -> Optional[float]:
+    if torch.cuda.is_available():
+        device = torch.cuda.current_device()
+        device_name = torch.cuda.get_device_name(device)
+        total_mem = torch.cuda.get_device_properties(device).total_memory / (1024**3)
+        reserved_mem = torch.cuda.memory_reserved(device) / (1024**3)
+        allocated_mem = torch.cuda.memory_allocated(device) / (1024**3)
+        free_mem = reserved_mem - allocated_mem
+        print(f"\n[GPU INFO] Device: {device_name}")
+        print(f"[GPU INFO] Total Memory: {total_mem:.2f} GB")
+        print(f"[GPU INFO] Reserved Memory: {reserved_mem:.2f} GB")
+        print(f"[GPU INFO] Allocated Memory: {allocated_mem:.2f} GB")
+        print(f"[GPU INFO] Free (within reserved): {free_mem:.2f} GB\n")
+    else:
+        print("[GPU INFO] No GPU available.")
+
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
