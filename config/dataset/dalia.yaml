@@ -1,5 +1,5 @@
 name: "dalia"
-description: "The PPG-DaLiA dataset is a multivariate time-series collection for heart rate estimation with motion compensation in daily life. It includes PPG, ECG (ground truth), and 3D accelerometer data from 15 subjects during various activities. Heart rate ground truth is derived from 8-second windows. This dataset is characterized by high sampling rates and real-world motion artifacts. LLMs should focus on identifying rhythmic physiological patterns, motion-induced noise correlations, and activity-specific signal changes to accurately predict heart rate."
+description: "" 
 
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
