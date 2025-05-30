@@ -9,7 +9,7 @@ model:
   dropout: 0.1
   llm_layers: 6
   d_model: 16
-  n_heads: 8
+  n_heads: 6
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   patch_len: 16 
   stride: 8 

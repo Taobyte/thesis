@@ -92,6 +92,7 @@ class BaseLightningModule(L.LightningModule):
         n_trials: int = 10,
         tune: bool = False,
         name: str = None,
+        use_plots: bool = False,
     ):
         super().__init__()
 
@@ -99,6 +100,7 @@ class BaseLightningModule(L.LightningModule):
         self.wandb_project = wandb_project
         self.tune = tune
         self.name = name
+        self.use_plots = use_plots
 
         self.evaluator = Evaluator()
 
@@ -228,78 +230,81 @@ class BaseLightningModule(L.LightningModule):
 
         self.log_dict(avg_metrics, logger=True)
 
-        # plot metric histograms
-        for metric_name, v in self.metric_full.items():
-            plot_metric_histogram(self.logger, metric_name, v)
+        if self.use_plots:
+            # plot metric histograms
+            for metric_name, v in self.metric_full.items():
+                plot_metric_histogram(self.logger, metric_name, v)
 
-        # plot best, worst and median
-        for metric_name, v in self.metric_full.items():
-            sorted_indices = np.argsort(v)
-            min_idx = sorted_indices[0]
-            max_idx = sorted_indices[-1]
-            median_idx = sorted_indices[len(v) // 2]
-            if metric_name == "cross_correlation":
-                zipped = zip(
-                    ["worst", "best", "median"], [min_idx, max_idx, median_idx]
-                )
-            else:
-                zipped = zip(
-                    ["worst", "best", "median"], [max_idx, min_idx, median_idx]
-                )
-
-            for type, idx in zipped:
-                look_back_window, target = self.trainer.test_dataloaders.dataset[idx]
-                look_back_window = look_back_window.unsqueeze(0).to(self.device)
-                look_back_window_norm, mean, std = local_z_norm(
-                    look_back_window, self.local_norm_channels
-                )
-                target = target.unsqueeze(0)
-                if self.has_probabilistic_forecast:
-                    pred_mean, pred_std = self.model_forward(look_back_window_norm)
-                    pred_mean = pred_mean[:, :, : target.shape[-1]]
-                    pred_denorm = local_z_denorm(
-                        pred_mean, self.local_norm_channels, mean, std
+            # plot best, worst and median
+            for metric_name, v in self.metric_full.items():
+                sorted_indices = np.argsort(v)
+                min_idx = sorted_indices[0]
+                max_idx = sorted_indices[-1]
+                median_idx = sorted_indices[len(v) // 2]
+                if metric_name == "cross_correlation":
+                    zipped = zip(
+                        ["worst", "best", "median"], [min_idx, max_idx, median_idx]
                     )
-                    pred_std = pred_std[:, :, : target.shape[-1]] * std
                 else:
-                    pred = self.model_forward(look_back_window_norm)[
-                        :, :, : target.shape[-1]
+                    zipped = zip(
+                        ["worst", "best", "median"], [max_idx, min_idx, median_idx]
+                    )
+
+                for type, idx in zipped:
+                    look_back_window, target = self.trainer.test_dataloaders.dataset[
+                        idx
                     ]
-                    pred_denorm = local_z_denorm(
-                        pred, self.local_norm_channels, mean, std
+                    look_back_window = look_back_window.unsqueeze(0).to(self.device)
+                    look_back_window_norm, mean, std = local_z_norm(
+                        look_back_window, self.local_norm_channels
                     )
-                    pred_std = None
+                    target = target.unsqueeze(0)
+                    if self.has_probabilistic_forecast:
+                        pred_mean, pred_std = self.model_forward(look_back_window_norm)
+                        pred_mean = pred_mean[:, :, : target.shape[-1]]
+                        pred_denorm = local_z_denorm(
+                            pred_mean, self.local_norm_channels, mean, std
+                        )
+                        pred_std = pred_std[:, :, : target.shape[-1]] * std
+                    else:
+                        pred = self.model_forward(look_back_window_norm)[
+                            :, :, : target.shape[-1]
+                        ]
+                        pred_denorm = local_z_denorm(
+                            pred, self.local_norm_channels, mean, std
+                        )
+                        pred_std = None
 
-                assert pred_denorm.shape == target.shape
+                    assert pred_denorm.shape == target.shape
 
-                if hasattr(self.trainer.datamodule, "use_heart_rate"):
-                    use_heart_rate = self.trainer.datamodule.use_heart_rate
-                else:
-                    use_heart_rate = False
+                    if hasattr(self.trainer.datamodule, "use_heart_rate"):
+                        use_heart_rate = self.trainer.datamodule.use_heart_rate
+                    else:
+                        use_heart_rate = False
 
-                plot_prediction_wandb(
-                    look_back_window,
-                    target,
-                    pred_denorm,
-                    wandb_logger=self.logger,
-                    metric_name=metric_name,
-                    metric_value=v[idx],
-                    type=type,
-                    use_heart_rate=use_heart_rate,
-                    freq=self.trainer.datamodule.freq,
-                    dataset=self.trainer.datamodule.name,
-                    pred_denorm_std=pred_std,
-                )
+                    plot_prediction_wandb(
+                        look_back_window,
+                        target,
+                        pred_denorm,
+                        wandb_logger=self.logger,
+                        metric_name=metric_name,
+                        metric_value=v[idx],
+                        type=type,
+                        use_heart_rate=use_heart_rate,
+                        freq=self.trainer.datamodule.freq,
+                        dataset=self.trainer.datamodule.name,
+                        pred_denorm_std=pred_std,
+                    )
 
-        # plot the whole timeseries with the metrics
-        datamodule = self.trainer.datamodule
-        plot_entire_series(
-            self.logger,
-            datamodule.test_dataset.data,
-            self.metric_full,
-            datamodule.look_back_window,
-            datamodule.prediction_window,
-        )
+            # plot the whole timeseries with the metrics
+            datamodule = self.trainer.datamodule
+            plot_entire_series(
+                self.logger,
+                datamodule.test_dataset.data,
+                self.metric_full,
+                datamodule.look_back_window,
+                datamodule.prediction_window,
+            )
 
     def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch

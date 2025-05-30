@@ -23,6 +23,7 @@ seed: 123
 overfit: False
 use_checkpoint_callback: False
 num_workers: 0
+use_plots: False
 
 # wandb logging
 use_wandb: False

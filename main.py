@@ -33,7 +33,12 @@ def main(config: DictConfig) -> Optional[float]:
 
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
-    pl_model = instantiate(config.model.pl_model, model=model, name=config.model.name)
+    pl_model = instantiate(
+        config.model.pl_model,
+        model=model,
+        name=config.model.name,
+        use_plots=config.use_plots,
+    )
 
     callbacks = []
     if config.model.trainer.use_early_stopping:
