@@ -11,6 +11,8 @@ from transformers import (
     LlamaConfig,
     LlamaModel,
     LlamaTokenizer,
+    AutoModelForCausalLM,
+    AutoTokenizer,
 )
 from transformers import BitsAndBytesConfig
 
@@ -424,8 +426,9 @@ class SimpleLinr(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        pred_len: int = 96,
-        seq_len: int = 96,
+        llm_model: str = "qwen",
+        pred_len: int = 3,
+        seq_len: int = 5,
         d_ff: int = 32,
         llm_dim: int = 4096,
         dropout: float = 0.1,
@@ -440,6 +443,7 @@ class Model(nn.Module):
         description: str = "",
     ):
         super(Model, self).__init__()
+        self.llm_model = llm_model
         self.pred_len = pred_len
         self.seq_len = seq_len
         self.d_ff = d_ff
@@ -447,44 +451,55 @@ class Model(nn.Module):
         self.d_llm = llm_dim
         self.patch_len = patch_len
         self.stride = stride
-        self.llama_model_path = llama_model_path
-        self.dropout = nn.Dropout(dropout)
 
-        self.llama_config = LlamaConfig.from_pretrained(self.llama_model_path)
-        self.llama_config.num_hidden_layers = llm_layers
-        self.llama_config.output_attentions = True
-        self.llama_config.output_hidden_states = True
-        try:
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16
+        if llm_model == "LLAMA":
+            self.llama_model_path = llama_model_path
+
+            self.llama_config = LlamaConfig.from_pretrained(self.llama_model_path)
+            self.llama_config.num_hidden_layers = llm_layers
+            self.llama_config.output_attentions = True
+            self.llama_config.output_hidden_states = True
+            try:
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16
+                )
+                self.llm_model = LlamaModel.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
+                    # 'huggyllama/llama-7b',
+                    self.llama_model_path,
+                    trust_remote_code=True,
+                    local_files_only=True,
+                    config=self.llama_config,
+                    quantization_config=bnb_config,
+                    device_map="auto",
+                    torch_dtype=torch.float16,
+                    # load_in_4bit=True
+                )
+            except EnvironmentError:  # downloads model from HF is not already done
+                print("Local model files not found. Attempting to download...")
+                print("no we do not download....")
+                exit()
+            try:
+                self.tokenizer = LlamaTokenizer.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
+                    # 'huggyllama/llama-7b',
+                    self.llama_model_path,
+                    trust_remote_code=True,
+                    local_files_only=True,
+                )
+            except (
+                EnvironmentError
+            ):  # downloads the tokenizer from HF if not already done
+                print("Local tokenizer files not found. Atempting to download them..")
+                exit()
+        elif llm_model == "qwen":
+            model_name = "Qwen/Qwen3-1.7B"
+
+            # load the tokenizer and the model
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.llm_model = AutoModelForCausalLM.from_pretrained(
+                model_name, torch_dtype="auto", device_map="auto"
             )
-            self.llm_model = LlamaModel.from_pretrained(
-                # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
-                # 'huggyllama/llama-7b',
-                self.llama_model_path,
-                trust_remote_code=True,
-                local_files_only=True,
-                config=self.llama_config,
-                quantization_config=bnb_config,
-                device_map="auto",
-                torch_dtype=torch.float16,
-                # load_in_4bit=True
-            )
-        except EnvironmentError:  # downloads model from HF is not already done
-            print("Local model files not found. Attempting to download...")
-            print("no we do not download....")
-            exit()
-        try:
-            self.tokenizer = LlamaTokenizer.from_pretrained(
-                # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
-                # 'huggyllama/llama-7b',
-                self.llama_model_path,
-                trust_remote_code=True,
-                local_files_only=True,
-            )
-        except EnvironmentError:  # downloads the tokenizer from HF if not already done
-            print("Local tokenizer files not found. Atempting to download them..")
-            exit()
 
         if self.tokenizer.eos_token:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -499,6 +514,7 @@ class Model(nn.Module):
         self.description = description
         print("description:", self.description)
 
+        self.dropout = nn.Dropout(dropout)
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
         self.num_tokens = 1000
@@ -524,7 +540,18 @@ class Model(nn.Module):
 
         self.normalize_layers = Normalize(enc_in, affine=False)
 
+        # cast layers to bfloat16
+        if llm_model == "qwen":
+            self.normalize_layers.to(torch.bfloat16)
+            self.mapping_layer.to(torch.bfloat16)
+            self.reprogramming_layer.to(torch.bfloat16)
+            self.patch_embedding.to(torch.bfloat16)
+            self.output_projection.to(torch.bfloat16)
+            self.normalize_layers.to(torch.bfloat16)
+
     def forward(self, x_enc):
+        if self.llm_model == "qwen":
+            x_enc = x_enc.to(torch.bfloat16)
         x_enc = self.normalize_layers(x_enc, "norm")
 
         B, T, N = x_enc.size()
@@ -557,6 +584,10 @@ class Model(nn.Module):
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
 
+        import pdb
+
+        pdb.set_trace()
+
         prompt = self.tokenizer(
             prompt,
             return_tensors="pt",
@@ -568,6 +599,8 @@ class Model(nn.Module):
             prompt.to(x_enc.device)
         )  # (batch, prompt_token, dim)
 
+        pdb.set_trace()
+
         source_embeddings = self.mapping_layer(
             self.word_embeddings.permute(1, 0)
         ).permute(1, 0)
@@ -577,6 +610,8 @@ class Model(nn.Module):
         enc_out = self.reprogramming_layer(
             enc_out, source_embeddings, source_embeddings
         )
+
+        pdb.set_trace()
 
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
@@ -591,6 +626,9 @@ class Model(nn.Module):
         dec_out = dec_out.permute(0, 2, 1).contiguous()
 
         dec_out = self.normalize_layers(dec_out, "denorm")
+
+        if self.llm_model == "qwen":
+            dec_out = dec_out.float()
 
         return dec_out
 
@@ -745,6 +783,13 @@ class TimeLLM(BaseLightningModule):
 if __name__ == "__main__":
     model = Model(llama_model_path="C:/Users/cleme/ETH/Master/Thesis/llama_weights/")
     pl_model = TimeLLM(model)
+    B = 32
+    tensor = torch.randn((B, 5, 3))
+    import pdb
+
+    pdb.set_trace()
+    output = model(tensor)
+    pdb.set_trace()
 
     config = LlamaConfig.from_pretrained(
         "C:/Users/cleme/ETH/Master/Thesis/llama_weights/"
