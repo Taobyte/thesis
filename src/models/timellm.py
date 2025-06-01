@@ -14,7 +14,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
 )
-from transformers import BitsAndBytesConfig
 
 from src.models.utils import BaseLightningModule
 
@@ -426,7 +425,7 @@ class SimpleLinr(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        llm_model: str = "qwen",
+        llm_model_name: str = "LLAMA",
         pred_len: int = 3,
         seq_len: int = 5,
         d_ff: int = 32,
@@ -443,7 +442,7 @@ class Model(nn.Module):
         description: str = "",
     ):
         super(Model, self).__init__()
-        self.llm_model = llm_model
+        self.llm_model_name = llm_model_name
         self.pred_len = pred_len
         self.seq_len = seq_len
         self.d_ff = d_ff
@@ -452,7 +451,7 @@ class Model(nn.Module):
         self.patch_len = patch_len
         self.stride = stride
 
-        if llm_model == "LLAMA":
+        if llm_model_name == "LLAMA":
             self.llama_model_path = llama_model_path
 
             self.llama_config = LlamaConfig.from_pretrained(self.llama_model_path)
@@ -460,9 +459,6 @@ class Model(nn.Module):
             self.llama_config.output_attentions = True
             self.llama_config.output_hidden_states = True
             try:
-                bnb_config = BitsAndBytesConfig(
-                    load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16
-                )
                 self.llm_model = LlamaModel.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
                     # 'huggyllama/llama-7b',
@@ -470,9 +466,6 @@ class Model(nn.Module):
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.llama_config,
-                    quantization_config=bnb_config,
-                    device_map="auto",
-                    torch_dtype=torch.float16,
                     # load_in_4bit=True
                 )
             except EnvironmentError:  # downloads model from HF is not already done
@@ -492,7 +485,7 @@ class Model(nn.Module):
             ):  # downloads the tokenizer from HF if not already done
                 print("Local tokenizer files not found. Atempting to download them..")
                 exit()
-        elif llm_model == "qwen":
+        elif llm_model_name == "qwen":
             model_name = "Qwen/Qwen3-1.7B"
 
             # load the tokenizer and the model
@@ -541,7 +534,7 @@ class Model(nn.Module):
         self.normalize_layers = Normalize(enc_in, affine=False)
 
         # cast layers to bfloat16
-        if llm_model == "qwen":
+        if llm_model_name == "qwen":
             self.normalize_layers.to(torch.bfloat16)
             self.mapping_layer.to(torch.bfloat16)
             self.reprogramming_layer.to(torch.bfloat16)
@@ -550,7 +543,7 @@ class Model(nn.Module):
             self.normalize_layers.to(torch.bfloat16)
 
     def forward(self, x_enc):
-        if self.llm_model == "qwen":
+        if self.llm_model_name == "qwen":
             x_enc = x_enc.to(torch.bfloat16)
         x_enc = self.normalize_layers(x_enc, "norm")
 
@@ -627,7 +620,7 @@ class Model(nn.Module):
 
         dec_out = self.normalize_layers(dec_out, "denorm")
 
-        if self.llm_model == "qwen":
+        if self.llm_model_name == "qwen":
             dec_out = dec_out.float()
 
         return dec_out
@@ -788,6 +781,11 @@ if __name__ == "__main__":
     import pdb
 
     pdb.set_trace()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    tensor = tensor.to(device)
+    model = model.to(device)
+
     output = model(tensor)
     pdb.set_trace()
 
