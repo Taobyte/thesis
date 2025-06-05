@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
-  - path: local
+  - path: cluster
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
@@ -21,7 +21,7 @@ use_dynamic_features: True
 
 seed: 123
 overfit: False
-use_checkpoint_callback: False
+use_checkpoint_callback: True
 num_workers: 0
 use_plots: True
 
@@ -42,6 +42,7 @@ use_multi_gpu: False
 multi:
   accelerator: "gpu"
   devices: 4
+  num_nodes: 1
   strategy: "ddp"
 
 

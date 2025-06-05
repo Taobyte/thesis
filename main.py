@@ -73,6 +73,8 @@ def main(config: DictConfig) -> Optional[float]:
         # limit_test_batches=10 if config.overfit else None,
         default_root_dir=config.path.basedir,
         num_sanity_val_steps=0,
+        # profiler="pytorch",
+        # enable_checkpointing=False,
         **multi_gpu_dict,
     )
 
@@ -136,7 +138,18 @@ def main(config: DictConfig) -> Optional[float]:
 
         print("Start Evaluation.")
         if config.model.name not in ["xgboost", "bnn"]:
-            trainer.test(datamodule=datamodule, ckpt_path="best")
+
+            if config.use_multi_gpu and trainer.is_global_zero:
+                trainer = L.Trainer(logger=wandb_logger,
+                                    enable_progress_bar=True, 
+                                    enable_model_summary=False,
+                                    default_root_dir=config.path.basedir, 
+                                    num_sanity_val_steps=0,
+                                    callbacks=callbacks)
+
+                trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
+            elif not config.use_multi_gpu:
+                trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
         else:
             print("Best checkpoint not found, testing with current model.")
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)

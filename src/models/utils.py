@@ -228,9 +228,9 @@ class BaseLightningModule(L.LightningModule):
             self.metrics_dict, self.batch_size
         )
 
-        self.log_dict(avg_metrics, logger=True)
+        self.log_dict(avg_metrics, logger=True, sync_dist=True)
 
-        if self.use_plots:
+        if self.use_plots and self.trainer.is_global_zero:
             # plot metric histograms
             for metric_name, v in self.metric_full.items():
                 plot_metric_histogram(self.logger, metric_name, v)

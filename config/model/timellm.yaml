@@ -2,7 +2,7 @@ name: "timellm"
 
 model:
   _target_: src.models.timellm.Model
-  llm_model: "qwen" # can be "LLAMA", "QWEN" or "PHI"
+  llm_model_name: "qwen" # can be "LLAMA", "QWEN" or "PHI"
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
   d_ff: 32
@@ -26,8 +26,8 @@ pl_model:
 
 trainer:
   use_early_stopping: True
-  patience: 10
-  max_epochs: 8
+  patience: 3
+  max_epochs: 1
 
 data:
-  batch_size: 64 # needs to be small for ucihar 16 did not work
+  batch_size: 32 # needs to be small for ucihar 16 did not work

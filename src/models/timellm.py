@@ -13,6 +13,7 @@ from transformers import (
     LlamaTokenizer,
     AutoModelForCausalLM,
     AutoTokenizer,
+    Qwen2Config
 )
 
 from src.models.utils import BaseLightningModule
@@ -425,7 +426,7 @@ class SimpleLinr(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        llm_model_name: str = "LLAMA",
+        llm_model_name: str = "qwen",
         pred_len: int = 3,
         seq_len: int = 5,
         d_ff: int = 32,
@@ -447,7 +448,12 @@ class Model(nn.Module):
         self.seq_len = seq_len
         self.d_ff = d_ff
         self.top_k = top_k
-        self.d_llm = llm_dim
+        if llm_model_name == "LLAMA":
+            self.d_llm = 4096
+        elif llm_model_name == "qwen":
+            self.d_llm = 1024
+        else:
+            raise NotImplementedError()
         self.patch_len = patch_len
         self.stride = stride
 
@@ -486,12 +492,17 @@ class Model(nn.Module):
                 print("Local tokenizer files not found. Atempting to download them..")
                 exit()
         elif llm_model_name == "qwen":
-            model_name = "Qwen/Qwen3-1.7B"
+            model_name = "Qwen/Qwen3-0.6B"
+
+            self.qwen_config = Qwen2Config.from_pretrained(model_name)
+            self.qwen_config.output_attentions = True
+            self.qwen_config.output_hidden_states = True
+            self.qwen_config.num_hidden_layers = llm_layers
 
             # load the tokenizer and the model
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.llm_model = AutoModelForCausalLM.from_pretrained(
-                model_name, torch_dtype="auto", device_map="auto"
+                model_name, torch_dtype="auto" 
             )
 
         if self.tokenizer.eos_token:
@@ -545,6 +556,8 @@ class Model(nn.Module):
     def forward(self, x_enc):
         if self.llm_model_name == "qwen":
             x_enc = x_enc.to(torch.bfloat16)
+        # import pdb 
+        # pdb.set_trace()
         x_enc = self.normalize_layers(x_enc, "norm")
 
         B, T, N = x_enc.size()
@@ -577,9 +590,9 @@ class Model(nn.Module):
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
 
-        import pdb
+        #import pdb
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         prompt = self.tokenizer(
             prompt,
@@ -592,22 +605,28 @@ class Model(nn.Module):
             prompt.to(x_enc.device)
         )  # (batch, prompt_token, dim)
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         source_embeddings = self.mapping_layer(
             self.word_embeddings.permute(1, 0)
         ).permute(1, 0)
 
         x_enc = x_enc.permute(0, 2, 1).contiguous()
-        enc_out, n_vars = self.patch_embedding(x_enc.float())
+        enc_out, n_vars = self.patch_embedding(x_enc)
         enc_out = self.reprogramming_layer(
             enc_out, source_embeddings, source_embeddings
         )
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
-        dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
+        if self.llm_model_name == "LLAMA":
+            dec_out = self.llm_model(inputs_embeds=llama_enc_out)
+            dec_out = dec_out.last_hidden_state
+        else: 
+            dec_out = self.llm_model(inputs_embeds=llama_enc_out, output_hidden_states=True)
+            dec_out = dec_out.hidden_states[-1]
+
         dec_out = dec_out[:, :, : self.d_ff]
 
         dec_out = torch.reshape(
@@ -720,9 +739,9 @@ class TimeLLM(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss, _ = self._shared_step(look_back_window, prediction_window)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True,sync_dist=True)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
+        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True,sync_dist=True)
         # here lightning calls OneCycleLR scheduler
         return loss
 
@@ -730,12 +749,12 @@ class TimeLLM(BaseLightningModule):
         loss, mae_loss = self._shared_step(look_back_window, prediction_window)
         if self.tune:
             loss = mae_loss
-        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
         return loss
 
     def on_train_epoch_end(self):
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-        self.log("current_lr", current_lr, on_epoch=True, logger=True)
+        self.log("current_lr", current_lr, on_epoch=True, logger=True, sync_dist=True)
 
     def configure_optimizers(self):
         trainable_parameters = []
@@ -776,7 +795,7 @@ class TimeLLM(BaseLightningModule):
 if __name__ == "__main__":
     model = Model(llama_model_path="C:/Users/cleme/ETH/Master/Thesis/llama_weights/")
     pl_model = TimeLLM(model)
-    B = 32
+    B = 16
     tensor = torch.randn((B, 5, 3))
     import pdb
 

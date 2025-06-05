@@ -1,12 +1,15 @@
 #!/bin/bash -l
 
-#SBATCH --gpus=4
-#SBATCH --gres=gpumem:24g
-#SBATCH --mem-per-cpu=24G
-#SBATCH --time=2:00:00
-#SBATCH --cpus-per-task=8
+#SBATCH --tasks-per-node=4
+#SBATCH --gpus=rtx_3090:4
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=24g
 #SBATCH --nodes=1
-#SBATCH --ntasks=4
+#SBATCH --time=0-02:00:00
 
+# setup
 module load eth_proxy
-python main.py model=timellm use_multi_gpu=True
+conda activate thesis
+
+srun python main.py model=timellm use_multi_gpu=True overfit=False use_wandb=True look_back_window=$1 prediction_window=$2 use_dynamic_features=$3 experiment=$4
+
