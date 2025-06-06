@@ -4,17 +4,26 @@ import wandb
 import argparse
 import plotly.graph_objects as go
 
+from matplotlib import colors
 from plotly.subplots import make_subplots
 from collections import defaultdict
+from itertools import product
+from typing import Tuple
 
 from utils import create_group_run_name
 
+test_metrics = ["test_MSE", "test_MAE", "test_cross_correlation", "test_dir_acc_single"]
+
+color_map = {
+    metric: color
+    for metric, color in zip(test_metrics, ["blue", "green", "orange", "red"])
+}
 
 metric_to_name = {
     "test_MSE": "Mean Squared Error",
     "test_MAE": "Mean Absolute Deviation",
     "test_cross_correlation": "Cross Correlation",
-    "test_dir_acc": "Directional Accuracy",
+    "test_dir_acc_single": "Directional Accuracy",
 }
 
 model_to_name = {
@@ -36,42 +45,76 @@ model_to_name = {
 datset_to_name = {"dalia": "DaLiA", "wildppg": "WildPPG", "ieee": "IEEE"}
 
 
-def visualize_look_back_window_difference():
-    raise NotImplementedError()
+def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Preprocess the run metrics for the wandb training runs in the runs list.
+    Returns two dataframes, the first storing the mean and the second the standard deviation for
+    each metric MSE, MAE, Cross Correlation and Directional Accuracy.
+    """
+
+    metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+
+    for run in runs:
+        name_splitted = run.name.split("_")
+        model_name = name_splitted[3]
+        look_back_window = name_splitted[-2]
+        prediction_window = name_splitted[-1]
+        summary = run.summary._json_dict
+        filtered_summary = {k: summary[k] for k in summary if k in test_metrics}
+        metrics[model_name][look_back_window][prediction_window].append(
+            filtered_summary
+        )
+
+    processed_metrics_mean = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    processed_metrics_std = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for model, v in metrics.items():
+        for lbw, w in v.items():
+            for pw, z in w.items():
+                metric_list = defaultdict(list)
+                for metric_dict in z:
+                    for metric_name, metric_value in metric_dict.items():
+                        metric_list[metric_name].append(metric_value)
+
+                mean = {
+                    metric_name: np.mean(v) for metric_name, v in metric_list.items()
+                }
+                std = {metric_name: np.std(v) for metric_name, v in metric_list.items()}
+                processed_metrics_mean[model][lbw][pw] = mean
+                processed_metrics_std[model][lbw][pw] = std
+
+    return processed_metrics_mean, processed_metrics_std
 
 
-def visualize_prediction_window_difference():
-    raise NotImplementedError()
-
-
-def process_results(
+def visualize_look_back_window_difference(
     dataset: str,
-    look_back_window: int,
-    prediction_window: int,
+    models: list[str],
+    look_back_window: list[int],
+    prediction_window: list[int],
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
-    start_time: str = "2025-5-25",
+    start_time: str = "2025-6-05",
 ):
-    print(
-        f"Filtering for \n dataset: {dataset} \n look_back_window: {look_back_window} \n prediction_window: {prediction_window} \n HR: {use_heart_rate} \n Dynamic Features: {use_dynamic_features} \n Static Features: {use_static_features}"
-    )
+    group_names = []
+    for lbw, pw, model in product(look_back_window, prediction_window, models):
+        group_name, run_name, tags = create_group_run_name(
+            dataset,
+            model,
+            use_heart_rate,
+            lbw,
+            pw,
+            use_dynamic_features,
+            use_static_features,
+            fold_nr=-1,  # does not matter, we only want group_name
+            fold_datasets=[],  # does not matter
+        )
 
-    group_name, run_name, tags = create_group_run_name(
-        dataset,
-        "",
-        use_heart_rate,
-        look_back_window,
-        prediction_window,
-        use_dynamic_features,
-        use_static_features,
-        fold_nr=-1,  # does not matter, we only want group_name
-        fold_datasets=[],  # does not matter
-    )
+        if run_name.split("_")[1] in models:
+            group_names.append(group_name)
 
     filters = {
         "$and": [
-            {"group": group_name},
+            {"group": {"$in": group_names}},
             {"state": "finished"},
             {"created_at": {"$gte": start_time}},
         ]
@@ -84,48 +127,113 @@ def process_results(
 
     assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
 
-    metrics = defaultdict(list)
+    mean_dict, std_dict = get_metrics(runs)
 
-    for run in runs:
-        model_name = run.name.split("_")[3]
-        summary = run.summary._json_dict
-        filtered_summary = {
-            k: summary[k]
-            for k in summary
-            if k in ["test_MSE", "test_MAE", "test_cross_correlation", "test_dir_acc"]
+    for model in mean_dict:
+        look_back_windows = list(mean_dict[model].keys())
+        prediction_windows = list(mean_dict[model][look_back_windows[0]].keys())
+
+        assert len(prediction_windows) == 1
+        assert set(test_metrics) == set(
+            mean_dict[model][look_back_windows[0]][prediction_windows[0]]
+        )
+
+        # look_back_windows = [int(lbw) for lbw in look_back_windows]
+        # prediction_windows = [int(pw) for pw in prediction_windows]
+        x = [int(lbw) for lbw in look_back_windows]
+        y_axis_ranges = {
+            test_metrics[0]: [0, 20],
+            test_metrics[1]: [0, 3],
+            test_metrics[2]: [-1, 1],
+            test_metrics[3]: [0, 1],
         }
-        metrics[model_name].append(filtered_summary)
 
-    # fig = create_loss_plots(dataframes, fig)
-    # plot metric table
-    processed_metrics_mean = {}
-    processed_metrics_std = {}
-    for k, v in metrics.items():
-        metric_list = defaultdict(list)
-        for metric_dict in v:
-            for metric_name, metric_value in metric_dict.items():
-                metric_list[metric_name].append(metric_value)
+        for pw in prediction_windows:
+            fig = make_subplots(
+                rows=2,
+                cols=2,
+                subplot_titles=[metric_to_name[m] for m in test_metrics],
+                shared_xaxes=True,
+                horizontal_spacing=0.1,
+                vertical_spacing=0.15,
+            )
 
-        mean = {metric_name: np.mean(v) for metric_name, v in metric_list.items()}
-        std = {metric_name: np.std(v) for metric_name, v in metric_list.items()}
-        processed_metrics_mean[k] = mean
-        processed_metrics_std[k] = std
-    df = pd.DataFrame.from_dict(processed_metrics_mean)
-    df_std = pd.DataFrame.from_dict(processed_metrics_std)
-    order = [
-        "linear",
-        "kalmanfilter",
-        "gp",
-        "xgboost",
-        "simpletm",
-        "pattn",
-        "adamshyper",
-        "gpt4ts",
-    ]
-    df = df[order]
-    df_std = df_std[order]
-    df = df.round(decimals=3)
+            for i, metric in enumerate(test_metrics):
+                means = [mean_dict[model][lbw][pw][metric] for lbw in look_back_windows]
+                stds = [std_dict[model][lbw][pw][metric] for lbw in look_back_windows]
 
+                upper = [m + s for m, s in zip(means, stds)]
+                lower = [m - s for m, s in zip(means, stds)]
+
+                row, col = divmod(i, 2)
+                row += 1
+                col += 1
+                color = color_map[metric]
+
+                # Mean line
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=means,
+                        mode="lines+markers",
+                        name=metric,
+                        line=dict(color=color),
+                        showlegend=False,
+                    ),
+                    row=row,
+                    col=col,
+                )
+
+                # Std deviation band (fill between)
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=upper + lower[::-1],
+                        fill="toself",
+                        fillcolor=color.replace("1.0", "0.2")
+                        if "rgba" in color
+                        else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                        line=dict(color="rgba(255,255,255,0)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    ),
+                    row=row,
+                    col=col,
+                )
+                # Set y-axis range for this subplot
+                fig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
+                # Set x-axis to look_back_window values
+                fig.update_xaxes(
+                    title_text="Lookback Window",
+                    tickmode="array",
+                    tickvals=look_back_windows,
+                    row=row,
+                    col=col,
+                )
+
+            fig.update_layout(
+                title_text=f"{model_to_name[model]} - Prediction Window {pw}",
+                height=600,
+                width=800,
+                template="plotly_white",
+            )
+
+            fig.update_xaxes(title_text="Lookback Window")
+            fig.update_yaxes(title_text="Metric Value")
+
+            fig.show()
+
+
+def visualize_metric_table(
+    df: pd.DataFrame,
+    df_std: pd.DataFrame,
+    dataset: str,
+    look_back_window: int,
+    prediction_window: int,
+    use_heart_rate: bool,
+    use_dynamic_features: bool,
+    use_static_features: bool,
+):
     font_weights = []
     for i in range(len(df)):
         row = df.iloc[i, :]
@@ -138,9 +246,6 @@ def process_results(
         font_weights.append(weights)
 
     font_weights = np.array(font_weights)
-    import pdb
-
-    pdb.set_trace()
 
     df.columns = [model_to_name[column] for column in df.columns]
     df_std.columns = [model_to_name[column] for column in df_std.columns]
@@ -194,8 +299,82 @@ def process_results(
     fig.show()
 
 
+def process_results(
+    dataset: str,
+    look_back_window: list[int],
+    prediction_window: list[int],
+    use_heart_rate: bool,
+    use_dynamic_features: bool,
+    use_static_features: bool,
+    start_time: str = "2025-5-25",
+    plot_type: str = "table",
+):
+    print(
+        f"Filtering for \n dataset: {dataset} \n look_back_window: {look_back_window} \n prediction_window: {prediction_window} \n HR: {use_heart_rate} \n Dynamic Features: {use_dynamic_features} \n Static Features: {use_static_features}"
+    )
+
+    assert len(look_back_window) == 1 and len(prediction_window) == 1, (
+        f"Look back window and prediction window lists must be of size 1, but are {len(look_back_window)} and {len(prediction_window)}"
+    )
+
+    group_name, run_name, tags = create_group_run_name(
+        dataset,
+        "",
+        use_heart_rate,
+        look_back_window[0],
+        prediction_window[0],
+        use_dynamic_features,
+        use_static_features,
+        fold_nr=-1,  # does not matter, we only want group_name
+        fold_datasets=[],  # does not matter
+    )
+
+    filters = {
+        "$and": [
+            {"group": group_name},
+            {"state": "finished"},
+            {"created_at": {"$gte": start_time}},
+        ]
+    }
+
+    api = wandb.Api()
+    runs = api.runs("c_keusch/thesis", filters=filters)
+
+    print(f"Found {len(runs)} runs.")
+
+    assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
+
+    df, df_std = get_metrics(runs)
+
+    if plot_type == "table":
+        visualize_metric_table(
+            df,
+            df_std,
+            dataset,
+            look_back_window,
+            prediction_window,
+            use_heart_rate,
+            use_dynamic_features,
+            use_static_features,
+        )
+    elif plot_type == "lbw_viz":
+        visualize_look_back_window_difference()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WandB Results")
+
+    parser.add_argument(
+        "--type",
+        type=str,
+        choices=[
+            "table",
+            "viz",
+        ],
+        required=True,
+        default="table",
+        help="Plot type. Must be either 'table' or 'viz'. ",
+    )
 
     parser.add_argument(
         "--dataset",
@@ -214,19 +393,22 @@ if __name__ == "__main__":
         help="Dataset must be one of the following: dalia, ieee, wildppg, chapman, ucihar, usc, capture24",
     )
 
+    def list_of_ints(arg):
+        return [int(i) for i in arg.split(",")]
+
     parser.add_argument(
         "--look_back_window",
-        type=int,
+        type=list_of_ints,
         required=True,
-        default=5,
+        default=[5],
         help="Lookback window size",
     )
 
     parser.add_argument(
         "--prediction_window",
-        type=int,
+        type=list_of_ints,
         required=True,
-        default=3,
+        default=[3],
         help="Prediction window size",
     )
 
@@ -234,7 +416,7 @@ if __name__ == "__main__":
         "--use_heart_rate",
         required=False,
         action="store_true",
-        help="get runs for heart rate only has an effect for datasets: dalia, ieee & ppg",
+        help="get runs for heart rate only has an effect for datasets: dalia, ieee & wildppg",
     )
     parser.add_argument(
         "--use_dynamic_features",
@@ -250,16 +432,35 @@ if __name__ == "__main__":
         help="get runs trained with activity information",
     )
 
+    def list_of_strings(arg):
+        return arg.split(",")
+
+    parser.add_argument(
+        "--models",
+        required=False,
+        default=None,
+        type=list_of_strings,
+        help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,elastst | Wrong Example: gpt4ts, timellm )",
+    )
+
     args = parser.parse_args()
 
-    api = wandb.Api()
-    runs = api.runs("c_keusch/thesis")
-
-    process_results(
-        args.dataset,
-        args.look_back_window,
-        args.prediction_window,
-        args.use_heart_rate,
-        args.use_dynamic_features,
-        args.use_static_features,
-    )
+    if args.type == "table":
+        process_results(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            args.use_heart_rate,
+            args.use_dynamic_features,
+            args.use_static_features,
+        )
+    elif args.type == "viz":
+        visualize_look_back_window_difference(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            args.use_heart_rate,
+            args.use_dynamic_features,
+            args.use_static_features,
+        )
