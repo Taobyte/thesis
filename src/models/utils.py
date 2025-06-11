@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------
-# This file includes code adapted from the Time-Series-Library:
+# This file includes code (evaluation functionality) adapted from the Time-Series-Library:
 # https://github.com/thuml/Time-Series-Library
 #
 # Original license: MIT License
@@ -14,15 +14,14 @@ import torch
 import lightning as L
 import numpy as np
 
-from einops import rearrange
 from omegaconf import DictConfig
 from typing import Dict, Tuple, Union
 from collections import defaultdict
 
 from src.metrics import Evaluator
 from src.plotting import (
-    plot_prediction_wandb,
-    plot_metric_histogram,
+    plot_max_min_median_predictions,
+    plot_metric_histograms,
     plot_entire_series,
 )
 
@@ -34,7 +33,7 @@ def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> d
             config.model.n_points, config.model.strategy
         )
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
-    elif config.model.name == "xgboost":
+    elif config.model.name in ["exactgp", "xgboost"]:
         lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
         model_kwargs["lbw_train_dataset"] = lbw_train_dataset
         model_kwargs["pw_train_dataset"] = pw_train_dataset
@@ -51,6 +50,42 @@ def local_z_norm(
     mean: torch.Tensor = None,
     std: torch.Tensor = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Applies local Z-normalization to the first `local_norm_channels` of a
+    time series tensor.
+
+    This function can operate in two modes:
+    1. If `mean` and `std` are not provided, it calculates them from the
+       input tensor `x` (assumed to be a 'lookback' window) and applies
+       the normalization.
+    2. If `mean` and `std` are provided, it uses them to normalize `x`
+       (assumed to be a 'prediction' window).
+
+    The normalization is only applied to the specified number of dynamic
+    time series channels, leaving static features (e.g., one-hot encoded
+    activity info, age, weight, height) untouched.
+
+    Args:
+        x (torch.Tensor): The input tensor with shape (batch_size, sequence_length, total_channels).
+                          It contains both dynamic time series channels and static features.
+        local_norm_channels (int): The number of initial channels in `x` that
+                                   represent dynamic time series data and should be normalized.
+                                   The remaining channels are assumed to be static and pre-normalized.
+        mean (Optional[torch.Tensor]): Optional. The mean tensor, typically calculated from a
+                                       lookback window, to use for normalization. If None,
+                                       the mean is calculated from `x`.
+                                       Shape should be (batch_size, 1, local_norm_channels).
+        std (Optional[torch.Tensor]): Optional. The standard deviation tensor, typically
+                                      calculated from a lookback window, to use for normalization.
+                                      If None, the standard deviation is calculated from `x`.
+                                      Shape should be (batch_size, 1, local_norm_channels).
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            - x_norm (torch.Tensor): The normalized tensor (float, detached from graph).
+            - mean (torch.Tensor): The mean tensor used for normalization (float, detached from graph).
+            - std (torch.Tensor): The standard deviation tensor used for normalization (float, detached from graph).
+    """
     if mean is None or std is None:
         # here we normalize the look back window
         _, _, C = x.shape
@@ -76,6 +111,30 @@ def local_z_denorm(
     mean: torch.Tensor,
     std: torch.Tensor,
 ) -> torch.Tensor:
+    """
+    Applies local Z-denormalization (reverses Z-normalization) to a tensor,
+    using provided mean and standard deviation.
+
+    This function denormalizes the channels that were previously normalized.
+    It's designed to work for both lookback and prediction windows, by ensuring
+    that it only processes up to `local_norm_channels` or the actual number
+    of channels in `x_norm`, whichever is smaller. The static features, which
+    were not normalized, remain untouched as they are outside the `local_norm_channels` range.
+
+    Args:
+        x_norm (torch.Tensor): The input tensor that was previously Z-normalized,
+                            with shape (batch_size, sequence_length, total_channels).
+        local_norm_channels (int): The number of initial channels in `x_norm` that
+                                represent dynamic time series data and were normalized.
+                                The remaining channels are assumed to be static.
+        mean (torch.Tensor): The mean tensor used during the original normalization.
+                            Shape should be compatible, e.g., (batch_size, 1, num_normalized_channels).
+        std (torch.Tensor): The standard deviation tensor used during the original normalization.
+                            Shape should be compatible, e.g., (batch_size, 1, num_normalized_channels).
+
+    Returns:
+        torch.Tensor: The denormalized tensor (float type).
+    """
     _, _, C = x_norm.shape
     C = min(
         C, local_norm_channels
@@ -117,7 +176,12 @@ class BaseLightningModule(L.LightningModule):
         Indicates whether the model provides probabilistic forecasts (mean and std).
         This property should be overridden in subclasses for probabilistic models.
         """
-        return self.name in ["gp", "dklgp", "bnn"]  # Example logic for the property
+        return self.name in [
+            "gp",
+            "dklgp",
+            "exactgp",
+            "bnn",
+        ]
 
     def model_forward(
         self, look_back_window: torch.Tensor
@@ -131,8 +195,8 @@ class BaseLightningModule(L.LightningModule):
 
         Args:
             look_back_window (torch.Tensor): A tensor representing the
-                look-back window. Its shape is expected to be (B, T_lb, C_lb),
-                where B is the batch size, T_lb is the length of the look-back
+                lookback window. Its shape is expected to be (B, T_lb, C_lb),
+                where B is the batch size, T_lb is the length of the lookback
                 window, and C_lb is the number of input channels.
 
         Returns:
@@ -172,10 +236,6 @@ class BaseLightningModule(L.LightningModule):
         self.dynamic_exogenous_variables = datamodule.dynamic_exogenous_variables
 
         self.local_norm_channels = datamodule.local_norm_channels
-
-    def on_fit_end(self):
-        pass
-        # self.compute_shap_values()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
@@ -224,77 +284,16 @@ class BaseLightningModule(L.LightningModule):
         self.metric_full = defaultdict(list)
 
     def on_test_epoch_end(self):
+        # log the average metrics to wandb
         avg_metrics = self.calculate_weighted_average(
             self.metrics_dict, self.batch_size
         )
-
         self.log_dict(avg_metrics, logger=True, sync_dist=True)
 
+        # plot if use_plots is true and process rank equals to 0 (multi gpu training)
         if self.use_plots and self.trainer.is_global_zero:
             # plot metric histograms
-            for metric_name, v in self.metric_full.items():
-                plot_metric_histogram(self.logger, metric_name, v)
-
-            # plot best, worst and median
-            for metric_name, v in self.metric_full.items():
-                sorted_indices = np.argsort(v)
-                min_idx = sorted_indices[0]
-                max_idx = sorted_indices[-1]
-                median_idx = sorted_indices[len(v) // 2]
-                if metric_name == "cross_correlation":
-                    zipped = zip(
-                        ["worst", "best", "median"], [min_idx, max_idx, median_idx]
-                    )
-                else:
-                    zipped = zip(
-                        ["worst", "best", "median"], [max_idx, min_idx, median_idx]
-                    )
-
-                for type, idx in zipped:
-                    look_back_window, target = self.trainer.test_dataloaders.dataset[
-                        idx
-                    ]
-                    look_back_window = look_back_window.unsqueeze(0).to(self.device)
-                    look_back_window_norm, mean, std = local_z_norm(
-                        look_back_window, self.local_norm_channels
-                    )
-                    target = target.unsqueeze(0)
-                    if self.has_probabilistic_forecast:
-                        pred_mean, pred_std = self.model_forward(look_back_window_norm)
-                        pred_mean = pred_mean[:, :, : target.shape[-1]]
-                        pred_denorm = local_z_denorm(
-                            pred_mean, self.local_norm_channels, mean, std
-                        )
-                        pred_std = pred_std[:, :, : target.shape[-1]] * std
-                    else:
-                        pred = self.model_forward(look_back_window_norm)[
-                            :, :, : target.shape[-1]
-                        ]
-                        pred_denorm = local_z_denorm(
-                            pred, self.local_norm_channels, mean, std
-                        )
-                        pred_std = None
-
-                    assert pred_denorm.shape == target.shape
-
-                    if hasattr(self.trainer.datamodule, "use_heart_rate"):
-                        use_heart_rate = self.trainer.datamodule.use_heart_rate
-                    else:
-                        use_heart_rate = False
-
-                    plot_prediction_wandb(
-                        look_back_window,
-                        target,
-                        pred_denorm,
-                        wandb_logger=self.logger,
-                        metric_name=metric_name,
-                        metric_value=v[idx],
-                        type=type,
-                        use_heart_rate=use_heart_rate,
-                        freq=self.trainer.datamodule.freq,
-                        dataset=self.trainer.datamodule.name,
-                        pred_denorm_std=pred_std,
-                    )
+            plot_metric_histograms(self.logger, self.metric_full)
 
             # plot the whole timeseries with the metrics
             datamodule = self.trainer.datamodule
@@ -305,6 +304,9 @@ class BaseLightningModule(L.LightningModule):
                 datamodule.look_back_window,
                 datamodule.prediction_window,
             )
+
+            # plot best, worst and median prediction for each metric
+            plot_max_min_median_predictions(self)
 
     def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch
@@ -346,56 +348,3 @@ class BaseLightningModule(L.LightningModule):
         for key, value in metrics_dict.items():
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
         return metrics
-
-    # sadly does NOT work, because I locally normalize and SHAP assume global normalization of the data!
-    def compute_shap_values(self):
-        import shap
-
-        class ModelWrapper(torch.nn.Module):
-            def __init__(self, model, look_back_channel_dim):
-                super().__init__()
-                self.model = model
-                self.look_back_channel_dim = look_back_channel_dim
-
-            def forward(self, x):
-                x = rearrange(x, "B (T C) -> B T C", C=self.look_back_channel_dim)
-                output = self.model(x)
-                output = rearrange(output, "B T C -> B (T C)")
-                return output
-
-        # self.model.eval()
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_to_explain = ModelWrapper(
-            self.model, self.trainer.datamodule.look_back_channel_dim
-        )
-
-        background_tensor = self.trainer.datamodule.get_inducing_points(
-            strategy="kmeans", mode="train"
-        )
-        background_tensor = background_tensor.to(device).requires_grad_(True)
-        background_tensor = rearrange(background_tensor, "B T C -> B (T C)")
-        explain_tensor = self.trainer.datamodule.get_inducing_points(
-            strategy="kmeans", mode="test"
-        )
-        explain_tensor = explain_tensor.to(device).requires_grad_(True)
-        explain_tensor = rearrange(explain_tensor, "B T C -> B (T C)")
-
-        out = model_to_explain(explain_tensor)
-        print(out.requires_grad)
-
-        explainer = shap.DeepExplainer(model_to_explain, background_tensor)
-
-        shap_values = explainer.shap_values(explain_tensor)
-
-        print(f"Computed SHAP values. Type: {type(shap_values)}")
-        if isinstance(shap_values, list):
-            print(
-                f"Number of output explanations (flattened output nodes): {len(shap_values)}"
-            )
-            if len(shap_values) > 0:
-                print(f"Shape of first SHAP values array: {shap_values[0].shape}")
-                # Expected: (num_explain_samples, look_back_window_length, num_input_channels)
-        else:  # For single output models, it might be a direct numpy array
-            print(f"Shape of SHAP values array: {shap_values.shape}")
-
-        print(f"Explainer Expected Value: {explainer.expected_value}")

@@ -2,11 +2,13 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
-  - path: cluster
+  - path: local
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
-fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"]
+n_folds: 3
+fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets have folds defined in config/experiments
+special_models: ["bnn", "xgboost"] # these models are not trained with pytorch
 
 hydra:
   run:
@@ -22,10 +24,10 @@ use_dynamic_features: True
 seed: 123
 overfit: False
 use_checkpoint_callback: True
-num_workers: 0
-use_plots: True
+num_workers: 0 # how many workers the pytorch dataloader has
+use_plots: True # flag for plotting test predictions and test timeseries 
 
-# wandb logging
+# wandb logging settings
 use_wandb: False
 wandb:
   save_dir: ${path.basedir}/wandb_logs
@@ -34,10 +36,10 @@ wandb:
   save_code: True
   reinit: True
 
-# tuner 
+# tuner flag
 tune: False
 
-# multi gpu training
+# multi gpu settings
 use_multi_gpu: False
 multi:
   accelerator: "gpu"

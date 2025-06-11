@@ -6,9 +6,9 @@ dalia:
   test_participants:  [3, 7, 8, 10, 14]  
 
 ieee:
-  train_participants: [2, 4, 5, 7, 8, 12]
-  val_participants:   [3, 6]
-  test_participants:  [1, 9, 10, 11]
+  train_participants: [1, 3, 4, 6, 7, 11]
+  val_participants:   [2, 5]
+  test_participants:  [0, 8, 9, 10]
 
 wildppg:
   train_participants: [2, 3, 4, 6, 7, 9, 10, 12, 15]   

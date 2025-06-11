@@ -11,6 +11,7 @@ import torch
 import lightning as L
 import wfdb
 
+from omegaconf import OmegaConf
 from einops import rearrange
 from torch.utils.data import DataLoader
 from numpy.lib.stride_tricks import sliding_window_view
@@ -19,6 +20,16 @@ from scipy.io import loadmat
 from pathlib import Path
 from tqdm import tqdm
 from typing import Tuple
+
+
+def get_datamodule_kwargs(config: OmegaConf):
+    kwargs = {}
+    if config.model.name in ["exactgp"]:
+        kwargs["shuffle"] = False
+    else:
+        kwargs["shuffle"] = True
+
+    return kwargs
 
 
 class BaseDataModule(L.LightningDataModule):
@@ -37,6 +48,7 @@ class BaseDataModule(L.LightningDataModule):
         dynamic_exogenous_variables: int = 1,
         static_exogenous_variables: int = 6,
         look_back_channel_dim: int = 1,
+        shuffle: bool = False,
     ):
         super().__init__()
 
@@ -65,6 +77,8 @@ class BaseDataModule(L.LightningDataModule):
             else target_channel_dim
         )
 
+        self.shuffle = shuffle
+
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -74,13 +88,13 @@ class BaseDataModule(L.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=True,
+            shuffle=self.shuffle,
         )
 
     def val_dataloader(self):
         return DataLoader(
             self.val_dataset,
-            batch_size=self.batch_size,
+            batch_size=min(self.batch_size, len(self.val_dataset)),
             num_workers=self.num_workers,
             shuffle=False,
         )
@@ -88,7 +102,7 @@ class BaseDataModule(L.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
             self.test_dataset,
-            batch_size=self.batch_size,
+            batch_size=min(self.batch_size, len(self.test_dataset)),
             num_workers=self.num_workers,
             shuffle=False,
         )

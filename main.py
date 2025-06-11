@@ -1,5 +1,8 @@
+# The overall project structure and training loop design in this repository
+# were significantly inspired by the work of Alice Bizeul.
+# See their repository at: https://github.com/alicebizeul/pmae
+
 import hydra
-import torch
 import lightning as L
 
 from hydra.utils import instantiate
@@ -15,6 +18,7 @@ from src.utils import (
     get_optuna_name,
 )
 from src.models.utils import get_model_kwargs
+from src.datasets.utils import get_datamodule_kwargs
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
@@ -30,7 +34,12 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    datamodule = instantiate(config.dataset.datamodule)
+    datamodule_kwargs = get_datamodule_kwargs(config)
+    datamodule = instantiate(config.dataset.datamodule, **datamodule_kwargs)
+    if config.model.name == "exactgp":
+        datamodule.batch_size = (
+            datamodule.get_train_dataset_length()
+        )  # ensures that we train with all data at once
 
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
@@ -54,11 +63,10 @@ def main(config: DictConfig) -> Optional[float]:
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",
             filename=run_name + "-{epoch}-{step}",
-            save_top_k=1,  # Also saves best model if you want
+            save_top_k=1,
         )
         callbacks.append(checkpoint_callback)
 
-    # multi gpu training
     multi_gpu_dict = {}
     if config.use_multi_gpu:
         multi_gpu_dict = config.multi
@@ -73,8 +81,6 @@ def main(config: DictConfig) -> Optional[float]:
         # limit_test_batches=10 if config.overfit else None,
         default_root_dir=config.path.basedir,
         num_sanity_val_steps=0,
-        # profiler="pytorch",
-        # enable_checkpointing=False,
         **multi_gpu_dict,
     )
 
@@ -85,7 +91,7 @@ def main(config: DictConfig) -> Optional[float]:
 
         # loop over all folds and return average val loss performance
         val_losses = []
-        for i in range(3):
+        for i in range(config.n_folds):
             if config.dataset.name in config.fold_datasets:
                 fold_name = f"fold_{i}"
                 overrides = [f"experiment={fold_name}"]
@@ -137,15 +143,16 @@ def main(config: DictConfig) -> Optional[float]:
         print("End Training.")
 
         print("Start Evaluation.")
-        if config.model.name not in ["xgboost", "bnn"]:
-
+        if config.model.name not in config.special_models:
             if config.use_multi_gpu and trainer.is_global_zero:
-                trainer = L.Trainer(logger=wandb_logger,
-                                    enable_progress_bar=True, 
-                                    enable_model_summary=False,
-                                    default_root_dir=config.path.basedir, 
-                                    num_sanity_val_steps=0,
-                                    callbacks=callbacks)
+                trainer = L.Trainer(
+                    logger=wandb_logger,
+                    enable_progress_bar=True,
+                    enable_model_summary=False,
+                    default_root_dir=config.path.basedir,
+                    num_sanity_val_steps=0,
+                    callbacks=callbacks,
+                )
 
                 trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
             elif not config.use_multi_gpu:

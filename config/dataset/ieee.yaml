@@ -9,6 +9,7 @@ datamodule:
   test_participants: ${experiment.ieee.test_participants}
   use_heart_rate: ${use_heart_rate}
   batch_size: ${model.data.batch_size}
+  shuffle: True 
   num_workers: ${num_workers}
 
   freq: 25 # preprocessed from 125Hz => 25Hz

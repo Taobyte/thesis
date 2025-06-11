@@ -10,6 +10,8 @@ import seaborn as sns
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
+from src.models.utils import BaseLightningModule, local_z_norm, local_z_denorm
+
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
 name_to_title = {
@@ -30,9 +32,34 @@ def plot_entire_series(
     metrics: dict,
     look_back_window: int,
     prediction_window: int,
-):
-    # n_metrics = len(metrics)
-    n_metrics = 3  # only plot mse
+) -> None:
+    """
+    Plots each entire time series along with corresponding per-step evaluation metrics
+    (MSE, MAE, Directional Accuracy) as bar plots.
+
+    This function iterates through multiple time series, creating a multi-panel plot
+    for each: the top panel displays the ground truth time series, and the panels below
+    show the MSE, MAE, and Directional Accuracy metrics as bar plots aligned with the
+    time series. The metrics are plotted at the time steps corresponding to the end
+    of their respective lookback windows.
+
+    Args:
+        logger (WandbLogger): The Weights & Biases logger instance to log the generated plots.
+        data (list[np.ndarray]): A list of NumPy arrays, where each array represents
+                                 an entire time series. Each array is expected to have
+                                 shape (sequence_length, num_channels), with the primary
+                                 series to plot being in the first channel (index 0).
+        metrics (dict): A dictionary containing evaluation metrics. Expected keys are
+                        "MSE", "MAE", and "dir_acc_single". Each value is a list or
+                        NumPy array of metric values, concatenated across all series
+                        and time windows.
+        look_back_window (int): The length of the look-back (input) window used by the model.
+                                This is used to correctly offset the metric plots.
+        prediction_window (int): The length of the prediction (output) window used by the model.
+                                 This is used to calculate the total window length for alignment.
+    """
+    assert ["MSE", "MAE", "dir_acc_single"] in metrics.keys()
+    n_metrics = 3  # only plot mse, mae and dir acc
     subplot_titles = ["Ground Truth Time Series"] + [
         name_to_title[metric_name] for metric_name in ["MSE", "MAE", "dir_acc_single"]
     ]
@@ -98,21 +125,36 @@ def plot_entire_series(
         )
 
 
-def plot_metric_histogram(logger: WandbLogger, metric_name: str, data: list[float]):
-    print(f"Plotting histogram for {metric_name}")
-    fig, ax = plt.subplots(figsize=(8, 6))
+def plot_metric_histograms(logger: WandbLogger, metric_full: dict[str]) -> None:
+    """
+    Generates and logs histograms for various evaluation metrics to Weights & Biases.
 
-    ax.hist(data, bins=50, edgecolor="black", alpha=0.7)  # Adjust bins as needed
-    ax.set_title(f"Distribution of {name_to_title.get(metric_name, metric_name)}")
-    ax.set_xlabel(name_to_title.get(metric_name, metric_name))
-    ax.set_ylabel("Frequency")
-    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    For each metric provided in the `metric_full` dictionary, this function creates
+    a histogram visualizing its distribution across all evaluated time windows.
+    The plots are then logged as images to the specified WandbLogger instance.
 
-    logger.experiment.log({f"{metric_name}/histogram": wandb.Image(fig)})
-    plt.close(fig)
+    Args:
+        logger (WandbLogger): The Weights & Biases logger instance to log the generated plots.
+        metric_full (Dict[str, List[float]]): A dictionary where keys are metric names (str)
+                                               and values are lists or NumPy arrays of
+                                               all computed metric values across all series
+                                               and time windows (e.g., `{"MSE": [0.1, 0.05, ...], "MAE": [0.2, 0.15, ...])`).
+    """
+    print("Plotting metric histograms")
+    for metric_name, v in metric_full.items():
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        ax.hist(v, bins=50, edgecolor="black", alpha=0.7)  # Adjust bins as needed
+        ax.set_title(f"Distribution of {name_to_title.get(metric_name, metric_name)}")
+        ax.set_xlabel(name_to_title.get(metric_name, metric_name))
+        ax.set_ylabel("Frequency")
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+
+        logger.experiment.log({f"{metric_name}/histogram": wandb.Image(fig)})
+        plt.close(fig)
 
 
-def get_yaxis_name(dataset: str, use_heart_rate: bool = False):
+def get_yaxis_name(dataset: str, use_heart_rate: bool = False) -> str:
     if dataset in ["dalia", "wildppg", "ieee"]:
         yaxis_name = "Heartrate" if use_heart_rate else "PPG"
     elif dataset == "mhc6mwt":
@@ -141,7 +183,7 @@ def plot_prediction_wandb(
     freq: int = 25,
     dataset: str = "dalia",
     pred_denorm_std: torch.Tensor = None,
-):
+) -> None:
     # make sure to always plot only the first channel
     look_back_window = x.cpu().detach().numpy()[0, :, 0]
     target = y.cpu().detach().numpy()[0, :, 0]
@@ -210,6 +252,67 @@ def plot_prediction_wandb(
     print(f"Plotting example {metric_name}/{type}")
     wandb_logger.experiment.log({f"{metric_name}/{type}": wandb.Image(fig)})
     plt.close(fig)
+
+
+def plot_max_min_median_predictions(lightning_module: BaseLightningModule) -> None:
+    # plot best, worst and median
+    for metric_name, v in lightning_module.metric_full.items():
+        sorted_indices = np.argsort(v)
+        min_idx = sorted_indices[0]
+        max_idx = sorted_indices[-1]
+        median_idx = sorted_indices[len(v) // 2]
+        if metric_name == "cross_correlation":
+            zipped = zip(["worst", "best", "median"], [min_idx, max_idx, median_idx])
+        else:
+            zipped = zip(["worst", "best", "median"], [max_idx, min_idx, median_idx])
+
+        for type, idx in zipped:
+            look_back_window, target = (
+                lightning_module.trainer.test_dataloaders.dataset[idx]
+            )
+            look_back_window = look_back_window.unsqueeze(0).to(lightning_module.device)
+            look_back_window_norm, mean, std = local_z_norm(
+                look_back_window, lightning_module.local_norm_channels
+            )
+            target = target.unsqueeze(0)
+            if lightning_module.has_probabilistic_forecast:
+                pred_mean, pred_std = lightning_module.model_forward(
+                    look_back_window_norm
+                )
+                pred_mean = pred_mean[:, :, : target.shape[-1]]
+                pred_denorm = local_z_denorm(
+                    pred_mean, lightning_module.local_norm_channels, mean, std
+                )
+                pred_std = pred_std[:, :, : target.shape[-1]] * std
+            else:
+                pred = lightning_module.model_forward(look_back_window_norm)[
+                    :, :, : target.shape[-1]
+                ]
+                pred_denorm = local_z_denorm(
+                    pred, lightning_module.local_norm_channels, mean, std
+                )
+                pred_std = None
+
+            assert pred_denorm.shape == target.shape
+
+            if hasattr(lightning_module.trainer.datamodule, "use_heart_rate"):
+                use_heart_rate = lightning_module.trainer.datamodule.use_heart_rate
+            else:
+                use_heart_rate = False
+
+            plot_prediction_wandb(
+                look_back_window,
+                target,
+                pred_denorm,
+                wandb_logger=lightning_module.logger,
+                metric_name=metric_name,
+                metric_value=v[idx],
+                type=type,
+                use_heart_rate=use_heart_rate,
+                freq=lightning_module.trainer.datamodule.freq,
+                dataset=lightning_module.trainer.datamodule.name,
+                pred_denorm_std=pred_std,
+            )
 
 
 if __name__ == "__main__":

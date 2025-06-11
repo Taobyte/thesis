@@ -1,3 +1,15 @@
+# ---------------------------------------------------------------
+# This file includes code (evaluation functionality) adapted from the Time-Series-Library:
+# https://github.com/thuml/Time-Series-Library
+#
+# Original license: MIT License
+# Copyright (c) THUML
+#
+# If you use this code, please consider citing the original repo:
+# https://github.com/thuml/Time-Series-Library
+# ---------------------------------------------------------------
+
+
 import torch
 import numpy as np
 
