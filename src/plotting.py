@@ -26,10 +26,8 @@ sns.set_theme(style="whitegrid")
 
 def plot_entire_series(
     logger: WandbLogger,
-    data: list[np.ndarray],
+    datamodule,
     metrics: dict,
-    look_back_window: int,
-    prediction_window: int,
 ) -> None:
     """
     Plots each entire time series along with corresponding per-step evaluation metrics
@@ -56,14 +54,27 @@ def plot_entire_series(
         prediction_window (int): The length of the prediction (output) window used by the model.
                                  This is used to calculate the total window length for alignment.
     """
+
+    data = datamodule.test_dataset.data
+    look_back_window = datamodule.look_back_window
+    prediction_window = datamodule.prediction_window
+    use_dynamic_features = datamodule.use_dynamic_features
+    target_channel_dim = datamodule.target_channel_dim
+
     required_keys = {"MSE", "MAE", "dir_acc_single"}
     assert required_keys.issubset(metrics.keys())
     n_metrics = 3  # only plot mse, mae and dir acc
-    subplot_titles = ["Ground Truth Time Series"] + [
+    series_title = (
+        ["Ground Truth Time Series", "Activity Info"]
+        if use_dynamic_features
+        else ["Ground Truth Time Series"]
+    )
+    subplot_titles = series_title + [
         name_to_title[metric_name] for metric_name in ["MSE", "MAE", "dir_acc_single"]
     ]
     colors = pcolors.qualitative.Plotly
-    row_heights = [0.7] + [0.3 / n_metrics for _ in range(n_metrics)]
+    series_heights = [0.35, 0.35] if use_dynamic_features else [0.7]
+    row_heights = series_heights + [0.3 / n_metrics for _ in range(n_metrics)]
 
     window_length = look_back_window + prediction_window
     lengths = [len(s) - window_length + 1 for s in data]
@@ -75,7 +86,7 @@ def plot_entire_series(
     for j in range(n_series):
         print(f"Plotting entire series {j + 1}")
         fig = make_subplots(
-            rows=1 + n_metrics,
+            rows=(2 if use_dynamic_features else 1) + n_metrics,
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.05,
@@ -83,19 +94,32 @@ def plot_entire_series(
             subplot_titles=subplot_titles,
         )
         series = data[j][:, 0]
+        activity = data[j][:, target_channel_dim]
         n = len(series)
         fig.add_trace(
             go.Scatter(
                 x=list(range(n)),
                 y=series,
                 mode="lines",
-                name="Actual Value",
+                name="Heartrate Value",
                 line=dict(color=colors[0]),
             ),
             row=1,
             col=1,
         )
-
+        if use_dynamic_features:
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(n)),
+                    y=activity,
+                    mode="lines",
+                    name="Activity Value",
+                    line=dict(color=colors[1]),
+                ),
+                row=2,
+                col=1,
+            )
+        offset = 1 if use_dynamic_features else 0
         for i, metric_name in enumerate(["MSE", "MAE", "dir_acc_single"]):
             mse_metric = np.array(
                 metrics[metric_name][cum_lengths[j] : cum_lengths[j + 1]]
@@ -112,10 +136,10 @@ def plot_entire_series(
                     x=list(range(n)),
                     y=mse_plot,
                     name=name_to_title[metric_name],
-                    marker_color=colors[i + 1],
+                    marker_color=colors[offset + i + 1],
                     opacity=1.0,
                 ),
-                row=i + 2,
+                row=offset + i + 2,
                 col=1,
             )
 

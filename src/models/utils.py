@@ -299,10 +299,8 @@ class BaseLightningModule(L.LightningModule):
             datamodule = self.trainer.datamodule
             plot_entire_series(
                 self.logger,
-                datamodule.test_dataset.data,
+                datamodule,
                 self.metric_full,
-                datamodule.look_back_window,
-                datamodule.prediction_window,
             )
 
             # plot best, worst and median prediction for each metric
