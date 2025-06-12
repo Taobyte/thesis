@@ -29,10 +29,6 @@ class ExactGPModel(gpytorch.models.ExactGP):
         pw_train_dataset = rearrange(pw_train_dataset, "B T C -> B (T C)")
         likelihood = MultitaskGaussianLikelihood(num_tasks=num_tasks)
 
-        import pdb
-
-        pdb.set_trace()
-
         super(ExactGPModel, self).__init__(
             lbw_train_dataset, pw_train_dataset, likelihood
         )

@@ -93,7 +93,7 @@ class WildPPGDataset(Dataset):
         self.base_channel_dim = 1
         self.use_heart_rate = use_heart_rate
         self.use_dynamic_features = use_dynamic_features
-        assert self.window <= 200  # window lengths of WildPPG is 200
+        assert self.window <= 200  # window lengths of WildPPG is at max 200
         if use_heart_rate:
             self.lengths = [(len(arr) - self.window + 1) for arr in self.arrays]
         else:

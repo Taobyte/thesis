@@ -1,0 +1,5 @@
+basedir: "/local/home/ckeusch"
+datadir:  "/local/home/data"
+llamadir: "/cluster/project/holz/ckeusch/llama_weights" 
+config_path: "/cluster/home/ckeusch/thesis/config"
+
