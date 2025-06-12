@@ -129,54 +129,26 @@ def get_usc_folds(datadir: str):
         print(f"test_participants:  {fold['test_participants']}")
 
 
-def get_wildppg_folds(datadir: str):
-    # IEEE has 12 participants, but no additional infos about these
-
-    all_participants = list(range(0, 16))  # Participants 0 to 15
-    np.random.seed(42)
+def get_folds(datadir: str, n_participants: int, train_size: int, test_size: int):
+    all_participants = list(range(n_participants))
+    np.random.seed(115)
     np.random.shuffle(all_participants)
 
-    folds = []
-    n_folds = 3
-    fold_size = len(all_participants) // n_folds
-
-    for i in range(n_folds):
-        test = all_participants[i * fold_size : (i + 1) * fold_size]
-        remaining = [p for p in all_participants if p not in test]
-        val = remaining[:2]  # Use 2 participants for validation
-        train = remaining[2:]
-        folds.append(
-            {
-                "fold": i,
-                "train_participants": sorted(train),
-                "val_participants": sorted(val),
-                "test_participants": sorted(test),
-            }
-        )
-
-    for fold in folds:
-        print(f"\nFOLD {fold['fold']}")
-        print(f"train_participants: {fold['train_participants']}")
-        print(f"val_participants:   {fold['val_participants']}")
-        print(f"test_participants:  {fold['test_participants']}")
-
-
-def get_ieee_folds(datadir: str):
-    # IEEE has 12 participants, but no additional infos about these
-
-    all_participants = list(range(1, 13))  # Participants 1 to 12
-    np.random.seed(42)
-    np.random.shuffle(all_participants)
+    test = all_participants[:test_size]
+    rest = all_participants[test_size:]
 
     folds = []
-    n_folds = 3
-    fold_size = len(all_participants) // n_folds
+    n_folds = 4
 
-    for i in range(n_folds):
-        test = all_participants[i * fold_size : (i + 1) * fold_size]
-        remaining = [p for p in all_participants if p not in test]
-        val = remaining[:2]  # Use 2 participants for validation
-        train = remaining[2:]
+    val_chunks = np.array_split(rest, n_folds)
+
+    for i in range(n_folds - 1):
+        val = [int(p) for p in list(val_chunks[i])]
+        train = [int(p) for j, chunk in enumerate(val_chunks) if j != i for p in chunk]
+
+        if len(train) > train_size:
+            train = train[:train_size]
+
         folds.append(
             {
                 "fold": i,
@@ -260,9 +232,9 @@ if __name__ == "__main__":
         get_dalia_folds(args.datadir)
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
     elif args.dataset == "wildppg":
-        get_wildppg_folds(args.datadir)
+        get_folds(args.datadir, 16, 9, 5)
     elif args.dataset == "ieee":
-        get_ieee_folds(args.datadir)
+        get_folds(args.datadir, 12, 6, 4)
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
     elif args.dataset == "ucihar":
         get_ucihar_folds(args.datadir)
