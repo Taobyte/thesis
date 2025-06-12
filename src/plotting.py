@@ -10,8 +10,6 @@ import seaborn as sns
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
-from src.models.utils import BaseLightningModule, local_z_norm, local_z_denorm
-
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
 name_to_title = {
@@ -254,7 +252,9 @@ def plot_prediction_wandb(
     plt.close(fig)
 
 
-def plot_max_min_median_predictions(lightning_module: BaseLightningModule) -> None:
+def plot_max_min_median_predictions(lightning_module) -> None:
+    from src.models.utils import local_z_norm, local_z_denorm
+
     # plot best, worst and median
     for metric_name, v in lightning_module.metric_full.items():
         sorted_indices = np.argsort(v)
