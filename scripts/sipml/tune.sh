@@ -13,16 +13,7 @@ echo $LBW
 echo $PW
 echo $SWEEPER_NAME
 
-torchrun --nproc_per_node=$GPUS \
-    main.py \
-    --multirun hydra/sweeper=$SWEEPER_NAME \
-    model=$MODEL \
-    dataset=$DATASET \
-    look_back_window=$LBW \
-    prediction_window=$PW \
-    overfit=False \
-    tune=True \ 
-    use_wandb=False 
+torchrun --nproc_per_node=$GPUS main.py --multirun hydra/sweeper=$SWEEPER_NAME model=$MODEL dataset=$DATASET look_back_window=$LBW prediction_window=$PW overfit=False tune=True use_wandb=False 
 
 
 
