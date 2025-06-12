@@ -13,6 +13,7 @@ export PYTHONPATH=$(pwd)/..
             for fold in {0,1,2}; do 
                 FOLD_STR="fold_${fold}"
                 torchrun --nproc_per_node=$GPUS main.py model=$model dataset=$DATASET look_back_window=$lbw prediction_window=$pw experiment=$FOLD_STR overfit=False use_wandb=True
+            done
         done 
     done
     echo "Finished training ${model}"
