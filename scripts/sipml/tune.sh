@@ -6,6 +6,11 @@ DATASET="$2"
 LBW="$3"
 PW="$4"
 
+echo $MODEL 
+echo $DATASET 
+echo $LBW 
+echo $PW
+
 torchrun --nproc_per_node=$GPUS \
     main.py \
     --multirun hydra/sweeper="$MODEL_sweeper" \
