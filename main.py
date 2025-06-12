@@ -67,7 +67,7 @@ def main(config: DictConfig) -> Optional[float]:
         )
         callbacks.append(checkpoint_callback)
 
-    multi_gpu_dict = {}
+    multi_gpu_dict = {"devices": 1, "num_nodes": 1}
     if config.use_multi_gpu:
         multi_gpu_dict = config.multi
 
