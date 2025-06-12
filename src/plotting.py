@@ -56,7 +56,8 @@ def plot_entire_series(
         prediction_window (int): The length of the prediction (output) window used by the model.
                                  This is used to calculate the total window length for alignment.
     """
-    assert ["MSE", "MAE", "dir_acc_single"] in metrics.keys()
+    required_keys = {"MSE", "MAE", "dir_acc_single"}
+    assert required_keys.issubset(metrics.keys())
     n_metrics = 3  # only plot mse, mae and dir acc
     subplot_titles = ["Ground Truth Time Series"] + [
         name_to_title[metric_name] for metric_name in ["MSE", "MAE", "dir_acc_single"]
