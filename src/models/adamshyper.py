@@ -11,7 +11,6 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.inits import glorot, zeros
 from torch_geometric.utils import degree, softmax
 from torch.nn import Linear
-from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.core.optimizer import LightningOptimizer
 
 from src.models.utils import BaseLightningModule
@@ -1408,4 +1407,4 @@ class AdaMSHyper(BaseLightningModule):
                 optimizer_2, strategy
             )
 
-        return optimizer_1, optimizer_2
+        return [optimizer_1, optimizer_2]
