@@ -107,7 +107,7 @@ def get_runs(
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
-    start_time: str = "2025-6-09",
+    start_time: str = "2025-6-12",
 ):
     group_names = []
     for lbw, pw, model in product(look_back_window, prediction_window, models):
@@ -139,6 +139,7 @@ def get_runs(
     print(f"Found {len(runs)} runs.")
 
     assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
+    assert len(runs) > 0, "No runs were found!"
     return runs
 
 
@@ -150,7 +151,7 @@ def add_model_mean_std_to_fig(
     std_dict: dict,
     fig: go.Figure,
     dataset: str,
-    row: int = None,
+    row_idx: int = None,
     ablation: bool = False,
 ):
     look_back_windows = sorted(list(mean_dict[model].keys()))
@@ -181,12 +182,13 @@ def add_model_mean_std_to_fig(
             upper = [m + s for m, s in zip(means, stds)]
             lower = [m - s for m, s in zip(means, stds)]
 
-            if row is None:
+            if row_idx is None:
                 row, col = divmod(i, 2)
                 row += 1
                 col += 1
             else:
                 col = i + 1  # plotly indexing starts at 1 not 0
+                row = row_idx
 
             color = model_color
             # Mean line
@@ -247,6 +249,7 @@ def dynamic_feature_ablation(
     use_heart_rate: bool,
     use_static_features: bool,
     start_time: str = "2025-6-09",
+    create_html: bool = False,
 ):
     n_models = len(models)
 
@@ -330,6 +333,7 @@ def visualize_look_back_window_difference(
     use_dynamic_features: bool,
     use_static_features: bool,
     start_time: str = "2025-6-05",
+    create_html: bool = False,
 ):
     runs = get_runs(
         dataset,
@@ -361,6 +365,7 @@ def visualize_look_back_window_difference(
             std_dict,
             fig,
             dataset,
+            ablation=False,
         )
 
     activity_string = "Activity" if use_dynamic_features else "No Activity"
@@ -376,6 +381,12 @@ def visualize_look_back_window_difference(
     fig.update_yaxes(title_text="Metric Value")
 
     fig.show()
+
+    if create_html:
+        import plotly.io as pio
+
+        plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join(look_back_window)}_{'_'.join(prediction_window)}"
+        pio.write_html(fig, file="/plots/viz/my_plot.html", auto_open=True)
 
 
 def visualize_metric_table(
@@ -594,6 +605,13 @@ if __name__ == "__main__":
         help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,elastst | Wrong Example: gpt4ts, timellm )",
     )
 
+    parser.add_argument(
+        "--save_html",
+        required=False,
+        action="store_true",
+        help="save html plot for sharing",
+    )
+
     args = parser.parse_args()
 
     if args.type == "table":
@@ -614,6 +632,7 @@ if __name__ == "__main__":
             args.use_heart_rate,
             args.use_dynamic_features,
             args.use_static_features,
+            args.save_html,
         )
     elif args.type == "activity_ablation":
         dynamic_feature_ablation(
