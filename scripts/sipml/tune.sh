@@ -1,16 +1,21 @@
 #!/bin/bash -l
 
 GPUS=1
+MODEL="$1"
+DATASET="$2"
+LBW="$3"
+PW="$4"
 
 torchrun --nproc_per_node=$GPUS \
     main.py \
-    --multirun hydra/sweeper="${1}_sweeper" \
-    model="${1}" \
-    dataset="${2}" \ 
-    look_back_window="${3}" \ 
-    prediction_window="${4}" \ 
+    --multirun hydra/sweeper="$MODEL_sweeper" \
+    model="$MODEL" \
+    dataset="$DATASET" \
+    look_back_window="$LBW" \
+    prediction_window="$PW" \
+    overfit=False \
     tune=True \ 
-    overfit=False 
+    use_wandb=False 
 
 
 
