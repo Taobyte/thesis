@@ -5,15 +5,17 @@ MODEL="$1"
 DATASET="$2"
 LBW="$3"
 PW="$4"
+SWEEPER_NAME="${MODEL}_sweeper"
 
 echo $MODEL 
 echo $DATASET 
 echo $LBW 
 echo $PW
+echo $SWEEPER_NAME
 
 torchrun --nproc_per_node=$GPUS \
     main.py \
-    --multirun hydra/sweeper="$MODEL"_sweeper \
+    --multirun hydra/sweeper=$SWEEPER_NAME \
     model=$MODEL \
     dataset=$DATASET \
     look_back_window=$LBW \
