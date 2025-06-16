@@ -12,51 +12,13 @@ from itertools import product
 from typing import Tuple
 
 from utils import create_group_run_name
-
-test_metrics = ["test_MSE", "test_MAE", "test_cross_correlation", "test_dir_acc_single"]
-
-model_colors = [
-    "blue",
-    "green",
-    "orange",
-    "red",
-    "purple",
-    "pink",
-    "brown",
-    "olive",
-    "cyan",
-    "magenta",
-    "lime",
-    "teal",
-    "navy",
-    "gold",
-    "gray",
-]
-
-metric_to_name = {
-    "test_MSE": "Mean Squared Error",
-    "test_MAE": "Mean Absolute Deviation",
-    "test_cross_correlation": "Cross Correlation",
-    "test_dir_acc_single": "Directional Accuracy",
-}
-
-model_to_name = {
-    "timesnet": "TimesNet",
-    "gpt4ts": "GPT4TS",
-    "adamshyper": "AdaMSHyper",
-    "timellm": "TimeLLM",
-    "pattn": "PAttn",
-    "simpletm": "SimpleTM",
-    "elastst": "ElasTST",
-    "gp": "Gaussian Process",
-    "bnn": "Bayesian Neural Network",
-    "kalmanfilter": "Kalman Filter",
-    "linear": "Linear Regression",
-    "hmm": "Hidden Markov Model",
-    "xgboost": "XGBoost",
-}
-
-datset_to_name = {"dalia": "DaLiA", "wildppg": "WildPPG", "ieee": "IEEE"}
+from src.constants import (
+    test_metrics,
+    model_colors,
+    metric_to_name,
+    model_to_name,
+    dataset_to_name,
+)
 
 
 def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -312,7 +274,7 @@ def dynamic_feature_ablation(
         )
 
     fig.update_layout(
-        title_text=f"Activity Ablation | Dataset {datset_to_name[dataset]} | Prediction Windows: {prediction_window}",
+        title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows: {prediction_window}",
         height=n_models * 400,
         width=1200,
         template="plotly_white",
@@ -333,7 +295,7 @@ def visualize_look_back_window_difference(
     use_dynamic_features: bool,
     use_static_features: bool,
     start_time: str = "2025-6-05",
-    create_html: bool = False,
+    save_html: bool = False,
 ):
     runs = get_runs(
         dataset,
@@ -371,7 +333,7 @@ def visualize_look_back_window_difference(
     activity_string = "Activity" if use_dynamic_features else "No Activity"
 
     fig.update_layout(
-        title_text=f"Dataset {datset_to_name[dataset]} | Prediction Window {prediction_window[0]} | {activity_string}",
+        title_text=f"Dataset {dataset_to_name[dataset]} | Prediction Window {prediction_window[0]} | {activity_string}",
         # height=600,
         # width=800,
         template="plotly_white",
@@ -382,11 +344,11 @@ def visualize_look_back_window_difference(
 
     fig.show()
 
-    if create_html:
+    if save_html:
         import plotly.io as pio
 
-        plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join(look_back_window)}_{'_'.join(prediction_window)}"
-        pio.write_html(fig, file="/plots/viz/my_plot.html", auto_open=True)
+        plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join([str(lbw) for lbw in look_back_window])}_{'_'.join([str(pw) for pw in prediction_window])}"
+        pio.write_html(fig, file=f"{plot_name}.html", auto_open=True)
 
 
 def visualize_metric_table(
@@ -515,7 +477,7 @@ def plot_tables(
         )
 
     fig.update_layout(
-        title_text=f"Model Performance Metrics for {datset_to_name[dataset]} \n"
+        title_text=f"Model Performance Metrics for {dataset_to_name[dataset]} \n"
         f"Lookback: {look_back_window}, Prediction: {prediction_window}, \n"
         f"HR: {use_heart_rate}, Dynamic Features: {use_dynamic_features}",
         title_x=0.5,
@@ -632,7 +594,7 @@ if __name__ == "__main__":
             args.use_heart_rate,
             args.use_dynamic_features,
             args.use_static_features,
-            args.save_html,
+            save_html=args.save_html,
         )
     elif args.type == "activity_ablation":
         dynamic_feature_ablation(

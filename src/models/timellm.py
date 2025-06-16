@@ -13,7 +13,7 @@ from transformers import (
     LlamaTokenizer,
     AutoModelForCausalLM,
     AutoTokenizer,
-    Qwen2Config
+    Qwen2Config,
 )
 
 from src.models.utils import BaseLightningModule
@@ -502,7 +502,7 @@ class Model(nn.Module):
             # load the tokenizer and the model
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.llm_model = AutoModelForCausalLM.from_pretrained(
-                model_name, torch_dtype="auto" 
+                model_name, torch_dtype="auto"
             )
 
         if self.tokenizer.eos_token:
@@ -556,7 +556,7 @@ class Model(nn.Module):
     def forward(self, x_enc):
         if self.llm_model_name == "qwen":
             x_enc = x_enc.to(torch.bfloat16)
-        # import pdb 
+        # import pdb
         # pdb.set_trace()
         x_enc = self.normalize_layers(x_enc, "norm")
 
@@ -583,14 +583,14 @@ class Model(nn.Module):
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
+                f"top {len(lags[b].tolist())} lags are : {lags_values_str}<|<end_prompt>|>"
             )
 
             prompt.append(prompt_)
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
 
-        #import pdb
+        # import pdb
 
         # pdb.set_trace()
 
@@ -623,8 +623,10 @@ class Model(nn.Module):
         if self.llm_model_name == "LLAMA":
             dec_out = self.llm_model(inputs_embeds=llama_enc_out)
             dec_out = dec_out.last_hidden_state
-        else: 
-            dec_out = self.llm_model(inputs_embeds=llama_enc_out, output_hidden_states=True)
+        else:
+            dec_out = self.llm_model(
+                inputs_embeds=llama_enc_out, output_hidden_states=True
+            )
             dec_out = dec_out.hidden_states[-1]
 
         dec_out = dec_out[:, :, : self.d_ff]
@@ -739,9 +741,18 @@ class TimeLLM(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss, _ = self._shared_step(look_back_window, prediction_window)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True,sync_dist=True)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, logger=True, sync_dist=True
+        )
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True,sync_dist=True)
+        self.log(
+            "current_lr",
+            current_lr,
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+            sync_dist=True,
+        )
         # here lightning calls OneCycleLR scheduler
         return loss
 
@@ -749,7 +760,9 @@ class TimeLLM(BaseLightningModule):
         loss, mae_loss = self._shared_step(look_back_window, prediction_window)
         if self.tune:
             loss = mae_loss
-        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True, sync_dist=True)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, logger=True, sync_dist=True
+        )
         return loss
 
     def on_train_epoch_end(self):

@@ -10,6 +10,10 @@ import seaborn as sns
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
+from src.constants import (
+    dataset_to_name,
+)
+
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
 name_to_title = {
@@ -54,12 +58,13 @@ def plot_entire_series(
         prediction_window (int): The length of the prediction (output) window used by the model.
                                  This is used to calculate the total window length for alignment.
     """
-
+    dataset = datamodule.name
     data = datamodule.test_dataset.data
     look_back_window = datamodule.look_back_window
     prediction_window = datamodule.prediction_window
     use_dynamic_features = datamodule.use_dynamic_features
     target_channel_dim = datamodule.target_channel_dim
+    use_heart_rate = datamodule.use_heart_rate
 
     required_keys = {"MSE", "MAE", "dir_acc_single"}
     assert required_keys.issubset(metrics.keys())
@@ -100,8 +105,8 @@ def plot_entire_series(
             go.Scatter(
                 x=list(range(n)),
                 y=series,
-                mode="lines",
-                name="Heartrate Value",
+                mode="lines" if not use_heart_rate else None,
+                name=f"{get_yaxis_name(dataset, use_heart_rate)} Value",
                 line=dict(color=colors[0]),
             ),
             row=1,
@@ -142,6 +147,13 @@ def plot_entire_series(
                 row=offset + i + 2,
                 col=1,
             )
+
+        heart_rate = "HR" if use_heart_rate else ""
+        activity_info = "Activity" if use_dynamic_features else ""
+        fig.update_layout(
+            title_text=f"{dataset_to_name[dataset]} {heart_rate} {activity_info} LBW={look_back_window} PW={prediction_window}",
+            title_x=0.5,  # centers the title
+        )
 
         logger.experiment.log(
             {f"entire_series/series_vs_metric_{j}": wandb.Html(pio.to_html(fig))}

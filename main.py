@@ -152,14 +152,11 @@ def main(config: DictConfig) -> Optional[float]:
                     devices=1,
                     num_nodes=1,
                     default_root_dir=config.path.basedir,
-                    callbacks=callbacks
+                    callbacks=callbacks,
                 )
             else:
                 test_trainer = trainer
             if test_trainer.is_global_zero:
-                print(50*"*")
-                print("this is the global zero process")
-                print(50*"*")
                 test_trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
         else:
             print("Best checkpoint not found, testing with current model.")

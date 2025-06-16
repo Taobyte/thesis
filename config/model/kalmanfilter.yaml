@@ -12,11 +12,11 @@ model:
 
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter
-  learning_rate: 0.001
+  learning_rate: 0.0005
   loss: "MSE"
 
 trainer:
-  max_epochs: 10
+  max_epochs: 30
   use_early_stopping: True
   patience: 2
 
