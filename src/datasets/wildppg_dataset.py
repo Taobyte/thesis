@@ -86,7 +86,7 @@ class WildPPGDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.arrays = wildppg_load_data(
+        self.data = wildppg_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
 
@@ -95,9 +95,9 @@ class WildPPGDataset(Dataset):
         self.use_dynamic_features = use_dynamic_features
         assert self.window <= 200  # window lengths of WildPPG is at max 200
         if use_heart_rate:
-            self.lengths = [(len(arr) - self.window + 1) for arr in self.arrays]
+            self.lengths = [(len(arr) - self.window + 1) for arr in self.data]
         else:
-            self.lengths = [len(arr) * (200 - self.window + 1) for arr in self.arrays]
+            self.lengths = [len(arr) * (200 - self.window + 1) for arr in self.data]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
 
@@ -108,12 +108,12 @@ class WildPPGDataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         if self.use_heart_rate:
             index = idx - self.cumulative_lengths[file_idx]
-            window = self.arrays[file_idx][index : (index + self.window)]
+            window = self.data[file_idx][index : (index + self.window)]
         else:
             participant_pos = idx - self.cumulative_lengths[file_idx]
             row_index = participant_pos // (200 - self.window + 1)
             window_pos = participant_pos % (200 - self.window + 1)
-            window = self.arrays[file_idx][row_index][
+            window = self.data[file_idx][row_index][
                 window_pos : window_pos + self.window
             ]
 

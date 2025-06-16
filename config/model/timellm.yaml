@@ -20,14 +20,14 @@ model:
 
 pl_model:
   _target_: src.models.timellm.TimeLLM
-  learning_rate: 0.01
+  learning_rate: 0.001
   lradj: "COS" # either "COS": CosineAnnealingLR Scheduler or "TST": OneCycleLR Scheduler
   pct_start: 0.2
 
 trainer:
   use_early_stopping: True
   patience: 3
-  max_epochs: 1
+  max_epochs: 5
 
 data:
   batch_size: 32 # needs to be small for ucihar 16 did not work

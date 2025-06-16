@@ -144,19 +144,23 @@ def main(config: DictConfig) -> Optional[float]:
 
         print("Start Evaluation.")
         if config.model.name not in config.special_models:
-            if config.use_multi_gpu and trainer.is_global_zero:
-                trainer = L.Trainer(
+            if config.use_multi_gpu:
+                print("Testing on single GPU to avoid DistributedSampler replication.")
+                test_trainer = L.Trainer(
                     logger=wandb_logger,
-                    enable_progress_bar=True,
-                    enable_model_summary=False,
+                    accelerator="gpu",
+                    devices=1,
+                    num_nodes=1,
                     default_root_dir=config.path.basedir,
-                    num_sanity_val_steps=0,
-                    callbacks=callbacks,
+                    callbacks=callbacks
                 )
-
-                trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
-            elif not config.use_multi_gpu:
-                trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
+            else:
+                test_trainer = trainer
+            if test_trainer.is_global_zero:
+                print(50*"*")
+                print("this is the global zero process")
+                print(50*"*")
+                test_trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
         else:
             print("Best checkpoint not found, testing with current model.")
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
