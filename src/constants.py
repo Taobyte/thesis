@@ -28,6 +28,15 @@ metric_to_name = {
     "test_dir_acc_single": "Directional Accuracy",
 }
 
+name_to_title = {
+    "MSE": "MSE",
+    "MAE": "MAE",
+    "cross_correlation": "Pearson Correlation",
+    "dir_acc_full": "Dir Acc Full",
+    "dir_acc_single": "Dir Acc Single",
+    "sMAPE": "sMAPE",
+}
+
 # Human-readable names for models
 model_to_name = {
     "timesnet": "TimesNet",

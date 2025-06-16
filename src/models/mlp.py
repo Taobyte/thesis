@@ -16,6 +16,7 @@ class Model(torch.nn.Module):
         hid_dim: int = 10,
         n_hid_layers: int = 2,
         activation: str = "relu",
+        dropout: float = 0.0,
     ):
         super().__init__()
 
@@ -26,24 +27,30 @@ class Model(torch.nn.Module):
         elif activation == "none":
             self.activation = torch.nn.Identity()
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"Unknown activation: {activation}")
 
         self.base_channel_dim = base_channel_dim
-
         in_dim = look_back_window * input_channels
         out_dim = prediction_window * base_channel_dim
 
-        self.layer_sizes = [in_dim] + n_hid_layers * [hid_dim] + [out_dim]
-        self.layers = torch.nn.Sequential(
-            *[
-                torch.nn.Linear(self.layer_sizes[i - 1], self.layer_sizes[i])
-                for i in range(1, len(self.layer_sizes))
-            ]
-        )
+        self.layers = torch.nn.ModuleList()
+        prev_dim = in_dim
+
+        for _ in range(n_hid_layers):
+            self.layers.append(torch.nn.Linear(prev_dim, hid_dim))
+            self.layers.append(torch.nn.BatchNorm1d(hid_dim))
+            self.layers.append(self.activation)
+            self.layers.append(torch.nn.Dropout(dropout))
+            prev_dim = hid_dim
+
+        # Final layer without BatchNorm or Activation
+        self.layers.append(torch.nn.Linear(prev_dim, out_dim))
+
+        self.network = torch.nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor):
         x = rearrange(x, "B T C -> B (T C)")
-        pred = self.layers(x)
+        pred = self.network(x)
         pred = rearrange(pred, "B (T C) -> B T C", C=self.base_channel_dim)
         return pred
 

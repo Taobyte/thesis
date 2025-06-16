@@ -10,6 +10,7 @@ from pyro.infer.autoguide import AutoDiagonalNormal, AutoMultivariateNormal
 from einops import rearrange
 
 from src.models.utils import BaseLightningModule
+from src.losses import get_loss_fn
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -146,3 +147,50 @@ class BayesianNeuralNetwork(BaseLightningModule):
 
     def configure_optimizers(self):
         return None
+
+
+class DropoutBNN(BaseLightningModule):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        learning_rate: float = 0.001,
+        loss: str = "MSE",
+        num_samples: int = 50,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.model = model
+        self.learning_rate = learning_rate
+        self.criterion = get_loss_fn(loss)
+        self.num_samples = num_samples
+
+    def enable_dropout(self):
+        for m in self.model.modules():
+            if isinstance(m, torch.nn.Dropout):
+                m.train()
+
+    def model_forward(self, look_back_window):
+        self.model.eval()
+        self.enable_dropout()
+        predictions = torch.stack(
+            [self.model(look_back_window) for _ in range(self.num_samples)]
+        )
+        mean_preds = predictions.mean(dim=0)
+        std_preds = predictions.std(dim=0)
+        return mean_preds, std_preds
+
+    def model_specific_train_step(self, look_back_window, prediction_window):
+        preds = self.model(look_back_window)
+        loss = self.criterion(preds, prediction_window)
+        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
+        return loss
+
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        preds = self.model(look_back_window)
+        loss = self.criterion(preds, prediction_window)
+        self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        return optimizer

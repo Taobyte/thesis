@@ -72,6 +72,8 @@ class XGBoost(BaseLightningModule):
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         look_back_window = look_back_window.detach().cpu().numpy()
         preds = self.model.predict(look_back_window)
+        if preds.ndim == 1:
+            preds = preds[:, np.newaxis]
         preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         # we need to have a pytorch tensor for evaluation
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)

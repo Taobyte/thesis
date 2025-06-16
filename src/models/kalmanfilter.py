@@ -138,7 +138,6 @@ class KalmanFilter(BaseLightningModule):
 
         # look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         preds = self.model(look_back_window)
-        # preds = rearrange(preds, "B (T C) -> B T C", C=self.model.input_channels)
 
         return preds[:, :, : self.model.target_channel_dim]
 

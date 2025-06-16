@@ -176,12 +176,7 @@ class BaseLightningModule(L.LightningModule):
         Indicates whether the model provides probabilistic forecasts (mean and std).
         This property should be overridden in subclasses for probabilistic models.
         """
-        return self.name in [
-            "gp",
-            "dklgp",
-            "exactgp",
-            "bnn",
-        ]
+        return self.name in ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"]
 
     def model_forward(
         self, look_back_window: torch.Tensor
