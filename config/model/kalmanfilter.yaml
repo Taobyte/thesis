@@ -8,7 +8,9 @@ model:
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
   hidden_dim: 32
   use_dynamic_features: ${use_dynamic_features}
+  use_static_features: ${use_static_features}
   dynamic_exogenous_variables: ${dataset.datamodule.dynamic_exogenous_variables}
+  static_exogenous_variables: ${dataset.datamodule.static_exogenous_variables}
 
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter

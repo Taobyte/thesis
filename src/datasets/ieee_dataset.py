@@ -129,7 +129,6 @@ class IEEEDataModule(BaseDataModule):
         dynamic_exogenous_variables: int = 1,
         static_exogenous_variables: int = 0,
         look_back_channel_dim: int = 1,
-        shuffle: bool = True,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -145,7 +144,6 @@ class IEEEDataModule(BaseDataModule):
             dynamic_exogenous_variables=dynamic_exogenous_variables,
             static_exogenous_variables=static_exogenous_variables,
             look_back_channel_dim=look_back_channel_dim,
-            shuffle=shuffle,
         )
 
         self.use_heart_rate = use_heart_rate

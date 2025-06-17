@@ -10,6 +10,8 @@ model:
   reg_lambda: 5.0 # 1.1942150027444449e-05
   subsample: 0.8 # 0.6921657132206152
   colsample_bytree: 0.8473304514929147
+  use_early_stopping: ${model.trainer.use_early_stopping}
+  patience: ${model.trainer.patience}
 
 pl_model:
   _target_: src.models.xgboost.XGBoost
@@ -19,6 +21,7 @@ pl_model:
 trainer:
   max_epochs: 1 # we don't train here, because we use the flattened dataset at once and don't use batched training
   use_early_stopping: False
+  patience: 2
 
 data:
   batch_size: 256

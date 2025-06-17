@@ -2,8 +2,10 @@ defaults:
  -  shared_sweeper
 
 params:
+  model.trainer.use_early_stopping: False 
+
+  model.model.n_estimators: int(interval(50, 1000))
   model.model.learning_rate: interval(1e-4, 2.0) # tag(log, interval(1e-4, 2.0))
-  model.model.n_estimators: 500 # int(interval(50, 1000))
   model.model.max_depth: int(interval(2,12)) 
   model.model.reg_alpha: interval(1e-5, 10.0) # tag(log, interval(1e-5, 10.0))
   model.model.reg_lambda: interval(1e-5, 10.0) # tag(log, interval(1e-5, 10.0))

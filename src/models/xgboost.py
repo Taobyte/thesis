@@ -25,6 +25,8 @@ class XGBoostModel(torch.nn.Module):
         reg_lambda: int = 1,
         subsample: float = 0.8,
         colsample_bytree: float = 0.8,
+        use_early_stopping: bool = False,
+        patience: int = 2,
     ):
         super().__init__()
 
@@ -33,13 +35,16 @@ class XGBoostModel(torch.nn.Module):
         self.lbw_val_dataset = lbw_val_dataset
         self.pw_val_dataset = pw_val_dataset
 
-        early_stop = xgb.callback.EarlyStopping(
-            rounds=2,
-            metric_name="rmse",
-            data_name="validation_0",
-            save_best=True,
-            maximize=False,
-        )
+        callbacks = []
+        if use_early_stopping:
+            early_stop = xgb.callback.EarlyStopping(
+                rounds=patience,
+                metric_name="rmse",
+                data_name="validation_0",
+                save_best=True,
+                maximize=False,
+            )
+            callbacks.append(early_stop)
 
         self.model = XGBRegressor(
             objective=objective,
@@ -53,7 +58,7 @@ class XGBoostModel(torch.nn.Module):
             colsample_bytree=colsample_bytree,
             # tree_method="gpu_hist",
             # predictor="gpu_predictor",
-            callbacks=[early_stop],
+            callbacks=callbacks,
         )
 
 

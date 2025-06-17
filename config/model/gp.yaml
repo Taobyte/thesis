@@ -1,5 +1,5 @@
 name: "gp"
-n_points: 2000 # number of inducing points
+n_points: 500 # 2000 # number of inducing points
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
@@ -20,4 +20,4 @@ trainer:
   patience: 2
 
 data: 
-  batch_size: 256
+  batch_size: 32 # 256

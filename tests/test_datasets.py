@@ -3,7 +3,18 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
+from src.utils import (
+    compute_square_window,
+    compute_input_channel_dims,
+    get_optuna_name,
+)
+
+OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
+OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
+OmegaConf.register_new_resolver(
+    "compute_input_channel_dims", compute_input_channel_dims
+)
 
 
 dataset_params = {

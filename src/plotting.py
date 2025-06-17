@@ -32,6 +32,9 @@ def plot_entire_series(
     logger: WandbLogger,
     datamodule,
     metrics: dict,
+    plot_metrics: bool = True,
+    data_type: str = "test",
+    show_fig: bool = False,
 ) -> None:
     """
     Plots each entire time series along with corresponding per-step evaluation metrics
@@ -59,39 +62,62 @@ def plot_entire_series(
                                  This is used to calculate the total window length for alignment.
     """
     dataset = datamodule.name
-    data = datamodule.test_dataset.data
+    if data_type == "test":
+        data = datamodule.test_dataset.data
+    elif data_type == "train":
+        data = datamodule.train_dataset.data
+    elif data_type == "val":
+        data = datamodule.val_dataset.data
+    else:
+        raise NotImplementedError()
+
     look_back_window = datamodule.look_back_window
     prediction_window = datamodule.prediction_window
     use_dynamic_features = datamodule.use_dynamic_features
     target_channel_dim = datamodule.target_channel_dim
     use_heart_rate = datamodule.use_heart_rate
-
-    required_keys = {"MSE", "MAE", "dir_acc_single"}
-    assert required_keys.issubset(metrics.keys())
-    n_metrics = 3  # only plot mse, mae and dir acc
+    if plot_metrics:
+        required_keys = {"MSE", "MAE", "dir_acc_single"}
+        assert required_keys.issubset(metrics.keys())
+        n_metrics = len(required_keys)  # only plot mse, mae and dir acc
     series_title = (
         ["Ground Truth Time Series", "Activity Info"]
         if use_dynamic_features
         else ["Ground Truth Time Series"]
     )
-    subplot_titles = series_title + [
-        name_to_title[metric_name] for metric_name in ["MSE", "MAE", "dir_acc_single"]
-    ]
+    subplot_titles = series_title
+    if plot_metrics:
+        subplot_titles += [
+            name_to_title[metric_name]
+            for metric_name in ["MSE", "MAE", "dir_acc_single"]
+        ]
+
     colors = pcolors.qualitative.Plotly
-    series_heights = [0.35, 0.35] if use_dynamic_features else [0.7]
-    row_heights = series_heights + [0.3 / n_metrics for _ in range(n_metrics)]
+    if plot_metrics:
+        series_heights = [0.35, 0.35] if use_dynamic_features else [0.7]
+        row_heights = series_heights + [0.3 / n_metrics for _ in range(n_metrics)]
+    else:
+        series_heights = [0.5, 0.5] if use_dynamic_features else [1.0]
+        row_heights = series_heights
 
     window_length = look_back_window + prediction_window
     lengths = [len(s) - window_length + 1 for s in data]
     cum_lengths = np.cumsum([0] + lengths)
 
-    assert cum_lengths[-1] == len(metrics["MSE"])
+    if plot_metrics:
+        assert cum_lengths[-1] == len(metrics["MSE"])
 
+    if len(data) >= 10:
+        print("We have a lot of timeseries. Only plot the first 10.")
+        data = data[:10]
     n_series = len(data)
     for j in range(n_series):
         print(f"Plotting entire series {j + 1}")
+        n_rows = 2 if use_dynamic_features else 1
+        if plot_metrics:
+            n_rows += n_metrics
         fig = make_subplots(
-            rows=(2 if use_dynamic_features else 1) + n_metrics,
+            rows=n_rows,
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.05,
@@ -124,29 +150,30 @@ def plot_entire_series(
                 row=2,
                 col=1,
             )
-        offset = 1 if use_dynamic_features else 0
-        for i, metric_name in enumerate(["MSE", "MAE", "dir_acc_single"]):
-            mse_metric = np.array(
-                metrics[metric_name][cum_lengths[j] : cum_lengths[j + 1]]
-            )
+        if plot_metrics:
+            offset = 1 if use_dynamic_features else 0
+            for i, metric_name in enumerate(["MSE", "MAE", "dir_acc_single"]):
+                mse_metric = np.array(
+                    metrics[metric_name][cum_lengths[j] : cum_lengths[j + 1]]
+                )
 
-            mse_plot = np.zeros(n)
-            assert len(mse_metric) < len(mse_plot)
-            mse_plot[look_back_window - 1 : look_back_window - 1 + len(mse_metric)] = (
-                mse_metric
-            )
+                mse_plot = np.zeros(n)
+                assert len(mse_metric) < len(mse_plot)
+                mse_plot[
+                    look_back_window - 1 : look_back_window - 1 + len(mse_metric)
+                ] = mse_metric
 
-            fig.add_trace(
-                go.Bar(
-                    x=list(range(n)),
-                    y=mse_plot,
-                    name=name_to_title[metric_name],
-                    marker_color=colors[offset + i + 1],
-                    opacity=1.0,
-                ),
-                row=offset + i + 2,
-                col=1,
-            )
+                fig.add_trace(
+                    go.Bar(
+                        x=list(range(n)),
+                        y=mse_plot,
+                        name=name_to_title[metric_name],
+                        marker_color=colors[offset + i + 1],
+                        opacity=1.0,
+                    ),
+                    row=offset + i + 2,
+                    col=1,
+                )
 
         heart_rate = "HR" if use_heart_rate else ""
         activity_info = "Activity" if use_dynamic_features else ""
@@ -155,9 +182,12 @@ def plot_entire_series(
             title_x=0.5,  # centers the title
         )
 
-        logger.experiment.log(
-            {f"entire_series/series_vs_metric_{j}": wandb.Html(pio.to_html(fig))}
-        )
+        if show_fig:
+            fig.show()
+        else:
+            logger.experiment.log(
+                {f"entire_series/series_vs_metric_{j}": wandb.Html(pio.to_html(fig))}
+            )
 
 
 def plot_metric_histograms(logger: WandbLogger, metric_full: dict[str]) -> None:
@@ -234,9 +264,14 @@ def plot_prediction_wandb(
     target = np.concatenate((last_look_back, target))
     prediction = np.concatenate((last_look_back, prediction))
 
-    if use_heart_rate:
+    if use_heart_rate and dataset not in ["mhc6mwt"]:
+        # dalia, wildppg and ieee use a sliding window with stride 2 seconds for the HR
         t_lookback = np.arange(-(len(look_back_window) - 1), 1) * 2
         t_future = np.arange(0, len(target)) * 2
+    elif use_heart_rate and dataset in ["mhc6mwt"]:
+        # the mhc6mwt dataset has frequency 1 for the heartrate values
+        t_lookback = np.arange(np.arange(-(len(look_back_window) - 1), 1))
+        t_future = np.arange(0, len(target))
     else:
         t_lookback = np.linspace(
             -len(look_back_window) / freq, 0, len(look_back_window)
@@ -359,17 +394,30 @@ def plot_max_min_median_predictions(lightning_module) -> None:
 
 
 if __name__ == "__main__":
-    # test plotting functionality
-    x = torch.randn((1, 96, 2)).abs() + 100
-    y = torch.randn((1, 32, 2)).abs() + 100
-    preds = torch.randn((1, 32, 2)).abs() + 100
-
-    metrics = {
-        "cross_correlation": [0.1, 0.7, 0.3],
-        "MSE": [0.9, 3.3, 11],
-        "abs_target_mean": [0.3, 2, 0.87],
-    }
-
-    plot_prediction_wandb(
-        x, y, preds, None, "MSE", 0.1, "best", True, freq=32, dataset="ucihar"
+    from hydra import initialize, compose
+    from hydra.utils import instantiate
+    from omegaconf import OmegaConf
+    from src.utils import (
+        compute_square_window,
+        compute_input_channel_dims,
+        get_optuna_name,
     )
+
+    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
+    OmegaConf.register_new_resolver("eval", eval)
+    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
+    OmegaConf.register_new_resolver(
+        "compute_input_channel_dims", compute_input_channel_dims
+    )
+
+    with initialize(version_base=None, config_path="../config/"):
+        cfg = compose(
+            config_name="config", overrides=["dataset=mhc6mwt", "experiment=fold_0"]
+        )
+
+    datamodule = instantiate(cfg.dataset.datamodule)
+
+    datamodule.setup("fit")
+    datamodule.setup("test")
+
+    plot_entire_series(None, datamodule, None, False, data_type="val", show_fig=True)

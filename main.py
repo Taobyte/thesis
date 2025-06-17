@@ -18,7 +18,6 @@ from src.utils import (
     get_optuna_name,
 )
 from src.models.utils import get_model_kwargs
-from src.datasets.utils import get_datamodule_kwargs
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
@@ -34,13 +33,7 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    datamodule_kwargs = get_datamodule_kwargs(config)
-    datamodule = instantiate(config.dataset.datamodule, **datamodule_kwargs)
-    if config.model.name == "exactgp":
-        datamodule.batch_size = (
-            datamodule.get_train_dataset_length()
-        )  # ensures that we train with all data at once
-
+    datamodule = instantiate(config.dataset.datamodule)
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(

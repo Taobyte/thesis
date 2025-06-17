@@ -59,4 +59,5 @@ dataset_to_name = {
     "dalia": "DaLiA",
     "wildppg": "WildPPG",
     "ieee": "IEEE",
+    "mhc6mwt": "My Heart Counts Six-Minute Walk Test",
 }

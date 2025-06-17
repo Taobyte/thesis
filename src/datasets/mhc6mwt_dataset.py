@@ -56,8 +56,17 @@ class MHC6MWTDataset(Dataset):
         self.target_channel_dim = target_channel_dim
         self.look_back_channel_dim = look_back_channel_dim
 
-        self.data = timeseries
-        self.static_features = static_features
+        # filter out all series that are not long enough
+        self.static_features = [
+            static_features
+            for i in range(len(static_features))
+            if len(timeseries[i]) >= self.window
+        ]
+        self.data = [
+            timeseries[i]
+            for i in range(len(timeseries))
+            if len(timeseries[i]) >= self.window
+        ]
 
         self.lengths = [
             len(self.data[i]) - self.window + 1 for i in range(len(self.data))
@@ -77,7 +86,7 @@ class MHC6MWTDataset(Dataset):
         pos_idx = idx - self.cumulative_lengths[participant_idx]
 
         window = self.data[participant_idx][pos_idx : pos_idx + self.window, :]
-
+        """
         if self.use_static_features:
             repeated = np.repeat(
                 self.static_features[participant_idx][np.newaxis, :],
@@ -85,6 +94,7 @@ class MHC6MWTDataset(Dataset):
                 axis=0,
             )
             window = np.concatenate((window, repeated), axis=1)
+        """
 
         look_back_window = torch.tensor(
             window[: self.look_back_window, : self.look_back_channel_dim]
@@ -113,6 +123,7 @@ class MHC6MWTDataModule(BaseDataModule):
         static_exogenous_variables: int = 0,
         look_back_channel_dim: int = 1,
         random_state: int = 42,
+        use_heart_rate: bool = True,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -130,8 +141,12 @@ class MHC6MWTDataModule(BaseDataModule):
             look_back_channel_dim=look_back_channel_dim,
         )
 
+        self.use_heart_rate = use_heart_rate
+
         with open(data_dir + "mhc6mwt.pkl", "rb") as f:
             data = pickle.load(f)
+
+        # mean, scale  = data["z_norm"]
 
         ids = list(data.keys())
         summary = pd.read_parquet(data_dir + "summary_table.parquet")

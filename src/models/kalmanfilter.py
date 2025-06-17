@@ -13,7 +13,9 @@ class Model(torch.nn.Module):
         target_channel_dim: int = 1,
         look_back_channel_dim: int = 1,
         use_dynamic_features: bool = False,
+        use_static_features: bool = False,
         dynamic_exogenous_variables: int = 1,
+        static_exogenous_variables: int = 0,
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -23,10 +25,24 @@ class Model(torch.nn.Module):
         self.target_channel_dim = target_channel_dim
         self.look_back_channel_dim = look_back_channel_dim
         self.use_dynamic_features = use_dynamic_features
+        self.use_static_features = use_static_features
         self.dynamic_exogenous_variables = dynamic_exogenous_variables
+        self.static_exogenous_variables = static_exogenous_variables
+
+        self.base_dim = (
+            hidden_dim  # latent space dimension without adding in additional info
+        )
 
         if use_dynamic_features:
             hidden_dim += dynamic_exogenous_variables
+
+        if use_static_features:
+            hidden_dim += static_exogenous_variables
+            self.static_start = (
+                self.base_dim
+                if not use_dynamic_features
+                else self.base_dim + dynamic_exogenous_variables
+            )
 
         # learnable transition matrices from motion model
         self.F = torch.nn.ModuleList(
@@ -69,11 +85,26 @@ class Model(torch.nn.Module):
         for t in range(self.look_back_window):
             # add dynamic features to hidden state
             if self.use_dynamic_features:
-                hidden_state[:, -self.dynamic_exogenous_variables :] = observation[
+                hidden_state[
+                    :,
+                    self.base_dim : self.base_dim + self.dynamic_exogenous_variables,
+                ] = observation[
                     :,
                     t,
                     self.target_channel_dim : self.target_channel_dim
                     + self.dynamic_exogenous_variables,
+                ]
+
+            if self.use_static_features:
+                start = self.target_channel_dim + self.dynamic_exogenous_variables
+                hidden_state[
+                    :,
+                    self.static_start : self.static_start
+                    + self.static_exogenous_variables,
+                ] = observation[
+                    :,
+                    t,
+                    start : start + self.static_exogenous_variables,
                 ]
 
             F_t = self.F[t]

@@ -38,6 +38,7 @@ wandb:
 
 # tuner flag
 tune: False
+n_trials: 50
 
 # multi gpu settings
 use_multi_gpu: False
