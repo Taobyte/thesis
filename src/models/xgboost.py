@@ -33,6 +33,14 @@ class XGBoostModel(torch.nn.Module):
         self.lbw_val_dataset = lbw_val_dataset
         self.pw_val_dataset = pw_val_dataset
 
+        early_stop = xgb.callback.EarlyStopping(
+            rounds=2,
+            metric_name="rmse",
+            data_name="validation_0",
+            save_best=True,
+            maximize=False,
+        )
+
         self.model = XGBRegressor(
             objective=objective,
             n_estimators=n_estimators,
@@ -45,6 +53,7 @@ class XGBoostModel(torch.nn.Module):
             colsample_bytree=colsample_bytree,
             # tree_method="gpu_hist",
             # predictor="gpu_predictor",
+            callbacks=[early_stop],
         )
 
 
@@ -133,8 +142,7 @@ class XGBoost(BaseLightningModule):
             self.X_train,
             self.y_train,
             eval_set=[(self.X_val, self.y_val)],
-            # early_stopping_rounds=10, TODO: does not work for some reason
-            verbose=False,
+            verbose=True,
         )
         # we need this for the optuna tuner
         preds = self.model.predict(self.X_val)

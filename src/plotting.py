@@ -292,16 +292,22 @@ def plot_prediction_wandb(
 def plot_max_min_median_predictions(lightning_module) -> None:
     from src.models.utils import local_z_norm, local_z_denorm
 
+    metrics_to_plot = ["MSE", "MAE", "cross_correlation"]
+
     # plot best, worst and median
-    for metric_name, v in lightning_module.metric_full.items():
+    for metric_name in metrics_to_plot:
+        v = lightning_module.metric_full[metric_name]
+
         sorted_indices = np.argsort(v)
         min_idx = sorted_indices[0]
         max_idx = sorted_indices[-1]
         median_idx = sorted_indices[len(v) // 2]
-        if metric_name == "cross_correlation":
-            zipped = zip(["worst", "best", "median"], [min_idx, max_idx, median_idx])
+        if metric_name in ["cross_correlation"]:
+            order = [min_idx, max_idx, median_idx]
         else:
-            zipped = zip(["worst", "best", "median"], [max_idx, min_idx, median_idx])
+            order = [max_idx, min_idx, median_idx]
+
+        zipped = zip(["worst", "best", "median"], order)
 
         for type, idx in zipped:
             look_back_window, target = (
