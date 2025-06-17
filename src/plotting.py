@@ -254,6 +254,10 @@ def plot_prediction_wandb(
     target = y.cpu().detach().numpy()[0, :, 0]
     prediction = preds.cpu().detach().numpy()[0, :, 0]
 
+    import pdb
+
+    pdb.set_trace()
+
     yaxis_name = get_yaxis_name(dataset, use_heart_rate)
 
     assert look_back_window.ndim == 1, f"look_back_window: {look_back_window.shape}"
@@ -270,7 +274,7 @@ def plot_prediction_wandb(
         t_future = np.arange(0, len(target)) * 2
     elif use_heart_rate and dataset in ["mhc6mwt"]:
         # the mhc6mwt dataset has frequency 1 for the heartrate values
-        t_lookback = np.arange(np.arange(-(len(look_back_window) - 1), 1))
+        t_lookback = np.arange(-(len(look_back_window) - 1), 1)
         t_future = np.arange(0, len(target))
     else:
         t_lookback = np.linspace(
