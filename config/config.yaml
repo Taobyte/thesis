@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - model: timesnet
-  - dataset: dalia
-  - path: local
+  - dataset: ieee
+  - path: cluster
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
@@ -39,7 +39,7 @@ wandb:
 # tuner flag
 tune: False
 n_trials: 50
-
+  
 # multi gpu settings
 use_multi_gpu: False
 multi:
