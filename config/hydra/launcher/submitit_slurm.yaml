@@ -9,3 +9,7 @@ name: ${hydra.job.name}
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
 setup:
   - module load eth_proxy
+srun_args:
+  - "--gres=gpumem:24g"
+additional_parameters:
+  gres: "gpumem:24g"
