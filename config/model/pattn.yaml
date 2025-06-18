@@ -14,7 +14,7 @@ pl_model:
   tmax: 10
 
 trainer: 
-  max_epochs: 10
+  max_epochs: 50
   use_early_stopping: True
   patience: 5 
 

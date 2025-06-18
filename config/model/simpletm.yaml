@@ -25,7 +25,7 @@ pl_model:
   lradj: 'type1'
 
 trainer: 
-  max_epochs: 10
+  max_epochs: 50
   use_early_stopping: True
   patience: 5
   pct_start: 0.2

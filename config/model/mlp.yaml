@@ -16,8 +16,9 @@ pl_model:
   loss: "MSE"
 
 trainer:
-  max_epochs: 5
-  use_early_stopping: False 
+  max_epochs: 50
+  use_early_stopping: True
+  patience: 2
 
 data:
   batch_size: 32

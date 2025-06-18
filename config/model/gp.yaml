@@ -15,8 +15,8 @@ pl_model:
   learning_rate: 0.0011634474722097472
 
 trainer:
+  max_epochs: 50
   use_early_stopping: True
-  max_epochs: 10
   patience: 2
 
 data: 

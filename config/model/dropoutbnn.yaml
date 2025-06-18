@@ -18,7 +18,7 @@ pl_model:
   num_samples: 50
 
 trainer:
-  max_epochs: 10
+  max_epochs: 50
   use_early_stopping: False 
 
 data:

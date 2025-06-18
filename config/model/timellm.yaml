@@ -25,9 +25,9 @@ pl_model:
   pct_start: 0.2
 
 trainer:
+  max_epochs: 50
   use_early_stopping: True
   patience: 3
-  max_epochs: 5
 
 data:
   batch_size: 32 # needs to be small for ucihar 16 did not work
