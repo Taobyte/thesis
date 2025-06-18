@@ -10,6 +10,12 @@ import seaborn as sns
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
+from src.normalization import (
+    local_z_norm,
+    local_z_denorm,
+    global_z_norm,
+    global_z_denorm,
+)
 from src.constants import (
     dataset_to_name,
 )
@@ -254,10 +260,6 @@ def plot_prediction_wandb(
     target = y.cpu().detach().numpy()[0, :, 0]
     prediction = preds.cpu().detach().numpy()[0, :, 0]
 
-    import pdb
-
-    pdb.set_trace()
-
     yaxis_name = get_yaxis_name(dataset, use_heart_rate)
 
     assert look_back_window.ndim == 1, f"look_back_window: {look_back_window.shape}"
@@ -329,7 +331,10 @@ def plot_prediction_wandb(
 
 
 def plot_max_min_median_predictions(lightning_module) -> None:
-    from src.models.utils import local_z_norm, local_z_denorm
+    normalization = lightning_module.normalization
+    local_norm_channels = lightning_module.local_norm_channels
+
+    test_dataset = lightning_module.trainer.datamodule.test_dataset
 
     metrics_to_plot = ["MSE", "MAE", "cross_correlation"]
 
@@ -346,36 +351,51 @@ def plot_max_min_median_predictions(lightning_module) -> None:
         else:
             order = [max_idx, min_idx, median_idx]
 
-        zipped = zip(["worst", "best", "median"], order)
-
-        for type, idx in zipped:
-            look_back_window, target = (
-                lightning_module.trainer.test_dataloaders.dataset[idx]
-            )
+        for type, idx in zip(["worst", "best", "median"], order):
+            look_back_window, target = test_dataset[idx]
             look_back_window = look_back_window.unsqueeze(0).to(lightning_module.device)
-            look_back_window_norm, mean, std = local_z_norm(
-                look_back_window, lightning_module.local_norm_channels
-            )
+
+            # normalize the lookback window
+            if normalization == "local":
+                look_back_window_norm, mean, std = local_z_norm(
+                    look_back_window, local_norm_channels
+                )
+            elif normalization == "global":
+                datamodule = lightning_module.trainer.datamodule
+                mean = datamodule.train_dataset.mean
+                std = datamodule.train_dataset.std
+                look_back_window_norm = global_z_norm(
+                    look_back_window, local_norm_channels, mean, std
+                )
+            elif normalization == "none":
+                look_back_window_norm = look_back_window
+
             target = target.unsqueeze(0)
             if lightning_module.has_probabilistic_forecast:
                 pred_mean, pred_std = lightning_module.model_forward(
                     look_back_window_norm
                 )
                 pred_mean = pred_mean[:, :, : target.shape[-1]]
-                pred_denorm = local_z_denorm(
-                    pred_mean, lightning_module.local_norm_channels, mean, std
-                )
-                pred_std = pred_std[:, :, : target.shape[-1]] * std
+                pred_std = pred_std[:, :, : target.shape[-1]]
+                if normalization in ["local", "global"]:
+                    pred_std *= std
             else:
-                pred = lightning_module.model_forward(look_back_window_norm)[
+                pred_mean = lightning_module.model_forward(look_back_window_norm)[
                     :, :, : target.shape[-1]
                 ]
-                pred_denorm = local_z_denorm(
-                    pred, lightning_module.local_norm_channels, mean, std
-                )
                 pred_std = None
 
-            assert pred_denorm.shape == target.shape
+            # denormalize the prediction
+            if normalization == "local":
+                pred_denorm = local_z_denorm(pred_mean, local_norm_channels, mean, std)
+            elif normalization == "global":
+                pred_denorm = global_z_denorm(pred_mean, local_norm_channels, mean, std)
+            elif normalization == "none":
+                pred_denorm = pred_mean
+
+            assert pred_denorm.shape == target.shape, (
+                f"target shape = {target.shape} | pred_denorm shape = {pred_denorm.shape}"
+            )
 
             if hasattr(lightning_module.trainer.datamodule, "use_heart_rate"):
                 use_heart_rate = lightning_module.trainer.datamodule.use_heart_rate

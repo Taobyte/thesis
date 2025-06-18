@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-from typing import Tuple
 from scipy.io import loadmat
 from torch.utils.data import Dataset
 
@@ -51,8 +50,6 @@ def wildppg_load_data(
         nans, x = nan_helper(activity)
         activity[nans] = np.interp(x(nans), x(~nans), hr[~nans])
 
-        # impute the activity values
-
         mask_ppg = ~np.isnan(ppg).any(axis=1) & ~np.isinf(ppg).any(axis=1)
         ppg = ppg[mask_ppg]
         if use_heart_rate:
@@ -70,7 +67,11 @@ def wildppg_load_data(
 
         arrays.append(series)
 
-    return arrays
+    combined = np.concatenate(arrays, axis=0)
+    mean = np.mean(combined, axis=0)
+    std = np.std(combined, axis=0)
+
+    return arrays, mean, std
 
 
 class WildPPGDataset(Dataset):
@@ -86,7 +87,7 @@ class WildPPGDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.data = wildppg_load_data(
+        self.data, self.mean, self.std = wildppg_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
 
@@ -128,39 +129,13 @@ class WildPPGDataset(Dataset):
 class WildPPGDataModule(BaseDataModule):
     def __init__(
         self,
-        data_dir: str,
         use_heart_rate: bool = False,
-        batch_size: int = 32,
-        num_workers: int = 0,
-        look_back_window: int = 128,
-        prediction_window: int = 64,
         train_participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: list[str] = [10, 11],
         test_participants: list[str] = [9, 12, 13, 14, 15],
-        freq: int = 25,
-        name: str = "wildppg",
-        use_dynamic_features: bool = False,
-        use_static_features: bool = False,
-        target_channel_dim: int = 1,
-        dynamic_exogenous_variables: int = 1,
-        static_exogenous_variables: int = 0,
-        look_back_channel_dim: int = 1,
+        **kwargs,
     ):
-        super().__init__(
-            data_dir=data_dir,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            name=name,
-            freq=freq,
-            look_back_window=look_back_window,
-            prediction_window=prediction_window,
-            use_dynamic_features=use_dynamic_features,
-            use_static_features=use_static_features,
-            target_channel_dim=target_channel_dim,
-            dynamic_exogenous_variables=dynamic_exogenous_variables,
-            static_exogenous_variables=static_exogenous_variables,
-            look_back_channel_dim=look_back_channel_dim,
-        )
+        super().__init__(**kwargs)
 
         self.use_heart_rate = use_heart_rate
 

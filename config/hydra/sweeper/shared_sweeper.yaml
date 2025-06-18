@@ -12,7 +12,7 @@ sampler:
 _target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
 direction: minimize
 storage: null
-study_name: ${optuna_name:${dataset.name}, ${model.name}, ${use_heart_rate}, ${look_back_window}, ${prediction_window}, ${use_dynamic_features}, ${use_static_features}, ${experiment.fold_nr}, ${fold_datasets}} 
+study_name: ${optuna_name:${dataset.name}, ${model.name}, ${use_heart_rate}, ${look_back_window}, ${prediction_window}, ${use_dynamic_features}, ${use_static_features}, ${experiment.fold_nr}, ${fold_datasets}, ${normalization}} 
 n_trials: ${n_trials}
 n_jobs: 1
 search_space: null

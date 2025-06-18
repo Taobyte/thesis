@@ -21,6 +21,8 @@ use_heart_rate: True
 use_static_features: False
 use_dynamic_features: True
 
+normalization: "global" # can be either "local", "global" or "none"
+
 seed: 123
 overfit: False
 use_checkpoint_callback: True

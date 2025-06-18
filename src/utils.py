@@ -17,6 +17,7 @@ def create_group_run_name(
     use_static_features: bool,
     fold_nr: int = 0,
     fold_datasets: list[str] = None,
+    normalization: str = "local",
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
     dataset_to_signal_type = {
@@ -46,10 +47,10 @@ def create_group_run_name(
     if dataset_name in fold_datasets:
         fold = f"fold_{fold_nr}_"
 
-    group_name = f"{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
-    run_name = f"{fold}{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    group_name = f"{normalization}_{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
 
-    tags = [dataset_name, model_name, signal_type]
+    tags = [dataset_name, model_name, signal_type, normalization]
     if features != "":
         tags.append(features)
     if dataset_name in fold_datasets:
@@ -68,6 +69,7 @@ def get_optuna_name(
     use_static_features: bool,
     fold_nr: int = 0,
     fold_datasets: list[str] = None,
+    normalization: str = "local",
 ):
     group_name, _, tags = create_group_run_name(
         dataset_name,
@@ -79,6 +81,7 @@ def get_optuna_name(
         use_static_features,
         fold_nr,
         fold_datasets,
+        normalization,
     )
     # tags[1] stores the models name
     return f"optuna_{tags[1]}_{group_name}"
@@ -97,6 +100,7 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         config.use_static_features,
         config.experiment.fold_nr,
         config.fold_datasets,
+        config.normalization,
     )
 
     # print(config_dict)

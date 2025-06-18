@@ -19,7 +19,7 @@ datamodule:
   target_channel_dim: 1
   dynamic_exogenous_variables: 0 # we treat the n_steps and distance as static features
   # static_exogenous_variables: 12 # Continuous: AGE, Categorical: SEX (3), PHYSICAL_ACTIVITY (7) + n_steps 
-  static_exogenous_variables: 2 # adds in only the already z-normalized velocity as activity info
+  static_exogenous_variables: 1 # adds in only the already z-normalized velocity as activity info
   look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
 
 

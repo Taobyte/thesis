@@ -24,6 +24,12 @@ from src.plotting import (
     plot_metric_histograms,
     plot_entire_series,
 )
+from src.normalization import (
+    local_z_denorm,
+    local_z_norm,
+    global_z_denorm,
+    global_z_norm,
+)
 
 
 def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
@@ -44,106 +50,6 @@ def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> d
     return model_kwargs
 
 
-def local_z_norm(
-    x: torch.Tensor,
-    local_norm_channels: int,
-    mean: torch.Tensor = None,
-    std: torch.Tensor = None,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Applies local Z-normalization to the first `local_norm_channels` of a
-    time series tensor.
-
-    This function can operate in two modes:
-    1. If `mean` and `std` are not provided, it calculates them from the
-       input tensor `x` (assumed to be a 'lookback' window) and applies
-       the normalization.
-    2. If `mean` and `std` are provided, it uses them to normalize `x`
-       (assumed to be a 'prediction' window).
-
-    The normalization is only applied to the specified number of dynamic
-    time series channels, leaving static features (e.g., one-hot encoded
-    activity info, age, weight, height) untouched.
-
-    Args:
-        x (torch.Tensor): The input tensor with shape (batch_size, sequence_length, total_channels).
-                          It contains both dynamic time series channels and static features.
-        local_norm_channels (int): The number of initial channels in `x` that
-                                   represent dynamic time series data and should be normalized.
-                                   The remaining channels are assumed to be static and pre-normalized.
-        mean (Optional[torch.Tensor]): Optional. The mean tensor, typically calculated from a
-                                       lookback window, to use for normalization. If None,
-                                       the mean is calculated from `x`.
-                                       Shape should be (batch_size, 1, local_norm_channels).
-        std (Optional[torch.Tensor]): Optional. The standard deviation tensor, typically
-                                      calculated from a lookback window, to use for normalization.
-                                      If None, the standard deviation is calculated from `x`.
-                                      Shape should be (batch_size, 1, local_norm_channels).
-
-    Returns:
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-            - x_norm (torch.Tensor): The normalized tensor (float, detached from graph).
-            - mean (torch.Tensor): The mean tensor used for normalization (float, detached from graph).
-            - std (torch.Tensor): The standard deviation tensor used for normalization (float, detached from graph).
-    """
-    if mean is None or std is None:
-        # here we normalize the look back window
-        _, _, C = x.shape
-
-        assert local_norm_channels <= C
-        mean = x.mean(dim=1, keepdim=True)
-        std = x.std(dim=1, keepdim=True)
-        x_norm = x.clone()
-        x_norm[:, :, :local_norm_channels] = (
-            x_norm[:, :, :local_norm_channels] - mean[:, :, :local_norm_channels]
-        ) / (std[:, :, :local_norm_channels] + 1e-8)
-    else:
-        # here we normalize the prediction window
-        _, _, C = x.shape
-        x_norm = (x - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
-
-    return x_norm.float().detach(), mean.float().detach(), std.float().detach()
-
-
-def local_z_denorm(
-    x_norm: torch.Tensor,
-    local_norm_channels: int,
-    mean: torch.Tensor,
-    std: torch.Tensor,
-) -> torch.Tensor:
-    """
-    Applies local Z-denormalization (reverses Z-normalization) to a tensor,
-    using provided mean and standard deviation.
-
-    This function denormalizes the channels that were previously normalized.
-    It's designed to work for both lookback and prediction windows, by ensuring
-    that it only processes up to `local_norm_channels` or the actual number
-    of channels in `x_norm`, whichever is smaller. The static features, which
-    were not normalized, remain untouched as they are outside the `local_norm_channels` range.
-
-    Args:
-        x_norm (torch.Tensor): The input tensor that was previously Z-normalized,
-                            with shape (batch_size, sequence_length, total_channels).
-        local_norm_channels (int): The number of initial channels in `x_norm` that
-                                represent dynamic time series data and were normalized.
-                                The remaining channels are assumed to be static.
-        mean (torch.Tensor): The mean tensor used during the original normalization.
-                            Shape should be compatible, e.g., (batch_size, 1, num_normalized_channels).
-        std (torch.Tensor): The standard deviation tensor used during the original normalization.
-                            Shape should be compatible, e.g., (batch_size, 1, num_normalized_channels).
-
-    Returns:
-        torch.Tensor: The denormalized tensor (float type).
-    """
-    _, _, C = x_norm.shape
-    C = min(
-        C, local_norm_channels
-    )  # for look back window, this will be local_norm_channels and for prediction window it will be C
-    x_denorm = x_norm.clone()
-    x_denorm = x_denorm[:, :, :C] * std[:, :, :C] + mean[:, :, :C]
-    return x_denorm.float()
-
-
 class BaseLightningModule(L.LightningModule):
     def __init__(
         self,
@@ -152,6 +58,7 @@ class BaseLightningModule(L.LightningModule):
         tune: bool = False,
         name: str = None,
         use_plots: bool = False,
+        normalization: str = "local",
     ):
         super().__init__()
 
@@ -160,6 +67,7 @@ class BaseLightningModule(L.LightningModule):
         self.tune = tune
         self.name = name
         self.use_plots = use_plots
+        self.normalization = normalization
 
         self.evaluator = Evaluator()
 
@@ -232,17 +140,47 @@ class BaseLightningModule(L.LightningModule):
 
         self.local_norm_channels = datamodule.local_norm_channels
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
-        # normalize data
+    def _normalize_data(
+        self, batch: Tuple[torch.Tensor, torch.Tensor]
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         look_back_window, prediction_window = batch
 
-        look_back_window_norm, mean, std = local_z_norm(
-            look_back_window, self.local_norm_channels
-        )
-        prediction_window_norm, _, _ = local_z_norm(
-            prediction_window, self.local_norm_channels, mean, std
-        )
+        if self.normalization == "local":
+            look_back_window_norm, mean, std = local_z_norm(
+                look_back_window, self.local_norm_channels
+            )
+            prediction_window_norm, _, _ = local_z_norm(
+                prediction_window, self.local_norm_channels, mean, std
+            )
+            return look_back_window_norm, prediction_window_norm, mean, std
+        elif self.normalization == "global":
+            datamodule = self.trainer.datamodule
+            mean = datamodule.train_dataset.mean
+            std = datamodule.train_dataset.std
 
+            look_back_window_norm = global_z_norm(
+                look_back_window, self.local_norm_channels, mean, std
+            )
+            prediction_window_norm = global_z_norm(
+                prediction_window, self.local_norm_channels, mean, std
+            )
+            return look_back_window_norm, prediction_window_norm
+        else:
+            raise NotImplementedError()
+
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+        # normalize data
+        if self.normalization == "global":
+            look_back_window_norm, prediction_window_norm = self._normalize_data(batch)
+        elif self.normalization == "local":
+            look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
+                batch
+            )
+        elif self.normalization == "none":
+            look_back_window_norm, prediction_window_norm = batch
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
         )
@@ -250,15 +188,14 @@ class BaseLightningModule(L.LightningModule):
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         # normalize data
-        look_back_window, prediction_window = batch
-
-        look_back_window_norm, mean, std = local_z_norm(
-            look_back_window, self.local_norm_channels
-        )
-        prediction_window_norm, _, _ = local_z_norm(
-            prediction_window, self.local_norm_channels, mean, std
-        )
-
+        if self.normalization == "global":
+            look_back_window_norm, prediction_window_norm = self._normalize_data(batch)
+        elif self.normalization == "local":
+            look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
+                batch
+            )
+        elif self.normalization == "none":
+            look_back_window_norm, prediction_window_norm = batch
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
         )
@@ -305,9 +242,14 @@ class BaseLightningModule(L.LightningModule):
         look_back_window, prediction_window = batch
         self.batch_size.append(look_back_window.shape[0])
 
-        look_back_window_norm, mean, std = local_z_norm(
-            look_back_window, self.local_norm_channels
-        )
+        if self.normalization == "global":
+            look_back_window_norm, _ = self._normalize_data(batch)
+        elif self.normalization == "local":
+            look_back_window_norm, _, mean, std = self._normalize_data(batch)
+        elif self.normalization == "none":
+            look_back_window_norm = look_back_window
+        else:
+            raise NotImplementedError()
 
         # Prediction
         if self.has_probabilistic_forecast:
@@ -318,9 +260,23 @@ class BaseLightningModule(L.LightningModule):
         preds = preds[:, :, : prediction_window.shape[-1]]
 
         assert preds.shape == prediction_window.shape
+        if self.normalization == "local":
+            denormalized_preds = local_z_denorm(
+                preds, self.local_norm_channels, mean, std
+            )
+        elif self.normalization == "global":
+            datamodule = self.trainer.datamodule
+            mean = datamodule.train_dataset.mean
+            std = datamodule.train_dataset.std
+            denormalized_preds = global_z_denorm(
+                preds, self.local_norm_channels, mean, std
+            )
+        elif self.normalization == "none":
+            denormalized_preds = preds
+        else:
+            raise NotImplementedError()
 
         # Metric Calculation
-        denormalized_preds = local_z_denorm(preds, self.local_norm_channels, mean, std)
         metrics, current_metrics = self.evaluator(
             prediction_window, denormalized_preds, look_back_window
         )

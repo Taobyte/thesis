@@ -33,7 +33,9 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    datamodule = instantiate(config.dataset.datamodule)
+    datamodule = instantiate(
+        config.dataset.datamodule, normalization=config.normalization
+    )
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
@@ -41,6 +43,7 @@ def main(config: DictConfig) -> Optional[float]:
         model=model,
         name=config.model.name,
         use_plots=config.use_plots,
+        normalization=config.normalization,
     )
 
     callbacks = []

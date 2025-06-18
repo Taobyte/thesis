@@ -30,6 +30,7 @@ class Linear(BaseLightningModule):
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
         loss = self.criterion(preds, prediction_window)
+
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 

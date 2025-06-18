@@ -152,6 +152,8 @@ class XGBoost(BaseLightningModule):
         # we need this for the optuna tuner
         preds = self.model.predict(self.X_val)
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
+        if preds.ndim == 1:
+            preds = preds.unsqueeze(-1)
         targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
 
         if self.tune:
