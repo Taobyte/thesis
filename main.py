@@ -163,7 +163,6 @@ def main(config: DictConfig) -> Optional[float]:
 
         if test_trainer.is_global_zero:
             best_checkpoint_path = checkpoint_callback.best_model_path
-            # 6. Delete the best checkpoint file
             try:
                 os.remove(best_checkpoint_path)
                 print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
