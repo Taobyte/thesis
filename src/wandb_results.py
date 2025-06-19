@@ -29,10 +29,11 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
 
     metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-
+    model_run_counts = defaultdict(int)
     for run in runs:
         name_splitted = run.name.split("_")
-        model_name = name_splitted[3]
+        model_name = name_splitted[4]
+        model_run_counts[model_name] += 1
         look_back_window = name_splitted[-2]
         prediction_window = name_splitted[-1]
         summary = run.summary._json_dict
@@ -40,6 +41,9 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
         metrics[model_name][look_back_window][prediction_window].append(
             filtered_summary
         )
+
+    for k, v in model_run_counts.items():
+        print(f"Model {k}: {v}")
 
     processed_metrics_mean = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     processed_metrics_std = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
@@ -69,13 +73,14 @@ def get_runs(
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
+    normalization: str = "global",
     start_time: str = "2025-6-12",
 ):
     group_names = []
-    for lbw, pw, model in product(look_back_window, prediction_window, models):
+    for lbw, pw in product(look_back_window, prediction_window):
         group_name, run_name, _ = create_group_run_name(
             dataset,
-            model,
+            "",  # doesn't matter
             use_heart_rate,
             lbw,
             pw,
@@ -83,16 +88,17 @@ def get_runs(
             use_static_features,
             fold_nr=-1,  # does not matter, we only want group_name
             fold_datasets=[],  # does not matter
+            normalization=normalization,
         )
 
-        if run_name.split("_")[1] in models:
-            group_names.append(group_name)
+        group_names.append(group_name)
 
     filters = {
         "$and": [
             {"group": {"$in": group_names}},
             {"state": "finished"},
             {"created_at": {"$gte": start_time}},
+            {"config.model.name": {"$in": models}},
         ]
     }
 
@@ -294,6 +300,7 @@ def visualize_look_back_window_difference(
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
+    normalization: str,
     start_time: str = "2025-6-05",
     save_html: bool = False,
 ):
@@ -305,6 +312,7 @@ def visualize_look_back_window_difference(
         use_heart_rate,
         use_dynamic_features,
         use_static_features,
+        normalization,
         start_time,
     )
 
@@ -517,6 +525,19 @@ if __name__ == "__main__":
         help="Dataset must be one of the following: dalia, ieee, wildppg, chapman, ucihar, usc, capture24",
     )
 
+    parser.add_argument(
+        "--normalization",
+        type=str,
+        choices=[
+            "none",
+            "global",
+            "local",
+        ],
+        required=True,
+        default="local",
+        help="Normalization must be 'none', 'global' or 'local' ",
+    )
+
     def list_of_ints(arg):
         return [int(i) for i in arg.split(",")]
 
@@ -594,6 +615,7 @@ if __name__ == "__main__":
             args.use_heart_rate,
             args.use_dynamic_features,
             args.use_static_features,
+            args.normalization,
             save_html=args.save_html,
         )
     elif args.type == "activity_ablation":

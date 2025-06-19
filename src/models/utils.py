@@ -140,6 +140,10 @@ class BaseLightningModule(L.LightningModule):
 
         self.local_norm_channels = datamodule.local_norm_channels
 
+    def on_train_end(self):
+        # self.compute_shap_values()
+        pass
+
     def _normalize_data(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Union[
@@ -297,3 +301,77 @@ class BaseLightningModule(L.LightningModule):
         for key, value in metrics_dict.items():
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
         return metrics
+
+    def compute_shap_values(self):
+        assert self.normalization != "local"
+
+        import shap
+        from einops import rearrange
+
+        class ModelWrapper(torch.nn.Module):
+            def __init__(self, model, look_back_channel_dim, target_channel_dim):
+                super().__init__()
+                self.model = model
+                self.look_back_channel_dim = look_back_channel_dim
+                self.target_channel_dim = target_channel_dim
+
+            def forward(self, x):
+                x = rearrange(x, "B (T C) -> B T C", C=self.look_back_channel_dim)
+                output = self.model(x)
+                output = output[:, :, : self.target_channel_dim]
+                output = rearrange(output, "B T C -> B (T C)")
+                return output
+
+        # self.model.eval()
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_to_explain = ModelWrapper(
+            self.model,
+            self.trainer.datamodule.look_back_channel_dim,
+            self.trainer.datamodule.target_channel_dim,
+        )
+
+        background_tensor = self.trainer.datamodule.get_inducing_points(
+            strategy="kmeans", mode="train"
+        )
+
+        _, look_back_window, channels = background_tensor.shape
+
+        background_tensor = background_tensor.to(device)
+        background_tensor = rearrange(background_tensor, "B T C -> B (T C)")
+        background_tensor.requires_grad_()
+        explain_tensor = self.trainer.datamodule.get_inducing_points(
+            strategy="kmeans", mode="test", num_inducing=50
+        )
+        explain_tensor = explain_tensor.to(device).requires_grad_(True)
+        explain_tensor = rearrange(explain_tensor, "B T C -> B (T C)")
+        explain_tensor.requires_grad_()
+
+        explainer = shap.DeepExplainer(model_to_explain, background_tensor)
+
+        shap_values = explainer.shap_values(explain_tensor)
+
+        feature_names = []
+        for i in range(look_back_window):
+            for j in range(channels):
+                feature_names.append(f"Activity {i + 1}" if j == 1 else f"HR {i + 1}")
+
+        explanation = shap.Explanation(
+            values=shap_values[:, :, 0],  # shape (B, T*C)
+            data=explain_tensor.detach().cpu().numpy(),
+            feature_names=feature_names,
+        )
+
+        shap.plots.beeswarm(explanation)
+
+        fst_shap = shap_values[0]
+        fst_shap = rearrange(fst_shap, "(T C) L -> T C L", C=self.look_back_channel_dim)
+        _, _, L = fst_shap.shape
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        for t in range(L):
+            sns.heatmap(fst_shap[:, :, t], annot=True, cmap="viridis", cbar=True)
+            plt.title("5x2 Heatmap")
+            plt.xlabel("Column")
+            plt.ylabel("Row")
+            plt.show()

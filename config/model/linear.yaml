@@ -11,7 +11,7 @@ model:
 
 pl_model: 
   _target_: src.models.linear.Linear
-  learning_rate: 0.001 # 0.008255574697066323
+  learning_rate: 0.0005 # 0.008255574697066323
   loss: "MSE"
   use_scheduler: False
   weight_decay: 4.474906030033394e-06

@@ -75,7 +75,7 @@ def main(config: DictConfig) -> Optional[float]:
         enable_model_summary=False,
         overfit_batches=1 if config.overfit else 0.0,
         # limit_test_batches=10 if config.overfit else None,
-        default_root_dir=config.path.basedir,
+        default_root_dir=config.path.checkpoint_path,
         num_sanity_val_steps=0,
         **multi_gpu_dict,
     )
@@ -112,7 +112,7 @@ def main(config: DictConfig) -> Optional[float]:
                 enable_model_summary=False,
                 overfit_batches=1 if config.overfit else 0.0,
                 limit_test_batches=10 if config.overfit else None,
-                default_root_dir=config.path.basedir,
+                default_root_dir=config.path.checkpoint_path,
                 num_sanity_val_steps=0,
                 **multi_gpu_dict,
             )
@@ -147,7 +147,7 @@ def main(config: DictConfig) -> Optional[float]:
                     accelerator="gpu",
                     devices=1,
                     num_nodes=1,
-                    default_root_dir=config.path.basedir,
+                    default_root_dir=config.path.checkpoint_path,
                     callbacks=callbacks,
                 )
             else:

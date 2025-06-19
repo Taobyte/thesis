@@ -19,7 +19,7 @@ pl_model:
   num_samples: 25
 
 trainer:
-  max_epochs: 5
+  max_epochs: 50
   use_early_stopping: False 
   patience: 3
 

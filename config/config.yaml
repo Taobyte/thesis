@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: mhc6mwt
-  - path: cluster
+  - path: local
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 

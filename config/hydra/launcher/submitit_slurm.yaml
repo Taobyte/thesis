@@ -1,7 +1,7 @@
 # @package hydra.launcher
 submitit_folder: ${hydra.sweep.dir}/.submitit/%j
 timeout_min: 240 # 60min * 4 = 4h 
-cpus_per_task: 8
+cpus_per_task: 1
 gpus_per_node: 1
 mem_per_cpu: 24G
 gres: "gpumem:24g"

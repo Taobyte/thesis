@@ -2,4 +2,4 @@ basedir: "/local/home/ckeusch"
 datadir:  "/local/home/ckeusch/data"
 llamadir: "/cluster/project/holz/ckeusch/llama_weights" 
 config_path: "/cluster/home/ckeusch/thesis/config"
-
+checkpoint_path: ${path.basedir}

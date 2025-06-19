@@ -16,34 +16,21 @@ or if advancements are needed to improve their predictive accuracy in such scena
 
 ## Datasets
 
-- [WildPPG](https://arxiv.org/abs/2412.17540)
-- [DaLiA](https://archive.ics.uci.edu/dataset/495/ppg+dalia)
-- [IEEE](https://ieeexplore.ieee.org/document/6905737) 
-- [Chapman](https://www.nature.com/articles/s41597-020-0386-x) 
-- [Capture24](https://arxiv.org/abs/2402.19229)
-- [USC](https://dl.acm.org/doi/10.1145/2370216.2370438) 
-- [UCIHAR](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones)
 
 
 | Dataset     | Signal Type              | Variates                  | Activity Type                     | Frequency | 
 |-------------|--------------------------|---------------------------|-----------------------------------| -------- |
-| WildPPG     | PPG / HR                    | 1          | Accelerometer                  |25 Hz |
-| DaLiA       | PPG / HR | 1            | Accelerometer   | 32 Hz|
-| IEEE        | PPG / HR           | 1            | Accelerometer  | 25 Hz|
-| Chapman     | ECG                      | 4 | Disease classes | TODO|
-| UCIHAR      | Accelerometer, Gyroscope | 9             | Walking, sitting, lying, etc.     | 50 Hz  | 
-| USC         | Accelerometer, Gyroscope           | 6             | Categorical              | 100 Hz
-| Capture24   | Accelerometer    | 3              | MET score      | 25 Hz |
+| [WildPPG](https://arxiv.org/abs/2412.17540)    | PPG / HR                    | 1          | Accelerometer                  |25 Hz |
+| [DaLiA](https://archive.ics.uci.edu/dataset/495/ppg+dalia)      | PPG / HR | 1            | Accelerometer   | 32 Hz|
+| [IEEE](https://ieeexplore.ieee.org/document/6905737)         | PPG / HR           | 1            | Accelerometer  | 25 Hz|
+| [Chapman](https://www.nature.com/articles/s41597-020-0386-x)    | ECG                      | 4 | Disease classes | 25 Hz |
+| [UCIHAR](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones) | Accelerometer, Gyroscope | 9             | Walking, sitting, lying, etc.     | 50 Hz  | 
+| [USC](https://dl.acm.org/doi/10.1145/2370216.2370438)         | Accelerometer, Gyroscope           | 6             | Categorical              | 100 Hz
+| [Capture24](https://arxiv.org/abs/2402.19229)   | Accelerometer    | 3              | MET score      | 25 Hz |
 
-## Deep Learning Models 
+## Complex Deep Learning Models 
 
-- [TimesNet](https://github.com/thuml/Time-Series-Library/)
-- [SimpleTM](https://github.com/vsingh-group/SimpleTM/)
-- [ElasTST](https://github.com/microsoft/ProbTS/tree/elastst)
-- [Ada-MSHyper](https://github.com/shangzongjiang/Ada-MSHyper)
-- [GPT4TS](https://github.com/DAMO-DI-ML/NeurIPS2023-One-Fits-All/)
-- [LLMTime](https://github.com/ngruver/llmtime)
-- TODO: ASK WHICH ONE
+
 
 | Model        | Description | Supports Short Seq | Link |
 |--------------|-------------|---------| ----- |
@@ -51,15 +38,16 @@ or if advancements are needed to improve their predictive accuracy in such scena
 | SimpleTM    | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | Yes| [GitHub](https://github.com/vsingh-group/SimpleTM/) |
 | ElasTST   | Patch-based transformer with rotary embeddings and elastic structure, effective for non-stationary series. | No| [GitHub](https://github.com/microsoft/ProbTS/tree/elastst) |
 | Ada-MSHyper  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | No | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
-| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/
-Pattn | Simple baseline forecasting model based on patching and the transfomer architecture | Yes | TODO
-TimeLLM |  TODO | Yes | [GitHub](https://github.com/ngruver/llmtime) |
+| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
+Pattn | Simple baseline forecasting model based on patching and the transfomer architecture | Yes | [GitHub](https://github.com/BennyTMT/LLMsForTimeSeries/tree/main)  
+TimeLLM |  LLM-based timeseries forecasting model using a reprogramming layer and using a frozen LLM as backbone. | Yes | [GitHub](https://github.com/ngruver/llmtime) |
 
-## Simpler Models 
+## Baselines
 - Linear Models
-- Hidden Markov Models
-- Gaussian Processes
-- Bayesian Neural Networks
+- [Kalman Filters](https://www.quantstart.com/articles/State-Space-Models-and-the-Kalman-Filter/)
+- [Gaussian Processes](https://gpytorch.ai/)
+- [Bayesian Neural Networks](https://docs.pyro.ai/en/dev/contrib.bnn.html)
+- [XGBoost](https://xgboost.readthedocs.io/en/stable/)
 
 ## Installation 
 This project uses [miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install#quickstart-install-instructions) for dependencies management. Use the following commands in your favourit shell. 
