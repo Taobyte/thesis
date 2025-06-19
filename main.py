@@ -2,6 +2,7 @@
 # were significantly inspired by the work of Alice Bizeul.
 # See their repository at: https://github.com/alicebizeul/pmae
 
+import os
 import hydra
 import lightning as L
 
@@ -154,9 +155,21 @@ def main(config: DictConfig) -> Optional[float]:
                 test_trainer = trainer
             if test_trainer.is_global_zero:
                 test_trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
+
         else:
             print("Best checkpoint not found, testing with current model.")
+            test_trainer = trainer
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
+
+        if test_trainer.is_global_zero:
+            best_checkpoint_path = checkpoint_callback.best_model_path
+            # 6. Delete the best checkpoint file
+            try:
+                os.remove(best_checkpoint_path)
+                print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
+            except OSError as e:
+                print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
+
         print("End Evaluation.")
 
 

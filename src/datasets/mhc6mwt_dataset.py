@@ -72,10 +72,6 @@ class MHC6MWTDataset(Dataset):
         self.mean = np.mean(combined, axis=0)
         self.std = np.std(combined, axis=0)
 
-        import pdb
-
-        pdb.set_trace()
-
         self.lengths = [
             len(self.data[i]) - self.window + 1 for i in range(len(self.data))
         ]
