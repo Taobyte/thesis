@@ -40,6 +40,10 @@ def wildppg_load_data(
         hr = data_all["data_bpm_values"][participant][0].astype(float)
         activity = data_all["data_imu_wrist"][participant][0]
 
+        import pdb
+
+        pdb.set_trace()
+
         # impute the values for hr and activity
         hr[hr < 30] = np.nan
         nans, x = nan_helper(hr)

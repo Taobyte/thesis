@@ -32,7 +32,7 @@ use_plots: False # flag for plotting test predictions and test timeseries
 # wandb logging settings
 use_wandb: False
 wandb:
-  save_dir: ${path.basedir}/wandb_logs
+  save_dir: ${path.checkpoint_path}/wandb_logs
   entity: "c_keusch"
   project: "thesis"
   log_model: False

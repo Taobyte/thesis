@@ -30,7 +30,7 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     model_run_counts = defaultdict(int)
-    for run in runs:
+    for run in tqdm(runs):
         name_splitted = run.name.split("_")
         model_name = name_splitted[4]
         model_run_counts[model_name] += 1
@@ -102,6 +102,10 @@ def get_runs(
         ]
     }
 
+    import pdb
+
+    pdb.set_trace()
+
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters=filters)
     print(f"Found {len(runs)} runs.")
@@ -137,8 +141,8 @@ def add_model_mean_std_to_fig(
     # look_back_windows = [int(lbw) for lbw in look_back_windows]
     # prediction_windows = [int(pw) for pw in prediction_windows]
     x = [int(lbw) for lbw in look_back_windows]
-    mse_upper = {"dalia": 5, "wildppg": 200, "ieee": 50}
-    mae_upper = {"dalia": 3, "wildppg": 20, "ieee": 5}
+    mse_upper = {"dalia": 10, "wildppg": 200, "ieee": 100}
+    mae_upper = {"dalia": 5, "wildppg": 20, "ieee": 10}
     y_axis_ranges = {
         test_metrics[0]: [0, mse_upper[dataset]],
         test_metrics[1]: [0, mae_upper[dataset]],
@@ -214,26 +218,27 @@ def add_model_mean_std_to_fig(
 
 
 def dynamic_feature_ablation(
-    dataset: str,
+    datasets: list[str],
     models: list[str],
     look_back_window: list[int],
     prediction_window: list[int],
     use_heart_rate: bool,
     use_static_features: bool,
-    start_time: str = "2025-6-09",
+    start_time: str = "2025-6-05",
+    normalization: str = "global",
     create_html: bool = False,
 ):
     n_models = len(models)
 
-    fig = make_subplots(
-        rows=n_models,
-        cols=4,
-        column_titles=[metric_to_name[metric] for metric in test_metrics],
-        row_titles=[model_to_name[model] for model in models],
-        shared_xaxes=False,
-    )
+    for dataset in datasets:
+        fig = make_subplots(
+            rows=n_models,
+            cols=4,
+            column_titles=[metric_to_name[metric] for metric in test_metrics],
+            row_titles=[model_to_name[model] for model in models],
+            shared_xaxes=False,
+        )
 
-    for i, model in tqdm(enumerate(models), total=len(models)):
         dynamic_runs = get_runs(
             dataset,
             models,
@@ -242,8 +247,10 @@ def dynamic_feature_ablation(
             use_heart_rate,
             True,
             use_static_features,
+            normalization,
             start_time,
         )
+
         no_dynamic_runs = get_runs(
             dataset,
             models,
@@ -252,48 +259,48 @@ def dynamic_feature_ablation(
             use_heart_rate,
             False,
             use_static_features,
+            normalization,
             start_time,
         )
-        assert len(dynamic_runs) > 0 and len(no_dynamic_runs) > 0
-
         dynamic_mean_dict, dynamic_std_dict = get_metrics(dynamic_runs)
         no_dynamic_mean_dict, no_dynamic_std_dict = get_metrics(no_dynamic_runs)
 
-        add_model_mean_std_to_fig(
-            model,
-            f"Activity {model_to_name[model]}",
-            model_colors[2],
-            dynamic_mean_dict,
-            dynamic_std_dict,
-            fig,
-            dataset,
-            i + 1,
-            True,
+        for i, model in tqdm(enumerate(models), total=len(models)):
+            add_model_mean_std_to_fig(
+                model,
+                f"Activity {model_to_name[model]}",
+                model_colors[2],
+                dynamic_mean_dict,
+                dynamic_std_dict,
+                fig,
+                dataset,
+                i + 1,
+                True,
+            )
+
+            add_model_mean_std_to_fig(
+                model,
+                f"No Activity {model_to_name[model]}",
+                model_colors[0],
+                no_dynamic_mean_dict,
+                no_dynamic_std_dict,
+                fig,
+                dataset,
+                i + 1,
+                True,
+            )
+
+        fig.update_layout(
+            title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows: {prediction_window}",
+            height=n_models * 400,
+            width=1200,
+            template="plotly_white",
         )
 
-        add_model_mean_std_to_fig(
-            model,
-            f"No Activity {model_to_name[model]}",
-            model_colors[0],
-            no_dynamic_mean_dict,
-            no_dynamic_std_dict,
-            fig,
-            dataset,
-            i + 1,
-            True,
-        )
+        fig.update_xaxes(title_text="Lookback Window")
+        fig.update_yaxes(title_text="Metric Value")
 
-    fig.update_layout(
-        title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows: {prediction_window}",
-        height=n_models * 400,
-        width=1200,
-        template="plotly_white",
-    )
-
-    fig.update_xaxes(title_text="Lookback Window")
-    fig.update_yaxes(title_text="Metric Value")
-
-    fig.show()
+        fig.show()
 
 
 def visualize_look_back_window_difference(
@@ -310,20 +317,25 @@ def visualize_look_back_window_difference(
 ):
     num_datasets = len(datasets)
     num_preds = len(prediction_window)
+    n_metrics = 4
+    offset = num_preds + 1
 
     readable_metric_names = [metric_to_name[m] for m in test_metrics]
-    fst_subtitle_row = 2 * readable_metric_names[:2]
-    snd_subtitle_row = 2 * readable_metric_names[2:]
+    block_titles = n_metrics * [""] + (num_preds * readable_metric_names)
+    subplot_titles = num_datasets * block_titles
+
+    mse_upper = {"dalia": 10, "wildppg": 200, "ieee": 100}
+    mae_upper = {"dalia": 5, "wildppg": 20, "ieee": 10}
 
     fig = make_subplots(
-        rows=2 * num_preds,
-        cols=2 * num_datasets,
-        subplot_titles=num_preds * (fst_subtitle_row + snd_subtitle_row),
-        shared_xaxes=True,
-        horizontal_spacing=0.05,
-        vertical_spacing=0.05,
+        rows=num_datasets * offset,
+        cols=n_metrics,
+        subplot_titles=subplot_titles,
+        # shared_xaxes=True,
+        # horizontal_spacing=0.1,
+        # vertical_spacing=0.1,
     )
-    for c_d, dataset in tqdm(enumerate(datasets), total=num_datasets):
+    for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
         runs = get_runs(
             dataset,
             models,
@@ -336,66 +348,135 @@ def visualize_look_back_window_difference(
             start_time,
         )
 
+        dataset_name = dataset_to_name[dataset]
+        y_axis_ranges = {
+            test_metrics[0]: [0, mse_upper[dataset]],
+            test_metrics[1]: [0, mae_upper[dataset]],
+            test_metrics[2]: [-1, 1],
+            test_metrics[3]: [0, 1],
+        }
+
         mean_dict, std_dict = get_metrics(runs)
 
-        # loop over all prediction windows and plot a 2x2 row_delta
-        for r_d in range(num_preds):
-            # Add group title annotation
-            for m, model in enumerate(models):
-                add_model_mean_std_to_fig(
-                    model,
-                    model_to_name[model],
-                    model_colors[m],
-                    mean_dict,
-                    std_dict,
-                    fig,
-                    dataset,
-                    ablation=False,
-                    row_delta=r_d * 2,
-                    col_delta=c_d * 2,
-                )
+        for i, pw in enumerate(prediction_window):
+            for j, metric in enumerate(test_metrics):
+                for m, model in enumerate(models):
+                    row = b * offset + i + 2
+                    col = j + 1
 
-    # add titles
-    for i, dataset in enumerate(datasets):
+                    model_name = model_to_name[model]
+
+                    look_back_windows = sorted(list(mean_dict[model].keys()))
+                    x = [int(lbw) for lbw in look_back_windows]
+
+                    means = [
+                        mean_dict[model][lbw][str(pw)][metric]
+                        for lbw in look_back_windows
+                    ]
+                    stds = [
+                        std_dict[model][lbw][str(pw)][metric]
+                        for lbw in look_back_windows
+                    ]
+                    upper = [m + s for m, s in zip(means, stds)]
+                    lower = [m - s for m, s in zip(means, stds)]
+
+                    color = model_colors[m]
+
+                    # Mean line
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x,
+                            y=means,
+                            mode="lines+markers",
+                            name=f"{dataset_name} {model_name}",
+                            line=dict(color=color),
+                            showlegend=(j == 0)
+                            and (row in [2 + k * offset for k in range(num_datasets)]),
+                            legendgroup=f"{dataset_name} {model_name}",
+                            # legendgrouptitle_text=dataset_name,
+                        ),
+                        row=row,
+                        col=col,
+                    )
+
+                    # Std deviation band (fill between)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x + x[::-1],
+                            y=upper + lower[::-1],
+                            fill="toself",
+                            fillcolor=color.replace("1.0", "0.2")
+                            if "rgba" in color
+                            else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                            line=dict(color="rgba(255,255,255,0)"),
+                            hoverinfo="skip",
+                            showlegend=False,
+                            name=model_name,
+                            legendgroup=model_name,
+                        ),
+                        row=row,
+                        col=col,
+                    )
+                    # Set y-axis range for this subplot
+                    # fig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
+                    # Set x-axis to look_back_window values
+                    fig.update_xaxes(
+                        title_text="Lookback Window",
+                        tickmode="array",
+                        tickvals=look_back_windows,
+                        row=row,
+                        col=col,
+                    )
+
+    num_rows = (num_preds + 1) * num_datasets
+    num_cols = n_metrics
+
+    for i, dataset in enumerate(datasets):  # or however many row groups you have
+        # add dataset title
         fig.add_annotation(
-            text=f"<b>{dataset_to_name[dataset]}</b>",
+            text=f"<b>Dataset {dataset_to_name[dataset]}</b>",
             xref="paper",
             yref="paper",
-            x=i / num_preds + 0.25,
-            y=0.95,  # rough y positioning
-            xanchor="center",
-            yanchor="bottom",
+            x=0.5,
+            y=(1 - i / num_datasets) - (1 / (2 * num_rows)),
             showarrow=False,
-            font=dict(size=16),
-        )
-    """
-    for i in range(num_preds):
-        fig.add_annotation(
-            text=f"<b>Prediction Window = {prediction_window[i]}</b>",
-            xref="paper",
-            yref="paper",
-            x=0.1,
-            y=1 - (i / num_preds),  # rough y positioning
+            font=dict(size=30),
+            textangle=0,
             xanchor="center",
-            yanchor="bottom",
-            showarrow=False,
-            textangle=90,  # <-- rotate the text 90 degrees
-            font=dict(size=16),
+            yanchor="middle",
         )
-    """
+
+    for row in range(num_rows):
+        if row not in [i * offset for i in range(0, num_datasets)]:
+            pw = prediction_window[row % offset - 1]
+            fig.add_annotation(
+                text=f"<b>Prediction Window = {pw}</b>",
+                xref="paper",
+                yref="paper",
+                x=-0.05,
+                y=(1 - row / num_rows),
+                showarrow=False,
+                font=dict(size=10),
+                textangle=-90,
+                xanchor="left",
+                yanchor="middle",
+            )
+
     activity_string = "Activity" if use_dynamic_features else "No Activity"
-
     fig.update_layout(
-        # title_text=f"Datasets {dataset} | Prediction Windows {prediction_window} | {activity_string}",
-        height=1500,
-        width=1000,
+        title={
+            "text": f"<b>Lookback Window Ablations | {activity_string}</b>",
+            "x": 0.5,
+            "xanchor": "center",
+            "font": dict(
+                size=40, family="Arial", color="black"
+            ),  # bold by default for many fonts
+        },
+        height=num_rows * 400,
+        width=num_cols * 600,
         template="plotly_white",
-        # title_x=0.5,
-        margin=dict(t=100),
+        # margin=dict(t=100, b=100, l=100, r=100),
     )
-
-    # fig.update_xaxes(title_text="Lookback Window")
-    # fig.update_yaxes(title_text="Metric Value")
 
     fig.show()
 
@@ -462,7 +543,7 @@ def visualize_metric_table(
 
 
 def plot_tables(
-    dataset: str,
+    dataset: list[str],
     look_back_window: list[int],
     prediction_window: list[int],
     use_heart_rate: bool,
@@ -470,8 +551,10 @@ def plot_tables(
     use_static_features: bool,
     start_time: str = "2025-5-25",
 ):
+    assert len(dataset) == 1
+
     print(
-        f"Plotting tables for \n Dataset: {dataset} \n Use Heartrate: {use_heart_rate} \n Dynamic Features: {use_dynamic_features}  \n Lookback Windows: {look_back_window} \n Prediction Windows: {prediction_window}"
+        f"Plotting tables for \n Dataset: {dataset[0]} \n Use Heartrate: {use_heart_rate} \n Dynamic Features: {use_dynamic_features}  \n Lookback Windows: {look_back_window} \n Prediction Windows: {prediction_window}"
     )
 
     n_combinations = len(look_back_window) * len(prediction_window)
@@ -664,4 +747,7 @@ if __name__ == "__main__":
             args.prediction_window,
             args.use_heart_rate,
             args.use_static_features,
+            args.normalization,
+            start_time="2025-6-15",
+            create_html=args.save_html,
         )
