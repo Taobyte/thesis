@@ -42,15 +42,18 @@ def main(config: DictConfig) -> Optional[float]:
         import numpy as np
         from hydra.core.global_hydra import GlobalHydra
         from hydra import initialize_config_module, compose
+        from hydra._internal.utils import get_args
+
+        overrides = get_args().overrides
 
         # loop over all folds and return average val loss performance
         val_losses = []
         for i in range(config.n_folds):
             if config.dataset.name in config.fold_datasets:
                 fold_name = f"fold_{i}"
-                overrides = [f"experiment={fold_name}"]
+                overrides += [f"experiment={fold_name}"]
             else:
-                overrides = [f"seed={i}"]
+                overrides += [f"seed={i}"]
 
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
