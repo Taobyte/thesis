@@ -13,5 +13,4 @@ conda activate thesis
 
 module load eth_proxy
 
-
-nvidia-smi;python main.py --multirun hydra/sweeper=${1}_sweeper model=${1} tune=True overfit=False num_workers=8
+nvidia-smi;python main.py --multirun hydra/sweeper=${1}_sweeper model=${1} normalization=${2} look_back_window=${3} prediction_window=${4} tune=True overfit=False num_workers=8

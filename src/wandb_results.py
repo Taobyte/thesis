@@ -1,3 +1,5 @@
+import os
+import time
 import pandas as pd
 import numpy as np
 import wandb
@@ -76,6 +78,7 @@ def get_runs(
     use_static_features: bool,
     normalization: str = "global",
     start_time: str = "2025-6-12",
+    window_statistic: str = None,
 ):
     group_names = []
     for lbw, pw in product(look_back_window, prediction_window):
@@ -94,14 +97,19 @@ def get_runs(
 
         group_names.append(group_name)
 
-    filters = {
-        "$and": [
-            {"group": {"$in": group_names}},
-            {"state": "finished"},
-            {"created_at": {"$gte": start_time}},
-            {"config.model.name": {"$in": models}},
-        ]
-    }
+    conditions = [
+        {"group": {"$in": group_names}},
+        {"state": "finished"},
+        {"created_at": {"$gte": start_time}},
+        {"config.model.name": {"$in": models}},
+    ]
+
+    if window_statistic:
+        conditions.append(
+            {"config.dataset.datamodule.window_statistic": {"$eq": window_statistic}}
+        )
+
+    filters = {"$and": conditions}
 
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters=filters)
@@ -125,7 +133,7 @@ def add_model_mean_std_to_fig(
     row_delta: int = 0,
     col_delta: int = 0,
 ):
-    look_back_windows = sorted(list(mean_dict[model].keys()))
+    look_back_windows = sorted(list(mean_dict[model].keys()), key=int)
     prediction_windows = [
         sorted(list(mean_dict[model][look_back_windows[0]].keys()))[row_delta // 2]
     ]
@@ -135,8 +143,6 @@ def add_model_mean_std_to_fig(
         mean_dict[model][look_back_windows[0]][prediction_windows[0]]
     )
 
-    # look_back_windows = [int(lbw) for lbw in look_back_windows]
-    # prediction_windows = [int(pw) for pw in prediction_windows]
     x = [int(lbw) for lbw in look_back_windows]
     mse_upper = {"dalia": 10, "wildppg": 200, "ieee": 100}
     mae_upper = {"dalia": 5, "wildppg": 20, "ieee": 10}
@@ -203,7 +209,7 @@ def add_model_mean_std_to_fig(
                 col=col,
             )
             # Set y-axis range for this subplot
-            fig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
+            # ig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
             # Set x-axis to look_back_window values
             fig.update_xaxes(
                 title_text="Lookback Window",
@@ -223,9 +229,11 @@ def dynamic_feature_ablation(
     use_static_features: bool,
     start_time: str = "2025-6-05",
     normalization: str = "global",
-    create_html: bool = False,
+    save_html: bool = False,
+    window_statistic: str = None,
 ):
     n_models = len(models)
+    current_time = int(time.time())
 
     for dataset in datasets:
         dynamic_runs = get_runs(
@@ -238,6 +246,7 @@ def dynamic_feature_ablation(
             use_static_features,
             normalization,
             start_time,
+            window_statistic=window_statistic,
         )
 
         no_dynamic_runs = get_runs(
@@ -250,6 +259,7 @@ def dynamic_feature_ablation(
             use_static_features,
             normalization,
             start_time,
+            window_statistic=window_statistic,
         )
         dynamic_mean_dict, dynamic_std_dict = get_metrics(dynamic_runs)
         no_dynamic_mean_dict, no_dynamic_std_dict = get_metrics(no_dynamic_runs)
@@ -289,7 +299,7 @@ def dynamic_feature_ablation(
                 )
 
             fig.update_layout(
-                title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw}",
+                title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw} | Window Statistic {window_statistic}",
                 height=n_models * 400,
                 width=1200,
                 template="plotly_white",
@@ -298,7 +308,17 @@ def dynamic_feature_ablation(
             fig.update_xaxes(title_text="Lookback Window")
             fig.update_yaxes(title_text="Metric Value")
 
-            fig.show()
+            if save_html:
+                plot_name = f"{current_time}_{dataset}_{window_statistic}_lbw_{'_'.join([str(lbw) for lbw in look_back_window])}_pw_{pw}_{'_'.join(models)}"
+                base_dir = f"./plots/ablations/{window_statistic}"
+                os.makedirs(base_dir, exist_ok=True)
+                pio.write_html(
+                    fig,
+                    file=f"{base_dir}/{plot_name}.html",
+                    auto_open=True,
+                )
+            else:
+                fig.show()
 
 
 def visualize_look_back_window_difference(
@@ -833,6 +853,15 @@ if __name__ == "__main__":
         help="save html plot for sharing",
     )
 
+    parser.add_argument(
+        "--window_statistic",
+        choices=["mean", "var", "power"],
+        required=False,
+        default=None,
+        type=str,
+        help="Which window statistic for the heartrate value to use. Can be 'mean', 'var' or 'power'. Only supported by DaLia dataset at the moment.",
+    )
+
     args = parser.parse_args()
 
     if args.type == "table":
@@ -864,8 +893,10 @@ if __name__ == "__main__":
             prediction_window=args.prediction_window,
             use_heart_rate=args.use_heart_rate,
             use_static_features=args.use_static_features,
-            start_time="2025-6-18",
+            start_time="2025-6-23",
             normalization=args.normalization,
+            save_html=args.save_html,
+            window_statistic=args.window_statistic,
         )
     elif args.type == "norm_ablation":
         visualize_normalization_difference(
