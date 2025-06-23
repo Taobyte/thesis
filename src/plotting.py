@@ -1,21 +1,23 @@
+import argparse
 import numpy as np
-import torch
 import wandb
-import matplotlib.pyplot as plt
+import torch
 import plotly.io as pio
 import plotly.graph_objects as go
 import plotly.colors as pcolors
 import seaborn as sns
+import matplotlib.pyplot as plt
+
+from src.normalization import (
+    local_z_denorm,
+    local_z_norm,
+    global_z_denorm,
+    global_z_norm,
+)
 
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
-from src.normalization import (
-    local_z_norm,
-    local_z_denorm,
-    global_z_norm,
-    global_z_denorm,
-)
 from src.constants import (
     dataset_to_name,
 )
@@ -32,6 +34,23 @@ name_to_title = {
 }
 
 sns.set_theme(style="whitegrid")
+
+
+def get_yaxis_name(dataset: str, use_heart_rate: bool = False) -> str:
+    if dataset in ["dalia", "wildppg", "ieee"]:
+        yaxis_name = "Heartrate" if use_heart_rate else "PPG"
+    elif dataset == "mhc6mwt":
+        yaxis_name = "Heartrate"
+    elif dataset in ["chapman", "ptbxl"]:
+        yaxis_name = "ECG"
+    elif dataset in ["ucihar", "usc"]:
+        yaxis_name = "Acc & Gyro"
+    elif dataset == "capture24":
+        yaxis_name = "Acc"
+    else:
+        raise NotImplementedError()
+
+    return yaxis_name
 
 
 def plot_entire_series(
@@ -113,9 +132,10 @@ def plot_entire_series(
     if plot_metrics:
         assert cum_lengths[-1] == len(metrics["MSE"])
 
-    if len(data) >= 10:
-        print("We have a lot of timeseries. Only plot the first 10.")
-        data = data[:10]
+    max_series = 30
+    if len(data) >= max_series:
+        print(f"We have a lot of timeseries. Only plot the first {max_series}.")
+        data = data[:max_series]
     n_series = len(data)
     for j in range(n_series):
         print(f"Plotting entire series {j + 1}")
@@ -196,6 +216,99 @@ def plot_entire_series(
             )
 
 
+def plot_all_data(datamodule, data_type: str = "test", save_html: bool = False) -> None:
+    dataset = datamodule.name
+    if data_type == "test":
+        data = datamodule.test_dataset.data
+    elif data_type == "train":
+        data = datamodule.train_dataset.data
+    elif data_type == "val":
+        data = datamodule.val_dataset.data
+    else:
+        raise NotImplementedError()
+
+    use_dynamic_features = datamodule.use_dynamic_features
+    target_channel_dim = datamodule.target_channel_dim
+    use_heart_rate = datamodule.use_heart_rate
+
+    colors = pcolors.qualitative.Plotly + pcolors.qualitative.Dark24
+    max_series = 20
+    if len(data) >= max_series:
+        print(f"We have a lot of timeseries. Only plot the first {max_series}.")
+        data = data[:max_series]
+    n_series = len(data)
+    n_rows = 2 if use_dynamic_features else 1
+
+    row_titles = []
+    for i in range(n_series):
+        row_titles.append(f"{get_yaxis_name(dataset, use_heart_rate)}")
+        if n_rows > 1:
+            row_titles.append("Activity")
+
+    fig = make_subplots(
+        rows=n_rows * n_series,
+        cols=1,
+        shared_xaxes=False,
+        row_titles=row_titles,
+        # vertical_spacing=0.05,
+        # row_heights=row_heights,
+        # subplot_titles=subplot_titles,
+    )
+    for j in range(n_series):
+        print(f"Plotting entire series {j + 1}")
+        series = data[j][:, 0]
+        activity = data[j][:, target_channel_dim]
+        n = len(series)
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(n)),
+                y=series,
+                mode="lines" if not use_heart_rate else "markers",
+                name=f"P{j + 1}",
+                line=dict(color=colors[j]),
+            ),
+            row=n_rows * j + 1,
+            col=1,
+        )
+        if use_dynamic_features:
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(n)),
+                    y=activity,
+                    mode="lines",
+                    name=f"P{j + 1} Activity Value",
+                    line=dict(color=colors[j]),
+                    showlegend=False,
+                ),
+                row=n_rows * j + 2,
+                col=1,
+            )
+
+            fig.update_xaxes(matches=f"x{2 * j + 1}", row=2 * j + 2, col=1)
+
+    fig.update_layout(
+        title={
+            "text": f"<b>{dataset_to_name[dataset]} Dataset </b>",
+            "x": 0.5,
+            "xanchor": "center",
+            "font": dict(
+                size=40, family="Arial", color="black"
+            ),  # bold by default for many fonts
+        },
+        legend=dict(font=dict(size=16)),
+        height=n_rows * 2000,
+    )
+
+    if save_html:
+        activity_string = "Activity" if use_dynamic_features else ""
+        plot_name = (
+            f"{dataset} {get_yaxis_name(dataset, use_heart_rate)} {activity_string}"
+        )
+        pio.write_html(fig, file=f"./plots/data/{plot_name}.html", auto_open=True)
+    else:
+        fig.show()
+
+
 def plot_metric_histograms(logger: WandbLogger, metric_full: dict[str]) -> None:
     """
     Generates and logs histograms for various evaluation metrics to Weights & Biases.
@@ -223,23 +336,6 @@ def plot_metric_histograms(logger: WandbLogger, metric_full: dict[str]) -> None:
 
         logger.experiment.log({f"{metric_name}/histogram": wandb.Image(fig)})
         plt.close(fig)
-
-
-def get_yaxis_name(dataset: str, use_heart_rate: bool = False) -> str:
-    if dataset in ["dalia", "wildppg", "ieee"]:
-        yaxis_name = "Heartrate" if use_heart_rate else "PPG"
-    elif dataset == "mhc6mwt":
-        yaxis_name = "Heartrate"
-    elif dataset in ["chapman", "ptbxl"]:
-        yaxis_name = "ECG"
-    elif dataset in ["ucihar", "usc"]:
-        yaxis_name = "Acc & Gyro"
-    elif dataset == "capture24":
-        yaxis_name = "Acc"
-    else:
-        raise NotImplementedError()
-
-    return yaxis_name
 
 
 def plot_prediction_wandb(
@@ -434,14 +530,28 @@ if __name__ == "__main__":
         "compute_input_channel_dims", compute_input_channel_dims
     )
 
+    parser = argparse.ArgumentParser(description="WandB Results")
+
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["wildppg", "dalia", "ieee", "mhc6mwt"],
+        required=True,
+        default="ieee",
+        help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' or 'mhc6mwt' ",
+    )
+
+    args = parser.parse_args()
+
     with initialize(version_base=None, config_path="../config/"):
         cfg = compose(
-            config_name="config", overrides=["dataset=mhc6mwt", "experiment=fold_0"]
+            config_name="config",
+            overrides=[f"dataset={args.dataset}", "experiment=all"],
         )
 
     datamodule = instantiate(cfg.dataset.datamodule)
 
     datamodule.setup("fit")
-    datamodule.setup("test")
+    # datamodule.setup("test")
 
-    plot_entire_series(None, datamodule, None, False, data_type="val", show_fig=True)
+    plot_all_data(datamodule, data_type="train", save_html=True)

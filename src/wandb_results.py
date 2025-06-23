@@ -3,6 +3,7 @@ import numpy as np
 import wandb
 import argparse
 import plotly.graph_objects as go
+import plotly.io as pio
 
 from tqdm import tqdm
 from matplotlib import colors
@@ -478,8 +479,6 @@ def visualize_look_back_window_difference(
     fig.show()
 
     if save_html:
-        import plotly.io as pio
-
         plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join([str(lbw) for lbw in look_back_window])}_{'_'.join([str(pw) for pw in prediction_window])}"
         pio.write_html(fig, file=f"{plot_name}.html", auto_open=True)
 
@@ -631,38 +630,34 @@ def visualize_normalization_difference(
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
-    normalization: str,
     start_time: str = "2025-6-05",
     save_html: bool = False,
 ):
     for dataset in datasets:
-        fig = make_subplots(
-            rows=len(models),
-            cols=4,
-            column_titles=[metric_to_name[metric] for metric in test_metrics],
-            row_titles=[model_to_name[model] for model in models],
-            shared_xaxes=False,
-        )
-
-        for normalization in ["global", "local", "none"]:
-            runs = get_runs(
-                dataset,
-                models,
-                look_back_window,
-                prediction_window,
-                use_heart_rate,
-                use_dynamic_features,
-                use_static_features,
-                normalization,
-                start_time,
+        for pw in prediction_window:
+            fig = make_subplots(
+                rows=len(models),
+                cols=4,
+                column_titles=[metric_to_name[metric] for metric in test_metrics],
+                row_titles=[model_to_name[model] for model in models],
+                shared_xaxes=False,
             )
 
-            dataset_name = dataset_to_name[dataset]
+            for n, normalization in enumerate(["global", "local", "none"]):
+                runs = get_runs(
+                    dataset,
+                    models,
+                    look_back_window,
+                    prediction_window,
+                    use_heart_rate,
+                    use_dynamic_features,
+                    use_static_features,
+                    normalization,
+                    start_time,
+                )
 
-            mean_dict, std_dict = get_metrics(runs)
-            for pw in prediction_window:
+                mean_dict, std_dict = get_metrics(runs)
                 for m, model in enumerate(models):
-                    model_name = model_to_name[model]
                     for j, metric in enumerate(test_metrics):
                         look_back_windows = sorted(list(mean_dict[model].keys()))
                         x = [int(lbw) for lbw in look_back_windows]
@@ -678,7 +673,7 @@ def visualize_normalization_difference(
                         upper = [m + s for m, s in zip(means, stds)]
                         lower = [m - s for m, s in zip(means, stds)]
 
-                        color = model_colors[m]
+                        color = model_colors[n]
 
                         row = m + 1
                         col = j + 1
@@ -689,10 +684,10 @@ def visualize_normalization_difference(
                                 x=x,
                                 y=means,
                                 mode="lines+markers",
-                                name=f"{dataset_name} {model_name}",
+                                name=normalization,
                                 line=dict(color=color),
                                 showlegend=(j == 0) and (row == 1),
-                                legendgroup=f"{normalization} {dataset_name} {model_name}",
+                                legendgroup=normalization,
                                 # legendgrouptitle_text=dataset_name,
                             ),
                             row=row,
@@ -711,15 +706,12 @@ def visualize_normalization_difference(
                                 line=dict(color="rgba(255,255,255,0)"),
                                 hoverinfo="skip",
                                 showlegend=False,
-                                name=model_name,
-                                legendgroup=model_name,
+                                name=normalization,
+                                legendgroup=normalization,
                             ),
                             row=row,
                             col=col,
                         )
-                        # Set y-axis range for this subplot
-                        # fig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
-                        # Set x-axis to look_back_window values
                         fig.update_xaxes(
                             title_text="Lookback Window",
                             tickmode="array",
@@ -727,6 +719,28 @@ def visualize_normalization_difference(
                             row=row,
                             col=col,
                         )
+
+            fig.update_layout(
+                title={
+                    "text": f"<b>Normalization Ablation {dataset_to_name[dataset]} | PW = {pw}</b>",
+                    "x": 0.5,
+                    "xanchor": "center",
+                    "font": dict(size=50, family="Arial", color="black"),
+                },
+                template="plotly_white",
+                height=2000,
+                width=2000,
+            )
+
+            if save_html:
+                plot_name = f"{dataset_to_name[dataset]}_{pw}"
+                pio.write_html(
+                    fig,
+                    file=f"./plots/ablations/normalization/{plot_name}.html",
+                    auto_open=True,
+                )
+            else:
+                fig.show()
 
 
 if __name__ == "__main__":
@@ -741,7 +755,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type",
         type=str,
-        choices=["table", "viz", "activity_ablation"],
+        choices=["table", "viz", "activity_ablation", "norm_ablation"],
         required=True,
         default="table",
         help="Plot type. Must be either 'table', 'viz' or 'activity_ablation' .",
@@ -763,7 +777,7 @@ if __name__ == "__main__":
             "global",
             "local",
         ],
-        required=True,
+        required=False,
         default="local",
         help="Normalization must be 'none', 'global' or 'local' ",
     )
@@ -852,4 +866,15 @@ if __name__ == "__main__":
             use_static_features=args.use_static_features,
             start_time="2025-6-18",
             normalization=args.normalization,
+        )
+    elif args.type == "norm_ablation":
+        visualize_normalization_difference(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            args.use_heart_rate,
+            args.use_dynamic_features,
+            args.use_static_features,
+            save_html=args.save_html,
         )
