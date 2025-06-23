@@ -19,6 +19,8 @@ datamodule:
   use_dynamic_features: ${use_dynamic_features}
   use_static_features: ${use_static_features}
 
+  window_statistic: "var" # can be "mean" "var" or "power"
+
   target_channel_dim: 1 
   dynamic_exogenous_variables: 1 # dynamic activity information is locally normalized
   static_exogenous_variables: 12 # Continuous: AGE, HEIGHT, WEIGHT Binary: GENDER Categorical: SKIN, SPORT

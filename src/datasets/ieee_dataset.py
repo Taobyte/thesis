@@ -21,8 +21,11 @@ def ieee_load_data(
         bpm = data["bpms"]  # shape (W, 1)
 
         if use_heart_rate and use_dynamic_features:
-            avg_acc = np.mean(acc, axis=1, keepdims=True).squeeze(-1)  # shape (W, 1)
-            series = np.concatenate((bpm, avg_acc), axis=1)
+            imu_mean = np.mean(acc, axis=1, keepdims=True).squeeze(-1)  # shape (W, 1)
+            imu_var = np.var(acc, axis=1, keepdims=True).squeeze(-1)
+            imu_power = np.mean(acc**2, axis=1, keepdims=True).squeeze(-1)
+            imu_energy = np.sum(acc**2, axis=1, keepdims=True).squeeze(-1)
+            series = np.concatenate((bpm, imu_mean), axis=1)
         elif use_heart_rate and not use_dynamic_features:
             series = bpm
         elif not use_heart_rate and use_dynamic_features:

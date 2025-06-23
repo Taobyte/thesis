@@ -4,6 +4,7 @@ multirun/
 thesis/
 wandb/
 lightning_logs/
+plots/
 __pycache__/
 **/__pycache__/
 *.pyc

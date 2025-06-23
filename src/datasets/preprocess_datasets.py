@@ -124,7 +124,6 @@ def create_dalia_npy_files(datadir: str):
     os.makedirs(dalia_preprocessed_dir, exist_ok=True)
 
     print("Start processing dalia files.")
-
     for path in tqdm(Path(datadir).glob("**/S*.pkl")):
         with open(path, "rb") as f:
             data = pickle.load(f, encoding="latin1")
@@ -139,6 +138,10 @@ def create_dalia_npy_files(datadir: str):
 
             windows = sliding_window_view(acc_norm, window_shape=window_size)[::stride]
             acc_norm_heart_rate = np.mean(windows, axis=1)
+            imu_var = np.var(windows, axis=1)
+            imu_power = np.mean(windows**2, axis=1)
+            imu_energy = np.sum(windows**2, axis=1)
+            imu_rms = np.sqrt(np.mean(windows**2, axis=1))
 
             assert heart_rate.shape == acc_norm_heart_rate.shape
 
@@ -149,6 +152,10 @@ def create_dalia_npy_files(datadir: str):
                 heart_rate=heart_rate,
                 acc_norm_ppg=acc_norm_ppg,
                 acc_norm_heart_rate=acc_norm_heart_rate,
+                imu_var=imu_var,
+                imu_power=imu_power,
+                imu_energy=imu_energy,
+                imu_rms=imu_rms,
                 activity=activity,
             )
 

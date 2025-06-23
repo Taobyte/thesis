@@ -15,6 +15,7 @@ def dalia_load_data(
     use_heart_rate: bool,
     use_dynamic_features: bool,
     use_static_features: bool,
+    window_statistic: str = "mean",
 ) -> Tuple[list[np.ndarray], np.ndarray, np.ndarray]:
     static_feature_df = pd.read_csv(path + "/static_participant_features.csv")
 
@@ -28,7 +29,15 @@ def dalia_load_data(
         if use_dynamic_features:
             activity = data["acc_norm_ppg"][:, np.newaxis]
             if use_heart_rate:
-                activity = data["acc_norm_heart_rate"][:, np.newaxis]
+                if window_statistic == "mean":
+                    activity = data["acc_norm_heart_rate"][:, np.newaxis]
+                elif window_statistic == "var":
+                    activity = data["imu_var"][:, np.newaxis]
+                elif window_statistic == "power":
+                    activity = data["imu_power"][:, np.newaxis]
+                else:
+                    raise NotImplementedError()
+
             series = np.concatenate((series, activity), axis=1)
 
         if use_static_features:
@@ -57,6 +66,7 @@ class DaLiADataset(Dataset):
         look_back_window: int = 32,
         prediction_window: int = 10,
         target_channel_dim: int = 1,
+        window_statistic: str = "mean",
     ):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -71,6 +81,7 @@ class DaLiADataset(Dataset):
             use_heart_rate,
             use_dynamic_features,
             use_static_features,
+            window_statistic=window_statistic,
         )
 
         self.lengths = [len(series) - self.window_length + 1 for series in self.data]
@@ -99,6 +110,7 @@ class DaLiADataModule(BaseDataModule):
         train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
         val_participants: list = [9, 10, 11],
         test_participants: list = [1, 13, 14],
+        window_statistic: str = "mean",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -108,6 +120,8 @@ class DaLiADataModule(BaseDataModule):
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        self.window_statistic = window_statistic
 
     def setup(self, stage: str = None):
         if stage == "fit":
@@ -120,6 +134,7 @@ class DaLiADataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.target_channel_dim,
+                self.window_statistic,
             )
             self.val_dataset = DaLiADataset(
                 self.data_dir,
@@ -130,6 +145,7 @@ class DaLiADataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.target_channel_dim,
+                self.window_statistic,
             )
         if stage == "test":
             self.test_dataset = DaLiADataset(
@@ -141,4 +157,5 @@ class DaLiADataModule(BaseDataModule):
                 self.look_back_window,
                 self.prediction_window,
                 self.target_channel_dim,
+                self.window_statistic,
             )
