@@ -17,9 +17,9 @@ pl_model:
   weight_decay: 4.474906030033394e-06
 
 trainer:
-  max_epochs: 1000
+  max_epochs: 5
   use_early_stopping: True
   patience: 2
 
 data:
-  batch_size: 32
+  batch_size: 256
