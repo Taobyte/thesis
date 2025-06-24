@@ -4,14 +4,14 @@ model:
   _target_: src.models.pattn.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  patch_size: 4
-  d_model: 128
+  patch_size: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.patch_size} 
+  d_model: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.d_model} 
 
 pl_model: 
   _target_: src.models.pattn.PAttn
-  learning_rate: 0.0003941089394447864
+  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
   lradj: 'type1'
-  tmax: 10
+  tmax: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.tmax} 
 
 trainer: 
   max_epochs: 1000

@@ -29,6 +29,8 @@ OmegaConf.register_new_resolver(
     "compute_input_channel_dims", compute_input_channel_dims
 )
 
+OmegaConf.register_new_resolver("str", lambda x: str(x))
+
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig) -> Optional[float]:
