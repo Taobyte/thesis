@@ -2,7 +2,8 @@ defaults:
  -  shared_sweeper
 
 params:
-  model.trainer.use_early_stopping: False 
+  model.trainer.use_early_stopping: True
+  model.pl_model.verbose: False
 
   model.model.n_estimators: int(interval(50, 1000))
   model.model.learning_rate: interval(1e-4, 2.0) # tag(log, interval(1e-4, 2.0))

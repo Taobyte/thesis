@@ -38,6 +38,55 @@ def main(config: DictConfig) -> Optional[float]:
     if config.use_multi_gpu:
         multi_gpu_dict = config.multi
 
+    def setup(config: DictConfig):
+        datamodule = instantiate(config.dataset.datamodule)
+        model_kwargs = get_model_kwargs(config, datamodule)
+        model = instantiate(config.model.model, **model_kwargs)
+        pl_model = instantiate(config.model.pl_model, model=model, tune=True)
+
+        callbacks = []
+
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            filename=run_name + "-{epoch}-{step}",
+            save_top_k=1,
+        )
+        callbacks.append(checkpoint_callback)
+
+        if config.model.trainer.use_early_stopping:
+            callbacks.append(
+                EarlyStopping(
+                    monitor="val_loss",
+                    mode="min",
+                    patience=config.model.trainer.patience,
+                    min_delta=0.001,  # stop if no substantial improvement is being made. Important for models with LR schedulers
+                )
+            )
+
+        trainer = L.Trainer(
+            logger=wandb_logger,
+            max_epochs=config.model.trainer.max_epochs,
+            callbacks=callbacks,
+            enable_progress_bar=True,
+            enable_model_summary=False,
+            overfit_batches=1 if config.overfit else 0.0,
+            limit_test_batches=10 if config.overfit else None,
+            default_root_dir=config.path.checkpoint_path,
+            num_sanity_val_steps=0,
+            **multi_gpu_dict,
+        )
+
+        return datamodule, pl_model, trainer, callbacks
+
+    def delete_checkpoint(trainer, checkpoint_callback):
+        if trainer.is_global_zero:
+            best_checkpoint_path = checkpoint_callback.best_model_path
+            try:
+                os.remove(best_checkpoint_path)
+                print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
+            except OSError as e:
+                print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
+
     if config.tune:
         import numpy as np
         from hydra.core.global_hydra import GlobalHydra
@@ -60,40 +109,8 @@ def main(config: DictConfig) -> Optional[float]:
             with initialize_config_module(version_base="1.1", config_module="config"):
                 fold_config = compose(config_name="config.yaml", overrides=overrides)
 
-            datamodule = instantiate(fold_config.dataset.datamodule)
-            model_kwargs = get_model_kwargs(config, datamodule)
-            model = instantiate(config.model.model, **model_kwargs)
-            pl_model = instantiate(config.model.pl_model, model=model, tune=True)
-
-            callbacks = []
-            if config.model.trainer.use_early_stopping:
-                callbacks.append(
-                    EarlyStopping(
-                        monitor="val_loss",
-                        mode="min",
-                        patience=config.model.trainer.patience,
-                    )
-                )
-            if config.use_checkpoint_callback:
-                checkpoint_callback = ModelCheckpoint(
-                    monitor="val_loss",
-                    filename=run_name + "-{epoch}-{step}",
-                    save_top_k=1,
-                )
-                callbacks.append(checkpoint_callback)
-
-            trainer = L.Trainer(
-                logger=wandb_logger,
-                max_epochs=config.model.trainer.max_epochs,
-                callbacks=callbacks,
-                enable_progress_bar=True,
-                enable_model_summary=False,
-                overfit_batches=1 if config.overfit else 0.0,
-                limit_test_batches=10 if config.overfit else None,
-                default_root_dir=config.path.checkpoint_path,
-                num_sanity_val_steps=0,
-                **multi_gpu_dict,
-            )
+            datamodule, pl_model, trainer, callbacks = setup(fold_config)
+            checkpoint_callback = callbacks[0]
 
             print(f"Starting fold {i}")
             trainer.fit(pl_model, datamodule=datamodule)
@@ -107,63 +124,15 @@ def main(config: DictConfig) -> Optional[float]:
             val_losses.append(last_val_loss)
             print(f"Finished fold {i}, val_loss = {last_val_loss:.4f}")
 
-            if trainer.is_global_zero:
-                best_checkpoint_path = checkpoint_callback.best_model_path
-                try:
-                    os.remove(best_checkpoint_path)
-                    print(
-                        f"Successfully deleted best checkpoint: {best_checkpoint_path}"
-                    )
-                except OSError as e:
-                    print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
+            delete_checkpoint(trainer, checkpoint_callback)
 
         avg_val_loss = float(np.mean(val_losses))
         print(f"Average validation loss across folds: {avg_val_loss:.4f}")
         return avg_val_loss
 
     else:
-        datamodule = instantiate(
-            config.dataset.datamodule, normalization=config.normalization
-        )
-        model_kwargs = get_model_kwargs(config, datamodule)
-        model = instantiate(config.model.model, **model_kwargs)
-        pl_model = instantiate(
-            config.model.pl_model,
-            model=model,
-            name=config.model.name,
-            use_plots=config.use_plots,
-            normalization=config.normalization,
-        )
-
-        callbacks = []
-        if config.model.trainer.use_early_stopping:
-            callbacks.append(
-                EarlyStopping(
-                    monitor="val_loss",
-                    mode="min",
-                    patience=config.model.trainer.patience,
-                )
-            )
-        if config.use_checkpoint_callback:
-            checkpoint_callback = ModelCheckpoint(
-                monitor="val_loss",
-                filename=run_name + "-{epoch}-{step}",
-                save_top_k=1,
-            )
-            callbacks.append(checkpoint_callback)
-
-        trainer = L.Trainer(
-            logger=wandb_logger,
-            max_epochs=config.model.trainer.max_epochs,
-            callbacks=callbacks,
-            enable_progress_bar=True,
-            enable_model_summary=False,
-            overfit_batches=1 if config.overfit else 0.0,
-            # limit_test_batches=10 if config.overfit else None,
-            default_root_dir=config.path.checkpoint_path,
-            num_sanity_val_steps=0,
-            **multi_gpu_dict,
-        )
+        datamodule, pl_model, trainer, callbacks = setup(config)
+        checkpoint_callback = callbacks[0]
 
         print("Start Training.")
         trainer.fit(pl_model, datamodule=datamodule)
@@ -191,13 +160,7 @@ def main(config: DictConfig) -> Optional[float]:
             test_trainer = trainer
             trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
 
-        if test_trainer.is_global_zero:
-            best_checkpoint_path = checkpoint_callback.best_model_path
-            try:
-                os.remove(best_checkpoint_path)
-                print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
-            except OSError as e:
-                print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
+        delete_checkpoint(test_trainer, checkpoint_callback)
 
         print("End Evaluation.")
 

@@ -25,7 +25,6 @@ normalization: "global" # can be either "local", "global" or "none"
 
 seed: 123
 overfit: False
-use_checkpoint_callback: True
 num_workers: 0 # how many workers the pytorch dataloader has
 use_plots: False # flag for plotting test predictions and test timeseries 
 

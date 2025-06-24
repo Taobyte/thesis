@@ -68,6 +68,7 @@ class XGBoost(BaseLightningModule):
         loss: str = "MSE",
         target_channel_dim: int = 1,
         model: torch.nn.Module = None,
+        verbose: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -81,6 +82,8 @@ class XGBoost(BaseLightningModule):
 
         self.criterion = get_loss_fn(loss)
         self.automatic_optimization = False
+
+        self.verbose = verbose
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
@@ -147,7 +150,7 @@ class XGBoost(BaseLightningModule):
             self.X_train,
             self.y_train,
             eval_set=[(self.X_val, self.y_val)],
-            verbose=True,
+            verbose=self.verbose,
         )
         # we need this for the optuna tuner
         preds = self.model.predict(self.X_val)
