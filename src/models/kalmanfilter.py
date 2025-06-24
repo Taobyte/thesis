@@ -156,6 +156,7 @@ class KalmanFilter(BaseLightningModule):
         model: torch.nn.Module,
         loss: str = "MSE",
         learning_rate: float = 0.001,
+        weight_decay: float = 0.00,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -163,6 +164,7 @@ class KalmanFilter(BaseLightningModule):
         self.model = model
         self.criterion = get_loss_fn(loss)
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
     def model_forward(self, look_back_window):
         assert len(look_back_window.shape) == 3
@@ -191,5 +193,9 @@ class KalmanFilter(BaseLightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+        )
         return optimizer

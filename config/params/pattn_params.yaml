@@ -1,0 +1,38 @@
+
+
+dalia:
+  "5":
+    "3":
+      learning_rate: 0.0001404076163188784
+      tmax: 50
+      patch_size: 4 
+      d_model: 512
+
+  "10":
+    "3":
+        learning_rate: 0.0002801189665608351
+        tmax: 20
+        patch_size: 8
+        d_model: 512
+  
+  "20":
+    "3":
+        learning_rate: 0.0002801189665608351
+        tmax: 20
+        patch_size: 8
+        d_model: 512
+  
+  "30":
+    "3":
+        learning_rate: 0.0053836874909736375
+        tmax: 10
+        patch_size: 4
+        d_model: 128
+  
+  "60":
+    "3":
+        learning_rate: 0.0053836874909736375
+        tmax: 10
+        patch_size: 4
+        d_model: 128
+

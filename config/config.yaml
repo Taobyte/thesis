@@ -1,9 +1,9 @@
 defaults:
   - _self_
   - model: timesnet
-  - dataset: ieee
+  - dataset: dalia
   - path: local
-  - experiment: all
+  - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
 n_folds: 3

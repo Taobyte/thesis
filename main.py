@@ -89,27 +89,33 @@ def main(config: DictConfig) -> Optional[float]:
 
     if config.tune:
         import numpy as np
-        from hydra.core.global_hydra import GlobalHydra
-        from hydra import initialize_config_module, compose
-        from hydra._internal.utils import get_args
+        import yaml
+        from hydra.utils import get_original_cwd
 
-        overrides = get_args().overrides
+        dataset_name = config.dataset.name
 
         # loop over all folds and return average val loss performance
         val_losses = []
         for i in range(config.n_folds):
-            if config.dataset.name in config.fold_datasets:
+            print(yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))["experiment"])
+            if dataset_name in config.fold_datasets:
+                base_path = get_original_cwd()
                 fold_name = f"fold_{i}"
-                overrides += [f"experiment={fold_name}"]
+                fold_conf_path = f"{base_path}/config/experiment/{fold_name}.yaml"
+                fold_config = OmegaConf.load(fold_conf_path)
+
+                config["experiment"][dataset_name]["train_participants"] = fold_config[
+                    dataset_name
+                ]["train_participants"]
+
+                config["experiment"][dataset_name]["val_participants"] = fold_config[
+                    dataset_name
+                ]["val_participants"]
+
             else:
-                overrides += [f"seed={i}"]
+                config["seed"] = i
 
-            if GlobalHydra.instance().is_initialized():
-                GlobalHydra.instance().clear()
-            with initialize_config_module(version_base="1.1", config_module="config"):
-                fold_config = compose(config_name="config.yaml", overrides=overrides)
-
-            datamodule, pl_model, trainer, callbacks = setup(fold_config)
+            datamodule, pl_model, trainer, callbacks = setup(config)
             checkpoint_callback = callbacks[0]
 
             print(f"Starting fold {i}")
