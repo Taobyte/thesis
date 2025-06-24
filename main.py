@@ -1,13 +1,14 @@
 # The overall project structure and training loop design in this repository
 # were significantly inspired by the work of Alice Bizeul.
 # See their repository at: https://github.com/alicebizeul/pmae
-
 import os
 import hydra
+import numpy as np
 import lightning as L
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
+from hydra.utils import get_original_cwd
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 from typing import Optional
@@ -88,16 +89,11 @@ def main(config: DictConfig) -> Optional[float]:
                 print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
 
     if config.tune:
-        import numpy as np
-        import yaml
-        from hydra.utils import get_original_cwd
-
         dataset_name = config.dataset.name
 
         # loop over all folds and return average val loss performance
         val_losses = []
         for i in range(config.n_folds):
-            print(yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))["experiment"])
             if dataset_name in config.fold_datasets:
                 base_path = get_original_cwd()
                 fold_name = f"fold_{i}"
