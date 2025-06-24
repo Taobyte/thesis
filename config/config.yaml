@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: timesnet
   - dataset: dalia
-  - path: local
+  - path: cluster
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
@@ -21,7 +21,7 @@ use_heart_rate: True
 use_static_features: False
 use_dynamic_features: True
 
-normalization: "global" # can be either "local", "global" or "none"
+normalization: "none" # can be either "local", "global" or "none"
 
 seed: 123
 overfit: False
