@@ -1,4 +1,5 @@
 import os
+import ast
 import time
 import pandas as pd
 import numpy as np
@@ -13,6 +14,7 @@ from plotly.subplots import make_subplots
 from collections import defaultdict
 from itertools import product
 from typing import Tuple
+from collections import OrderedDict
 
 from utils import create_group_run_name
 from src.constants import (
@@ -80,22 +82,27 @@ def get_runs(
     start_time: str = "2025-6-12",
     window_statistic: str = None,
 ):
+    if normalization is None:
+        normalizations = ["global", "local", "none"]
+    else:
+        normalizations = [normalization]
     group_names = []
     for lbw, pw in product(look_back_window, prediction_window):
-        group_name, run_name, _ = create_group_run_name(
-            dataset,
-            "",  # doesn't matter
-            use_heart_rate,
-            lbw,
-            pw,
-            use_dynamic_features,
-            use_static_features,
-            fold_nr=-1,  # does not matter, we only want group_name
-            fold_datasets=[],  # does not matter
-            normalization=normalization,
-        )
+        for normalization in normalizations:
+            group_name, run_name, _ = create_group_run_name(
+                dataset,
+                "",  # doesn't matter
+                use_heart_rate,
+                lbw,
+                pw,
+                use_dynamic_features,
+                use_static_features,
+                fold_nr=-1,  # does not matter, we only want group_name
+                fold_datasets=[],  # does not matter
+                normalization=normalization,
+            )
 
-        group_names.append(group_name)
+            group_names.append(group_name)
 
     conditions = [
         {"group": {"$in": group_names}},
@@ -227,7 +234,7 @@ def dynamic_feature_ablation(
     prediction_window: list[int],
     use_heart_rate: bool,
     use_static_features: bool,
-    start_time: str = "2025-6-05",
+    start_time: str = "2025-6-24",
     normalization: str = "global",
     save_html: bool = False,
     window_statistic: str = None,
@@ -763,6 +770,70 @@ def visualize_normalization_difference(
                 fig.show()
 
 
+def create_params_file_from_optuna(models: list[str], start_time: str):
+    import yaml
+
+    assert len(models) == 1
+    model = models[0]
+    filters = {"$and": [{"created_at": {"$gte": start_time}}]}
+    api = wandb.Api()
+    runs = api.runs("c_keusch/thesis", filters=filters)
+    print(f"Found {len(runs)} runs.")
+
+    filtered_runs = [
+        run for run in runs if run.name and run.name.startswith(f"optuna_{model}")
+    ]
+
+    final_dict = defaultdict(lambda: defaultdict(dict))
+    for run in filtered_runs:
+        for file in run.files():
+            if file.name == "output.log":
+                path = file.download(replace=True).name
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+
+                last_two_lines = [line.strip() for line in lines if line.strip()][-2:]
+
+                name_splitted = run.name.split("_")
+                dynamic_info = str("df" in name_splitted)
+                lbw = name_splitted[-2]
+                pw = name_splitted[-1]
+
+                parameter_line = last_two_lines[0]
+                keyword = "Best parameters: "
+                start = parameter_line.find(keyword) + len(keyword)
+
+                param_dict = ast.literal_eval(parameter_line[start:])
+                param_dict = {
+                    key.split(".")[-1]: value for key, value in param_dict.items()
+                }
+
+                final_dict[dynamic_info][lbw][pw] = param_dict
+
+                print(param_dict)
+                print(type(param_dict))
+
+                os.remove(path)
+
+    def to_regular_dict(d):
+        if isinstance(d, defaultdict):
+            d = {k: to_regular_dict(v) for k, v in d.items()}
+        elif isinstance(d, dict):
+            d = {k: to_regular_dict(v) for k, v in d.items()}
+        return d
+
+    clean_dict = to_regular_dict(final_dict)
+    sorted_dict = dict(
+        sorted(
+            clean_dict.items(),
+            key=lambda item: int(item[0]) if item[0].isdigit() else item[0],
+        )
+    )
+
+    yaml_str = yaml.dump(sorted_dict, sort_keys=False)
+    print(yaml_str)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WandB Results")
 
@@ -775,7 +846,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type",
         type=str,
-        choices=["table", "viz", "activity_ablation", "norm_ablation"],
+        choices=["table", "viz", "activity_ablation", "norm_ablation", "optuna"],
         required=True,
         default="table",
         help="Plot type. Must be either 'table', 'viz' or 'activity_ablation' .",
@@ -798,7 +869,7 @@ if __name__ == "__main__":
             "local",
         ],
         required=False,
-        default="local",
+        default=None,
         help="Normalization must be 'none', 'global' or 'local' ",
     )
 
@@ -893,7 +964,7 @@ if __name__ == "__main__":
             prediction_window=args.prediction_window,
             use_heart_rate=args.use_heart_rate,
             use_static_features=args.use_static_features,
-            start_time="2025-6-23",
+            start_time="2025-6-24",
             normalization=args.normalization,
             save_html=args.save_html,
             window_statistic=args.window_statistic,
@@ -909,3 +980,6 @@ if __name__ == "__main__":
             args.use_static_features,
             save_html=args.save_html,
         )
+
+    elif args.type == "optuna":
+        create_params_file_from_optuna(models=args.models, start_time="2025-6-24")

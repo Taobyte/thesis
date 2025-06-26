@@ -1,0 +1,67 @@
+dalia:
+  "True":
+    "5":
+      "3":
+        learning_rate: 0.011106305059724413
+        d_model: 32
+        d_ff: 32
+        dropout: 0.02091018222270044
+    "10": 
+      "3":
+        learning_rate: 0.0011999282843919573
+        d_model: 512
+        d_ff: 128
+        dropout: 0.19001767930747404
+    "20": 
+      "3":
+        learning_rate: 0.005447141754016845
+        d_model: 32
+        d_ff: 128
+        dropout: 0.02687825271370967
+    "30": 
+      "3":
+        learning_rate: 0.006267352927346846
+        d_model: 32
+        d_ff: 64
+        dropout: 0.24356721313400437 
+    "60": 
+      "3":
+        learning_rate: 0.006757553589352132
+        d_model: 32
+        d_ff: 32
+        dropout: 0.01696330173575103
+  "False":
+    "5":
+      "3":
+        learning_rate: 0.011470859332963573 
+        d_model: 32
+        d_ff: 32
+        dropout: 0.002421656527736515
+    "10": 
+      "3":
+        learning_rate: 0.005489119104314109
+        d_model: 32
+        d_ff: 64
+        dropout: 0.06917189247125666
+    "20": 
+      "3":
+        learning_rate: 0.006473063312168188
+        d_model: 32
+        d_ff: 32
+        dropout: 0.002483907308531854
+    "30":
+      "3":
+        learning_rate: 0.0032285497601072964
+        d_model: 64
+        d_ff: 128
+        dropout: 0.01768956076367377
+    "60": 
+      "3":
+        learning_rate: 0.0045458054280454385
+        d_model: 64
+        d_ff: 32
+        dropout: 0.17716207281735036
+        
+        
+
+
