@@ -803,7 +803,15 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
                 keyword = "Best parameters: "
                 start = parameter_line.find(keyword) + len(keyword)
 
-                param_dict = ast.literal_eval(parameter_line[start:])
+                try:
+                    param_dict = ast.literal_eval(parameter_line[start:])
+                except (ValueError, SyntaxError) as e:
+                    print(
+                        f"[WARN] Skipping run {run.name}: Failed to parse parameters → {e}"
+                    )
+                    os.remove(path)
+                    continue  # Skip this run and go to the next one
+
                 param_dict = {
                     key.split(".")[-1]: value for key, value in param_dict.items()
                 }

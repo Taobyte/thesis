@@ -13,15 +13,15 @@ model:
   d_model: 256
   wv: "db1"
   factor: 1 # TODO: find out what this is doing
-  dropout: 0.026750790185748306
-  geomattn_dropout: 0.17856166986929792
+  dropout: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.dropout} 
+  geomattn_dropout: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.geomattn_dropout} 
   requires_grad: True # set to true to enable trainable wavelets
   m: 3 # Number of levels for the stationary wavelet transform 
-  d_ff: 256 # Dimensionality of the feed forward network
+  d_ff: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.d_ff} # Dimensionality of the feed forward network
 
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
-  learning_rate: 0.0028709383524582496
+  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
   lradj: 'type1'
 
 trainer: 

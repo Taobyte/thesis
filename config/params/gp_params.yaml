@@ -1,0 +1,83 @@
+dalia:
+  "True":
+    "5": # not fully tuned
+      "3":
+        n_points: 500
+        learning_rate: 0.0016946309193589563
+        num_latents: 10
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: "additive"
+    "10": # not fully tuned
+      "3":
+        n_points: 1000
+        learning_rate: 0.0016946309193589563
+        num_latents: 8
+        kernel: "rbf"
+        use_linear: 0
+        periodic_type: "additive"
+    "20": # not fully tuned
+      "3":
+        n_points: 1000
+        learning_rate: 0.002753454339719312
+        num_latents: 4
+        kernel: "rq"
+        use_linear: 0
+        periodic_type: "additive"
+    "30": # not tuned, just take reasonable parameters 
+      "3":
+        n_points: 2000
+        learning_rate: 0.001
+        num_latents: 8
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""
+    "60": # not tuned, just take reasonable parameters 
+      "3":
+        n_points: 2000
+        learning_rate: 0.001
+        num_latents: 8
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""
+  "False":
+    "5": # not fully tuned
+      "3":
+        n_points: 1500
+        learning_rate: 0.0003778849213091795
+        num_latents: 9
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""
+    "10": # not fully tuned
+      "3":
+        n_points: 2000
+        learning_rate: 0.0012851206157504158
+        num_latents: 6
+        kernel: "matern"
+        use_linear: 0
+        periodic_type: "multiplicative"
+    "20": # not tuned, just take reasonable parameters 
+      "3":
+        n_points: 2000
+        learning_rate: 0.001
+        num_latents: 8
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""
+    "30": # not tuned, just take reasonable parameters 
+      "3":
+        n_points: 2000
+        learning_rate: 0.001
+        num_latents: 8
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""
+    "60": # not tuned, just take reasonable parameters 
+      "3":
+        n_points: 2000
+        learning_rate: 0.001
+        num_latents: 8
+        kernel: "matern"
+        use_linear: 1
+        periodic_type: ""

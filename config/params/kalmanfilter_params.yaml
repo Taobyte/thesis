@@ -1,0 +1,44 @@
+# NOT TUNED
+dalia:
+  "True":
+    "5":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 32
+    "10":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 64
+    "20":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 128
+    "30":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 128
+    "60":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 256
+  "False":
+    "5":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 32
+    "10":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 64
+    "20":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 128
+    "30":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 128
+    "60":
+      "3":
+        learning_rate: 0.0005
+        hidden_dim: 256

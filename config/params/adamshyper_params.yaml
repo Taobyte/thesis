@@ -1,0 +1,53 @@
+dalia:
+  'True':
+    '5':
+      '3':
+        learning_rate: 0.0023752166039571958
+        d_model: 768
+        inner_size: 16
+    '10':
+      '3':
+        learning_rate: 0.0007072099285631307
+        d_model: 512
+        inner_size: 8
+    '20': # NOT TUNED
+      '3':
+        learning_rate: 0.0007072099285631307
+        d_model: 512
+        inner_size: 8
+    '30': # NOT TUNED
+      '3':
+        learning_rate: 0.0007072099285631307
+        d_model: 512
+        inner_size: 8
+    '60': # NOT TUNED
+      '3':
+        learning_rate: 0.0007072099285631307
+        d_model: 512
+        inner_size: 8
+  'False':
+    '5':
+      '3':
+        learning_rate: 0.005538269137885625
+        d_model: 128
+        inner_size: 16
+    '10': 
+      '3':        
+        learning_rate: 0.0006594839980394368
+        d_model: 768
+        inner_size: 8
+    '20': 
+      '3':        
+        learning_rate: 0.00970745552895098
+        d_model: 768
+        inner_size: 4
+    '30':
+      '3':        
+        learning_rate: 0.0026664395453299366
+        d_model: 768
+        inner_size: 8
+    '60':
+      '3':        
+        learning_rate: 0.0019060948869004733
+        d_model: 512
+        inner_size: 16

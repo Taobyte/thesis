@@ -1,21 +1,21 @@
 name: "gp"
-n_points: 500 # 2000 # number of inducing points
+n_points: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.n_points}  # 2000 # number of inducing points
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
   _target_: src.models.gp.GPModel
-  num_latents: 5 
+  num_latents: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.num_latents} 
   num_tasks: ${prediction_window}
-  kernel: "rbf"  # can be "rbf", "matern", "rq" or "sm" spectral mixutre kernel
-  periodic_type: "" # can be "additive", "multiplicative" or "" for no periodic kernel
-  use_linear_trend: 1
+  kernel: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.kernel}   # can be "rbf", "matern", "rq" or "sm" spectral mixutre kernel
+  periodic_type: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.periodic_type}  # can be "additive", "multiplicative" or "" for no periodic kernel
+  use_linear_trend: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.use_linear} 
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
-  learning_rate: 0.0011634474722097472
+  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
 
 trainer:
-  max_epochs: 50
+  max_epochs: 1000
   use_early_stopping: True
   patience: 2
 
