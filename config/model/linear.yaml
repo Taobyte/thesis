@@ -17,7 +17,7 @@ pl_model:
   weight_decay: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.weight_decay} 
 
 trainer:
-  max_epochs: 5
+  max_epochs: 1000
   use_early_stopping: True
   patience: 2
 
