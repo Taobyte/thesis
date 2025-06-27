@@ -45,7 +45,14 @@ def main(config: DictConfig) -> Optional[float]:
         datamodule = instantiate(config.dataset.datamodule)
         model_kwargs = get_model_kwargs(config, datamodule)
         model = instantiate(config.model.model, **model_kwargs)
-        pl_model = instantiate(config.model.pl_model, model=model, tune=True)
+        pl_model = instantiate(
+            config.model.pl_model,
+            model=model,
+            name=config.model.name,
+            use_plots=config.use_plots,
+            normalization=config.normalization,
+            tune=config.tune,
+        )
 
         callbacks = []
 

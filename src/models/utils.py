@@ -55,17 +55,17 @@ class BaseLightningModule(L.LightningModule):
         self,
         wandb_project: str = "c_keusch/thesis",
         n_trials: int = 10,
-        tune: bool = False,
         name: str = None,
         use_plots: bool = False,
         normalization: str = "local",
+        tune: bool = False,
     ):
         super().__init__()
 
         self.n_trials = n_trials
         self.wandb_project = wandb_project
-        self.tune = tune
         self.name = name
+        self.tune = tune
         self.use_plots = use_plots
         self.normalization = normalization
 
