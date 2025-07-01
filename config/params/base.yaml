@@ -10,7 +10,7 @@ hmm:
 
 kalmanfilter:
   learning_rate: 0.0005
-  hidden_dim: 32
+  hidden_dim: 256
 
 xgboost:
   n_estimators: 538
