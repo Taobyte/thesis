@@ -1,18 +1,18 @@
 name: "gp"
-n_points: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.n_points}  # 2000 # number of inducing points
+n_points: ${params.gp.n_points} 
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
   _target_: src.models.gp.GPModel
-  num_latents: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.num_latents} 
+  num_latents: ${params.gp.num_latents}
   num_tasks: ${prediction_window}
-  kernel: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.kernel}   # can be "rbf", "matern", "rq" or "sm" spectral mixutre kernel
-  periodic_type: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.periodic_type}  # can be "additive", "multiplicative" or "" for no periodic kernel
-  use_linear_trend: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.use_linear} 
+  kernel: ${params.gp.kernel} 
+  periodic_type: ${params.gp.periodic_type}
+  use_linear_trend: ${params.gp.use_linear_trend} 
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
-  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
+  learning_rate: ${params.gp.learning_rate}
 
 trainer:
   max_epochs: 1000

@@ -28,7 +28,7 @@ OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
 OmegaConf.register_new_resolver(
     "compute_input_channel_dims", compute_input_channel_dims
 )
-
+OmegaConf.register_new_resolver("min", lambda x, y: min(int(x), int(y)))
 OmegaConf.register_new_resolver("str", lambda x: str(x))
 
 

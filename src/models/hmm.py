@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from typing import Tuple
 
@@ -11,49 +10,39 @@ from src.models.utils import BaseLightningModule
 class PytorchHMM(nn.Module):
     def __init__(
         self,
-        hidden_dim: int = 5,
+        base_dim: int = 5,
         target_channel_dim: int = 1,
         temperature: float = 1.0,
         min_var: float = 1e-6,
-        use_dynamic_features: bool = False,
-        dynamic_exogenous_variables: int = 2,
-        ff_dim: int = 32,
+        use_activity_labels: bool = False,
+        n_activity_states: int = 1,
     ):
         super().__init__()
 
-        self.hidden_dim = hidden_dim
+        self.base_dim = base_dim
+        self.use_activity_labels = use_activity_labels
+        if use_activity_labels:
+            self.hidden_dim = n_activity_states * base_dim
+        else:
+            self.hidden_dim = base_dim
         self.target_channel_dim = target_channel_dim
         self.temperature = temperature
         self.min_var = min_var
 
         # Transition matrix parameters (learnable)
-        self.transition_logits = nn.Parameter(torch.randn(hidden_dim, hidden_dim))
+        self.transition_logits = nn.Parameter(
+            torch.randn(self.hidden_dim, self.hidden_dim)
+        )
 
         # Initial state distribution parameters
-        self.initial_logits = nn.Parameter(torch.randn(hidden_dim))
+        self.initial_logits = nn.Parameter(torch.randn(self.hidden_dim))
 
-        self.use_dynamic_features = use_dynamic_features
-        if use_dynamic_features:
-            self.dynamic_exogenous_variables = dynamic_exogenous_variables
-            self.emission_nns = nn.ModuleList(
-                [
-                    nn.Sequential(
-                        nn.Linear(self.dynamic_exogenous_variables, ff_dim),
-                        nn.ReLU(),
-                        nn.Linear(
-                            ff_dim, 2 * self.target_channel_dim
-                        ),  # outputs mean and log-variance
-                    )
-                    for _ in range(self.hidden_dim)
-                ]
-            )
-        else:
-            self.emission_means = nn.Parameter(
-                torch.randn(hidden_dim, target_channel_dim)
-            )
-            self.emission_log_vars = nn.Parameter(
-                torch.zeros(hidden_dim, target_channel_dim)
-            )
+        self.emission_means = nn.Parameter(
+            torch.randn(self.hidden_dim, target_channel_dim)
+        )
+        self.emission_log_vars = nn.Parameter(
+            torch.zeros(self.hidden_dim, target_channel_dim)
+        )
 
         # Initialize parameters
         self._initialize_parameters()
@@ -61,19 +50,10 @@ class PytorchHMM(nn.Module):
     def _initialize_parameters(self):
         """Initialize parameters with reasonable defaults."""
         with torch.no_grad():
-            # Initialize transition matrix to slightly favor staying in same state
             self.transition_logits.fill_(0.0)
             self.transition_logits.diagonal().fill_(1.0)
 
-            # Initialize initial state distribution uniformly
             self.initial_logits.fill_(0.0)
-
-            # Initialize emission means with different values for each state
-            for i in range(self.hidden_dim):
-                self.emission_means[i].fill_(i - self.hidden_dim // 2)
-
-            # Initialize emission variances to reasonable values
-            self.emission_log_vars.fill_(np.log(1.0))
 
     @property
     def transition_matrix(self):
@@ -93,22 +73,12 @@ class PytorchHMM(nn.Module):
     def compute_emission_probability(
         self, look_back_window: torch.Tensor, state: int
     ) -> torch.Tensor:
-        if self.use_dynamic_features:
-            activity = look_back_window[
-                :,
-                self.target_channel_dim : self.target_channel_dim
-                + self.dynamic_exogenous_variables,
-            ]
-            params = self.emission_nns[state](activity)
-            mean, log_var = params.chunk(2, dim=-1)
-            var = torch.exp(log_var) + self.min_var
-        else:
-            mean = (
-                self.emission_means[state].unsqueeze(0).unsqueeze(0)
-            )  # (1, 1, target_channel_dim)
-            var = (
-                self.emission_variances[state].unsqueeze(0).unsqueeze(0)
-            )  # (1, 1, target_channel_dim)
+        mean = (
+            self.emission_means[state].unsqueeze(0).unsqueeze(0)
+        )  # (1, 1, target_channel_dim)
+        var = (
+            self.emission_variances[state].unsqueeze(0).unsqueeze(0)
+        )  # (1, 1, target_channel_dim)
 
         # Gaussian log probability
         log_prob = -0.5 * (
@@ -119,7 +89,8 @@ class PytorchHMM(nn.Module):
         return log_prob.sum(dim=-1)
 
     def forward_algorithm(
-        self, observations: torch.Tensor
+        self,
+        observations: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, seq_len, _ = observations.shape
         alpha = torch.zeros(
@@ -137,13 +108,33 @@ class PytorchHMM(nn.Module):
         # Forward pass
         transition_matrix = self.transition_matrix
         for t in range(1, seq_len):
+            current_alpha = alpha[:, t - 1, :]
+            if self.use_activity_labels:
+                activity_onehot = observations[
+                    :, t - 1, self.target_channel_dim :
+                ]  # assumes that the data after the heartrate is the one-hot encoded activity
+
+                act_idx = torch.argmax(activity_onehot, dim=-1)  # (B,)
+                base_dim = self.base_dim
+                num_actions = 9
+
+                pos = torch.arange(
+                    0, num_actions * base_dim, device=activity_onehot.device
+                )
+
+                block_idx = (pos // base_dim).unsqueeze(0)  # (1, num_actions*base_dim)
+                act_idx_expanded = act_idx.unsqueeze(1)  # (B, 1)
+
+                mask = block_idx == act_idx_expanded  # (B, num_actions*base_dim)
+                current_alpha[~mask] = -torch.inf
+
             for s in range(self.hidden_dim):
                 emission_prob = self.compute_emission_probability(
                     observations[:, t : t + 1], s
                 ).squeeze(1)
 
                 # Log-sum-exp for numerical stability
-                transition_scores = alpha[:, t - 1, :] + torch.log(
+                transition_scores = current_alpha + torch.log(
                     transition_matrix[:, s] + 1e-10
                 )
                 alpha[:, t, s] = (
@@ -201,17 +192,18 @@ class PytorchHMM(nn.Module):
 
         return states
 
-    def infer_current_state(self, observations: torch.Tensor) -> torch.Tensor:
+    def infer_current_state(
+        self, observations: torch.Tensor, is_training: bool = False
+    ) -> torch.Tensor:
         alpha, _ = self.forward_algorithm(observations)
         # Normalize the final forward probabilities
-        final_alpha = alpha[:, -1, :]  # (batch_size, hidden_dim)
+        final_alpha = alpha[:, -1, :]  # (batch_size, self.hidden_dim)
         state_probs = F.softmax(final_alpha, dim=-1)
         return state_probs
 
     def predict_next_timestep(
         self, current_state_probs: torch.Tensor, deterministic: bool = False
     ) -> torch.Tensor:
-        # Compute next state probabilities
         transition_matrix = self.transition_matrix
         next_state_probs = torch.matmul(current_state_probs, transition_matrix)
 
@@ -221,13 +213,10 @@ class PytorchHMM(nn.Module):
                 next_state_probs.unsqueeze(-1) * self.emission_means.unsqueeze(0), dim=1
             ).unsqueeze(1)  # (batch_size, 1, target_channel_dim)
         else:
-            # Sample from mixture of Gaussians
-            # Sample states
             state_samples = torch.multinomial(next_state_probs, 1).squeeze(
                 -1
             )  # (batch_size,)
 
-            # Sample from emission distributions
             selected_means = self.emission_means[
                 state_samples
             ]  # (batch_size, target_channel_dim)
@@ -247,11 +236,13 @@ class PytorchHMM(nn.Module):
         lookback_sequence: torch.Tensor,
         prediction_steps: int,
         deterministic: bool = True,
+        is_training: bool = False,
     ) -> torch.Tensor:
         predictions = []
 
-        # Infer current state from lookback sequence
-        current_state_probs = self.infer_current_state(lookback_sequence)
+        current_state_probs = self.infer_current_state(
+            lookback_sequence, is_training=is_training
+        )
 
         for _ in range(prediction_steps):
             # Predict next timestep
@@ -275,8 +266,9 @@ class HMMLightningModule(BaseLightningModule):
         model: torch.nn.Module,
         learning_rate: float = 1e-3,
         deterministic: bool = True,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
         self.deterministic = deterministic
@@ -289,18 +281,18 @@ class HMMLightningModule(BaseLightningModule):
         prediction_window = getattr(self.trainer.datamodule, "prediction_window")
 
         return self.model.autoregressive_predict(
-            look_back_window, prediction_window, deterministic=True
+            look_back_window,
+            prediction_window,
+            deterministic=True,
         )
 
     def model_specific_train_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> torch.Tensor:
-        target_channel_dim = getattr(self.trainer.datamodule, "target_channel_dim")
-        full_sequence = torch.cat(
-            [look_back_window[:, :, :target_channel_dim], prediction_window], dim=1
-        )
+        # full_sequence = torch.cat([look_back_window[:, :, :], prediction_window], dim=1)
+        # TODO: currently we do not train with all data!
 
-        _, log_likelihood = self.model.forward_algorithm(full_sequence)
+        _, log_likelihood = self.model.forward_algorithm(look_back_window)
 
         loss = -log_likelihood.mean()
 
@@ -311,8 +303,6 @@ class HMMLightningModule(BaseLightningModule):
     def model_specific_val_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> torch.Tensor:
-        # _, log_likelihood = self.model.forward_algorithm(look_back_window)
-
         preds = self.model_forward(look_back_window)
         mse_loss = self.criterion(preds, prediction_window)
 

@@ -1,0 +1,66 @@
+# baselines
+# we can add in specific parameters with:  ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
+linear:
+  learning_rate: 0.0005
+  weight_decay: 6.627291754394113e-06
+
+hmm:
+  learning_rate: 0.001
+  hidden_dim: 32
+
+kalmanfilter:
+  learning_rate: 0.0005
+  hidden_dim: 32
+
+xgboost:
+  n_estimators: 538
+  learning_rate: 0.08118777317963338
+  max_depth: 5
+  reg_alpha: 2.3548874442035386
+  reg_lambda: 2.944183580003594
+  subsample: 0.9162495442966206
+  colsample_bytree: 0.6224391217896296
+
+gp:
+  n_points: 2000
+  learning_rate: 0.001
+  num_latents: 10
+  kernel: "matern"
+  use_linear_trend: 1
+  periodic_type: ""
+
+
+# SOTA Deep Learning Architectures
+
+timesnet:
+  learning_rate: 0.006757553589352132
+  d_model: 32
+  d_ff: 32
+  dropout: 0.01696330173575103
+
+simpletm:
+  learning_rate: 0.0038826539697481037
+  d_model: 256
+  dropout: 0.014237860899953811
+  geomattn_dropout: 0.25380888118473355
+  d_ff: 32
+
+adamshyper:
+  learning_rate: 0.0023752166039571958
+  d_model: 768
+  inner_size: 16
+
+pattn:
+  learning_rate: 0.002428582457141732
+  tmax: 10
+  patch_size: 4 
+  d_model: 128
+
+gpt4ts:
+  d_ff: 128
+  d_model: 64
+
+timexer:
+  d_ff: 128 # 256, 512
+  d_model: 128 # 256, 512 
+  e_layers: 1 # 2,3 

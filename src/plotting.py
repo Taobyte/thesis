@@ -228,6 +228,7 @@ def plot_all_data(datamodule, data_type: str = "test", save_html: bool = False) 
         raise NotImplementedError()
 
     use_dynamic_features = datamodule.use_dynamic_features
+    use_static_features = datamodule.use_static_features
     target_channel_dim = datamodule.target_channel_dim
     use_heart_rate = datamodule.use_heart_rate
 
@@ -237,7 +238,7 @@ def plot_all_data(datamodule, data_type: str = "test", save_html: bool = False) 
         print(f"We have a lot of timeseries. Only plot the first {max_series}.")
         data = data[:max_series]
     n_series = len(data)
-    n_rows = 2 if use_dynamic_features else 1
+    n_rows = 2 if use_dynamic_features or use_static_features else 1
 
     row_titles = []
     for i in range(n_series):
@@ -271,6 +272,43 @@ def plot_all_data(datamodule, data_type: str = "test", save_html: bool = False) 
             col=1,
         )
         if use_dynamic_features:
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(n)),
+                    y=activity,
+                    mode="lines",
+                    name=f"P{j + 1} Activity Value",
+                    line=dict(color=colors[j]),
+                    showlegend=False,
+                ),
+                row=n_rows * j + 2,
+                col=1,
+            )
+            fig.update_xaxes(matches=f"x{2 * j + 1}", row=2 * j + 2, col=1)
+        elif use_static_features:
+
+            def int_to_str(activity_label: int):
+                if activity_label == 0:
+                    return "Transition"
+                elif activity_label == 1:
+                    return "Sitting"
+                elif activity_label == 2:
+                    return "Ascending / Descending Stairs"
+                elif activity_label == 3:
+                    return "Table Soccer"
+                elif activity_label == 4:
+                    return "Cycling"
+                elif activity_label == 5:
+                    return "Driving Car"
+                elif activity_label == 6:
+                    return "Lunch Break"
+                elif activity_label == 7:
+                    return "Walking"
+                elif activity_label == 8:
+                    return "Working"
+
+            # TODO: process activity and plot the activity string
+
             fig.add_trace(
                 go.Scatter(
                     x=list(range(n)),
@@ -554,4 +592,4 @@ if __name__ == "__main__":
     datamodule.setup("fit")
     # datamodule.setup("test")
 
-    plot_all_data(datamodule, data_type="train", save_html=True)
+    plot_all_data(datamodule, data_type="train", save_html=False)

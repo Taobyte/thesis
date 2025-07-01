@@ -1,0 +1,34 @@
+name: "timexer"
+
+model:
+    _target_: src.models.timexer.Model
+    features: "MS" # do we have more than 1 endogenous variable to forecast? M stands for multi
+    seq_len: ${look_back_window} 
+    pred_len: ${prediction_window}
+    use_norm: False
+    patch_len:  ${min:${look_back_window}, 16} 
+    d_model: ${params.timexer.d_model}
+    d_ff: ${params.timexer.d_ff}
+    e_layers: ${params.timexer.e_layers} # number of encoding layers
+    embed: "fixed"
+    freq: "h"
+    dropout: 0.1
+    enc_in: ${dataset.datamodule.look_back_channel_dim}
+    factor: 1 # attention factor: afaik not used in the code!
+    n_heads: 8
+    activation: "gelu"
+    target_channel_dim: ${dataset.datamodule.target_channel_dim}
+    look_back_window: ${look_back_window}
+
+
+pl_model:
+    _target_: src.models.timexer.TimeXer
+    learning_rate: 0.0001
+
+trainer:
+    max_epochs: 10
+    use_early_stopping: True 
+    patience: 3
+
+data:
+    batch_size: 32

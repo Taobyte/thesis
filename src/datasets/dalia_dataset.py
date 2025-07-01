@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 from typing import Tuple
+from sklearn.preprocessing import OneHotEncoder
 
 from src.datasets.utils import BaseDataModule
 
@@ -41,10 +42,33 @@ def dalia_load_data(
             series = np.concatenate((series, activity), axis=1)
 
         if use_static_features:
-            row = static_feature_df[static_feature_df["SUBJECT_ID"] == label]
-            static_features = row.values[:, 2:].astype(float)  # (1, 12)
-            repeated = np.repeat(static_features, repeats=len(series), axis=0)
-            series = np.concatenate((series, repeated), axis=1)
+            #  row = static_feature_df[static_feature_df["SUBJECT_ID"] == label]
+            #  static_features = row.values[:, 2:].astype(float)  # (1, 12)
+            #  repeated = np.repeat(static_features, repeats=len(series), axis=0)
+            #  series = np.concatenate((series, repeated), axis=1)
+            activity = data["activity"]
+            if use_heart_rate:
+                # use the same preprocessing as for the heartrate
+
+                encoder = OneHotEncoder(
+                    categories=[list(range(0, 9))], sparse_output=False
+                )
+                window_size = 8
+                stride = 2
+                argmax_activities = []
+                activity_label_1hz = activity[::4].astype(np.int64)  # activity is 4Hz
+                for i in range(0, len(activity_label_1hz) - window_size + 1, stride):
+                    window = activity_label_1hz[i : i + window_size, :]
+                    counts = np.bincount(window[:, 0], minlength=9)
+                    argmax_activities.append(np.argmax(counts))
+
+                processed_activity = np.array(argmax_activities)[:, np.newaxis]
+                assert len(processed_activity) == len(series)
+
+                processed_activity_onehot = encoder.fit_transform(processed_activity)
+            else:
+                processed_activity = 0  # TODO
+            series = np.concatenate((series, processed_activity_onehot), axis=1)
 
         loaded_series.append(series)
 

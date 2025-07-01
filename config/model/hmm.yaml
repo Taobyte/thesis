@@ -2,13 +2,12 @@ name: "hmm"
 
 model:
   _target_: src.models.hmm.PytorchHMM
-  hidden_dim: 32 
+  base_dim: 32 
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   temperature: 1.0
   min_var: 1e-6
-  use_dynamic_features: ${dataset.datamodule.use_dynamic_features}
-  dynamic_exogenous_variables: ${dataset.datamodule.dynamic_exogenous_variables}
-  ff_dim: 16
+  use_activity_labels: ${use_static_features}
+  n_activity_states: ${dataset.datamodule.static_exogenous_variables}
 
 pl_model: 
   _target_: src.models.hmm.HMMLightningModule
@@ -16,8 +15,9 @@ pl_model:
   deterministic: True
 
 trainer:
-  use_early_stopping: False
-  max_epochs: 20
+  max_epochs: 1000
+  use_early_stopping: True
+  patience: 5
 
 data: 
   batch_size: 256

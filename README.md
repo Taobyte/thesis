@@ -13,6 +13,10 @@ their strengths, limitations, and applicability. The findings will help determin
 models can reliably capture the patterns and abrupt transitions inherent to non-stationary signals,
 or if advancements are needed to improve their predictive accuracy in such scenarios 
 
+Current research heavily focusses on public datasets. For long-term forecasting the datasets ETT, Electricity, Weather, Exchange and ILI are frequently used for evaluating novel machine learning models. For short-term forecasting, many authors use the M4 dataset. You can download these datasets from this google drive [Datasets](https://drive.google.com/drive/folders/13Cg1KYOlzM5C7K8gK8NfC-F3EYxkM3D2) provided by the authors from the TimesNet paper.
+
+
+
 
 ## Datasets
 

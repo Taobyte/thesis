@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - model: pattn
-  - params: pattn_params
+  - params: base 
   - dataset: dalia
   - path: local
   - experiment: fold_0

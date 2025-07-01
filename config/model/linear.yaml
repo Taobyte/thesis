@@ -11,10 +11,10 @@ model:
 
 pl_model: 
   _target_: src.models.linear.Linear
-  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate}  # 0.008255574697066323
+  learning_rate: ${params.linear.learning_rate} 
   loss: "MSE"
   use_scheduler: False
-  weight_decay: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.weight_decay} 
+  weight_decay: ${params.linear.weight_decay} 
 
 trainer:
   max_epochs: 1000

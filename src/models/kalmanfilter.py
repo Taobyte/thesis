@@ -110,18 +110,16 @@ class Model(torch.nn.Module):
             F_t = self.F[t]
             H_t = self.H[t]
 
-            # Prediction
+            # (S1) Prediction Step
             hidden_state_pred = F_t(hidden_state)  # (B, hidden_dim)
-            # pdb.set_trace()
             F_mat = F_t.weight  # (hidden_dim, hidden_dim)
             Q = self.Q.unsqueeze(0).repeat(B, 1, 1)
             P_pred = F_mat @ P @ F_mat.transpose(-1, -2) + Q
-            # pdb.set_trace()
-            # Observation Update
+
+            # (S2) Measurement Update Step
             H_mat = H_t.weight  # (target_channel_dim, hidden_dim)
             R = self.R.unsqueeze(0).repeat(B, 1, 1)
             y_pred = H_t(hidden_state_pred)  # (B, target_channel_dim)
-            # pdb.set_trace()
             y_obs = observation[
                 :, t, : self.target_channel_dim
             ]  # (B, target_channel_dim)
