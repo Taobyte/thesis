@@ -5,12 +5,12 @@ model:
     features: "MS" # do we have more than 1 endogenous variable to forecast? M stands for multi
     seq_len: ${look_back_window} 
     pred_len: ${prediction_window}
-    use_norm: False
-    patch_len:  ${min:${look_back_window}, 16} 
+    use_norm: True
+    patch_len:  4 # ${min:${look_back_window}, 16} 
     d_model: ${params.timexer.d_model}
     d_ff: ${params.timexer.d_ff}
     e_layers: ${params.timexer.e_layers} # number of encoding layers
-    embed: "fixed"
+    embed: "timeF"
     freq: "h"
     dropout: 0.1
     enc_in: ${dataset.datamodule.look_back_channel_dim}

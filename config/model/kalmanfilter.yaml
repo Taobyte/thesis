@@ -17,7 +17,7 @@ pl_model:
   learning_rate: ${params.kalmanfilter.learning_rate}
   loss: "MSE"
   weight_decay: 0.0
-  exo_weight: 0.5
+  exo_weight: 0.1
 
 trainer:
   max_epochs: 1000
