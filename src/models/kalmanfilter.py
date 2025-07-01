@@ -82,7 +82,18 @@ class Model(torch.nn.Module):
         )  # (B, hidden_dim, hidden_dim)
         I = torch.eye(P.size(-1), device=device).unsqueeze(0).repeat(B, 1, 1)
         # pdb.set_trace()
+        exo_hidden = []
         for t in range(self.look_back_window):
+            # collect the predicted hidden state for further loss calculation
+            if self.use_dynamic_features:
+                exo_hidden.append(
+                    hidden_state[
+                        :,
+                        self.base_dim : self.base_dim
+                        + self.dynamic_exogenous_variables,
+                    ]
+                )
+
             # add dynamic features to hidden state
             if self.use_dynamic_features:
                 hidden_state[
@@ -132,11 +143,11 @@ class Model(torch.nn.Module):
             hidden_state = hidden_state_pred + (K @ residual.unsqueeze(-1)).squeeze(-1)
             P = (I - K @ H_mat) @ P_pred
 
-        return hidden_state
+        return hidden_state, exo_hidden
 
     def forward(self, x: torch.Tensor):
         # x.shape == (B, T, 1)
-        hidden_state = self.find_current_hidden_state(x)
+        hidden_state, exo_hidden = self.find_current_hidden_state(x)
         preds = []
         for i in range(self.look_back_window, self.window_length):
             hidden_state = self.F[i](hidden_state)
@@ -145,7 +156,7 @@ class Model(torch.nn.Module):
 
         stacked_preds = torch.cat(preds, dim=1)
 
-        return stacked_preds.unsqueeze(-1)
+        return stacked_preds.unsqueeze(-1), exo_hidden
 
 
 class KalmanFilter(BaseLightningModule):
@@ -154,7 +165,8 @@ class KalmanFilter(BaseLightningModule):
         model: torch.nn.Module,
         loss: str = "MSE",
         learning_rate: float = 0.001,
-        weight_decay: float = 0.00,
+        weight_decay: float = 0.0,
+        exo_weight: float = 0.5,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -164,20 +176,39 @@ class KalmanFilter(BaseLightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
 
+        self.exo_weight = exo_weight
+
     def model_forward(self, look_back_window):
         assert len(look_back_window.shape) == 3
 
         # look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
-        preds = self.model(look_back_window)
+        preds, _ = self.model(look_back_window)
 
         return preds[:, :, : self.model.target_channel_dim]
 
     def model_specific_train_step(self, look_back_window, prediction_window):
-        preds = self.model_forward(look_back_window)
+        preds, exo_hidden = self.model(look_back_window)
+        if self.use_dynamic_features:
+            ground_truth_exo = look_back_window[
+                :,
+                :,
+                self.target_channel_dim : self.target_channel_dim
+                + self.dynamic_exogenous_variables,
+            ]
+            exo_predicted = torch.concatenate(exo_hidden, dim=1).unsqueeze(-1)
+            exo_loss = self.criterion(exo_predicted, ground_truth_exo)
+        else:
+            exo_loss = 0
+
         assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
-        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
-        return loss
+        obs_loss = self.criterion(preds, prediction_window)
+        total_loss = obs_loss + self.exo_weight * exo_loss
+        self.log("train_loss_obs", obs_loss, on_epoch=True, on_step=True, logger=True)
+        self.log("train_loss_exo", exo_loss, on_epoch=True, on_step=True, logger=True)
+        self.log(
+            "train_loss_total", total_loss, on_epoch=True, on_step=True, logger=True
+        )
+        return total_loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
