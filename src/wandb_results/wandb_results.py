@@ -87,7 +87,7 @@ def main():
         required=False,
         default=None,
         type=list_of_strings,
-        help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,elastst | Wrong Example: gpt4ts, timellm )",
+        help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,xgboost| Wrong Example: gpt4ts, timellm )",
     )
 
     parser.add_argument(

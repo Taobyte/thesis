@@ -46,6 +46,7 @@ model_to_name = {
     "pattn": "PAttn",
     "simpletm": "SimpleTM",
     "elastst": "ElasTST",
+    "timexer": "TimeXer",
     "gp": "Gaussian Process",
     "bnn": "Bayesian Neural Network",
     "kalmanfilter": "Kalman Filter",

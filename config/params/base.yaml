@@ -61,6 +61,6 @@ gpt4ts:
   d_model: 64
 
 timexer:
-  d_ff: 128 # 256, 512
-  d_model: 128 # 256, 512 
-  e_layers: 1 # 2,3 
+  d_ff: 512 # 128, 256, 512
+  d_model: 512 # 128, 256, 512 
+  e_layers: 2 # 2,3 
