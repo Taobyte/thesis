@@ -6,7 +6,7 @@ model:
     seq_len: ${look_back_window} 
     pred_len: ${prediction_window}
     use_norm: True
-    patch_len:  4 # ${min:${look_back_window}, 16} 
+    patch_len: ${min:${look_back_window}, 16} 
     d_model: ${params.timexer.d_model}
     d_ff: ${params.timexer.d_ff}
     e_layers: ${params.timexer.e_layers} # number of encoding layers
@@ -26,7 +26,7 @@ pl_model:
     learning_rate: 0.0001
 
 trainer:
-    max_epochs: 10
+    max_epochs: 1000
     use_early_stopping: True 
     patience: 3
 
