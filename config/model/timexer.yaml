@@ -2,7 +2,7 @@ name: "timexer"
 
 model:
     _target_: src.models.timexer.Model
-    features: "MS" # do we have more than 1 endogenous variable to forecast? M stands for multi
+    features: "M" # do we have more than 1 endogenous variable to forecast? M stands for multi
     seq_len: ${look_back_window} 
     pred_len: ${prediction_window}
     use_norm: True

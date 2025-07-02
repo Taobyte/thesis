@@ -350,6 +350,9 @@ class Model(nn.Module):
                 x_enc[:, :, self.target_channel_dim :], x_mark_enc
             )
         else:
+            print(
+                "Attention! You are using the exogenous based forecast without exogenous variables!"
+            )
             # in here, we don't have any exogenous variable! So we have to add some dummy embedding
             zero_tensor = torch.zeros_like(x_enc, device=x_enc.device)
             ex_embed = self.ex_embedding(zero_tensor, x_mark_enc)
@@ -430,13 +433,8 @@ class TimeXer(BaseLightningModule):
         self.learning_rate = learning_rate
         self.criterion = torch.nn.MSELoss()
 
-    def _generate_time_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        B, T, _ = x.shape
-        return torch.zeros((B, T, 5), device=x.device).float()
-
     def model_forward(self, x):
-        time_tensor = self._generate_time_tensor(x)
-        preds = self.model(x, time_tensor)
+        preds = self.model(x, None)
         return preds
 
     def _shared_step(self, look_back_window, prediction_window):
@@ -451,8 +449,6 @@ class TimeXer(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         loss, _ = self._shared_step(look_back_window, prediction_window)
-        current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
-        self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
