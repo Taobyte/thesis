@@ -195,9 +195,12 @@ class PytorchHMM(nn.Module):
 
         if deterministic:
             # Expected value prediction
-            predictions = torch.sum(
-                next_state_probs.unsqueeze(-1) * self.emission_means.unsqueeze(0), dim=1
-            ).unsqueeze(1)  # (batch_size, 1, target_channel_dim)
+            state_samples = torch.argmax(next_state_probs, dim=-1)
+            predictions = self.emission_means[state_samples].unsqueeze(1)
+
+            #  predictions = torch.sum(
+            #      next_state_probs.unsqueeze(-1) * self.emission_means.unsqueeze(0), dim=1
+            #  ).unsqueeze(1)  # (batch_size, 1, target_channel_dim)
         else:
             state_samples = torch.multinomial(next_state_probs, 1).squeeze(
                 -1
