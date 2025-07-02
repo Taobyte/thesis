@@ -1,0 +1,14 @@
+defaults:
+ -  shared_sweeper
+
+params:
+  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
+
+  model.model.use_norm: choice(0,1)
+  model.model.patch_len: int(interval(2,16))
+  model.model.d_model: choice(64, 128, 256, 512)
+  model.model.d_ff: choice(64, 128, 256, 512)
+  model.model.e_layers: int(interval(1,5))
+  model.model.dropout: interval(0.0,0.5)
+
+  #model.data.batch_size: choice(32, 64, 128)
