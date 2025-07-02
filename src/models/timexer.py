@@ -279,7 +279,7 @@ class Model(nn.Module):
             )
         self.patch_num = int(seq_len // patch_len)
 
-        self.n_vars = 1 if features == "MS" else enc_in
+        self.n_vars = 1 if features else enc_in
         # Embedding
         self.en_embedding = EnEmbedding(self.n_vars, d_model, self.patch_len, dropout)
 
@@ -340,22 +340,27 @@ class Model(nn.Module):
 
         _, _, N = x_enc.shape
 
-        # removed .unsqueeze(-1) from input to en_embedding
+        #  # removed .unsqueeze(-1) from input to en_embedding
+        #  en_embed, n_vars = self.en_embedding(
+        #      x_enc[:, :, : self.target_channel_dim].permute(0, 2, 1)
+        #  )
+
         en_embed, n_vars = self.en_embedding(
-            x_enc[:, :, : self.target_channel_dim].permute(0, 2, 1)
+            x_enc[:, :, -1].unsqueeze(-1).permute(0, 2, 1)
         )
-        if self.target_channel_dim < N:
-            # since the condition is met, we know there are exogenous variables present
-            ex_embed = self.ex_embedding(
-                x_enc[:, :, self.target_channel_dim :], x_mark_enc
-            )
-        else:
-            print(
-                "Attention! You are using the exogenous based forecast without exogenous variables!"
-            )
-            # in here, we don't have any exogenous variable! So we have to add some dummy embedding
-            zero_tensor = torch.zeros_like(x_enc, device=x_enc.device)
-            ex_embed = self.ex_embedding(zero_tensor, x_mark_enc)
+        ex_embed = self.ex_embedding(x_enc[:, :, :-1], x_mark_enc)
+        #  if self.target_channel_dim < N:
+        #      # since the condition is met, we know there are exogenous variables present
+        #      ex_embed = self.ex_embedding(
+        #          x_enc[:, :, self.target_channel_dim :], x_mark_enc
+        #      )
+        #  else:
+        #      print(
+        #          "Attention! You are using the exogenous based forecast without exogenous variables!"
+        #      )
+        #      # in here, we don't have any exogenous variable! So we have to add some dummy embedding
+        #      zero_tensor = torch.zeros_like(x_enc, device=x_enc.device)
+        #      ex_embed = self.ex_embedding(zero_tensor, x_mark_enc)
 
         enc_out = self.encoder(en_embed, ex_embed)
         enc_out = torch.reshape(
@@ -434,7 +439,12 @@ class TimeXer(BaseLightningModule):
         self.criterion = torch.nn.MSELoss()
 
     def model_forward(self, x):
+        if self.use_dynamic_features:
+            x = torch.flip(x, dims=[-1])
+
         preds = self.model(x, None)
+        if self.use_dynamic_features:
+            preds = torch.flip(preds, dims=[-1])
         return preds
 
     def _shared_step(self, look_back_window, prediction_window):

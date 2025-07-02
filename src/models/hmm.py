@@ -171,75 +171,6 @@ class PytorchHMM(nn.Module):
 
         return alpha, log_likelihood
 
-    def viterbi_decode(self, observations: torch.Tensor) -> torch.Tensor:
-        """Vectorized Viterbi decoding."""
-        batch_size, seq_len, _ = observations.shape
-        device = observations.device
-
-        # Extract exogenous variables if using activity labels
-        if self.use_activity_labels:
-            exog_vars = torch.argmax(
-                observations[:, :-1, self.target_channel_dim :], dim=-1
-            )
-        else:
-            exog_vars = None
-
-        # Compute emission probabilities
-        emission_log_probs = self.compute_emission_probabilities(
-            observations[:, :, : self.target_channel_dim]
-        )
-
-        # Get transition matrices
-        if self.use_activity_labels:
-            transition_matrices = self.get_transition_matrices(exog_vars)
-        else:
-            transition_matrices = self.get_transition_matrices()
-
-        # Initialize delta and path tracking
-        delta = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
-        path_indices = torch.zeros(
-            batch_size, seq_len - 1, self.hidden_dim, dtype=torch.long, device=device
-        )
-
-        # Initialize first timestep
-        initial_dist = self.initial_distribution
-        delta[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
-
-        # Forward pass
-        for t in range(1, seq_len):
-            if self.use_activity_labels:
-                trans_t = transition_matrices[:, t - 1, :, :]
-                trans_log_t = torch.log(trans_t + 1e-10)
-
-                # [batch, hidden_dim, 1] + [batch, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
-                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log_t
-
-                # Find best previous state for each current state
-                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
-                delta[:, t, :] += emission_log_probs[:, t, :]
-            else:
-                trans_log = torch.log(transition_matrices + 1e-10)
-
-                # [batch, hidden_dim, 1] + [1, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
-                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log.unsqueeze(0)
-
-                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
-                delta[:, t, :] += emission_log_probs[:, t, :]
-
-        # Backtrack to find best path
-        best_paths = torch.zeros(batch_size, seq_len, dtype=torch.long, device=device)
-
-        # Find best final state
-        _, best_paths[:, -1] = torch.max(delta[:, -1, :], dim=1)
-
-        # Backtrack
-        for t in range(seq_len - 2, -1, -1):
-            best_paths[:, t] = path_indices[
-                torch.arange(batch_size), t, best_paths[:, t + 1]
-            ]
-
-        return best_paths
-
     def infer_current_state(
         self, observations: torch.Tensor, is_training: bool = False
     ) -> torch.Tensor:
@@ -318,10 +249,6 @@ class PytorchHMM(nn.Module):
 
 
 class HMMLightningModule(BaseLightningModule):
-    """
-    PyTorch Lightning wrapper for the HMM model.
-    """
-
     def __init__(
         self,
         model: torch.nn.Module,
@@ -353,9 +280,12 @@ class HMMLightningModule(BaseLightningModule):
         # full_sequence = torch.cat([look_back_window[:, :, :], prediction_window], dim=1)
         # TODO: currently we do not train with all data!
 
-        _, log_likelihood = self.model.forward_algorithm(look_back_window)
+        # _, log_likelihood = self.model.forward_algorithm(look_back_window)
+        # loss = -log_likelihood.mean()
 
-        loss = -log_likelihood.mean()
+        preds = self.model_forward(look_back_window)
+        mse_loss = self.criterion(preds, prediction_window)
+        loss = mse_loss
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 
@@ -389,3 +319,77 @@ class HMMLightningModule(BaseLightningModule):
                 "monitor": "val_loss",
             },
         }
+
+
+"""
+
+    def viterbi_decode(self, observations: torch.Tensor) -> torch.Tensor:
+        batch_size, seq_len, _ = observations.shape
+        device = observations.device
+
+        # Extract exogenous variables if using activity labels
+        if self.use_activity_labels:
+            exog_vars = torch.argmax(
+                observations[:, :-1, self.target_channel_dim :], dim=-1
+            )
+        else:
+            exog_vars = None
+
+        # Compute emission probabilities
+        emission_log_probs = self.compute_emission_probabilities(
+            observations[:, :, : self.target_channel_dim]
+        )
+
+        # Get transition matrices
+        if self.use_activity_labels:
+            transition_matrices = self.get_transition_matrices(exog_vars)
+        else:
+            transition_matrices = self.get_transition_matrices()
+
+        # Initialize delta and path tracking
+        delta = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
+        path_indices = torch.zeros(
+            batch_size, seq_len - 1, self.hidden_dim, dtype=torch.long, device=device
+        )
+
+        # Initialize first timestep
+        initial_dist = self.initial_distribution
+        delta[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
+
+        # Forward pass
+        for t in range(1, seq_len):
+            if self.use_activity_labels:
+                trans_t = transition_matrices[:, t - 1, :, :]
+                trans_log_t = torch.log(trans_t + 1e-10)
+
+                # [batch, hidden_dim, 1] + [batch, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
+                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log_t
+
+                # Find best previous state for each current state
+                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
+                delta[:, t, :] += emission_log_probs[:, t, :]
+            else:
+                trans_log = torch.log(transition_matrices + 1e-10)
+
+                # [batch, hidden_dim, 1] + [1, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
+                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log.unsqueeze(0)
+
+                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
+                delta[:, t, :] += emission_log_probs[:, t, :]
+
+        # Backtrack to find best path
+        best_paths = torch.zeros(batch_size, seq_len, dtype=torch.long, device=device)
+
+        # Find best final state
+        _, best_paths[:, -1] = torch.max(delta[:, -1, :], dim=1)
+
+        # Backtrack
+        for t in range(seq_len - 2, -1, -1):
+            best_paths[:, t] = path_indices[
+                torch.arange(batch_size), t, best_paths[:, t + 1]
+            ]
+
+        return best_paths
+
+
+"""
