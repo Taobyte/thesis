@@ -46,7 +46,9 @@ class PytorchHMM(nn.Module):
             torch.zeros(self.hidden_dim, target_channel_dim)
         )
 
-    def get_transition_matrices(self, exogenous_variables: torch.Tensor = None):
+    def get_transition_matrices(
+        self, exogenous_variables: torch.Tensor = None, batch_size: int = 0
+    ):
         """Get normalized transition matrices for all exogenous states or base."""
         if self.use_activity_labels and exogenous_variables is not None:
             base_logits = self.base_transition_logits.unsqueeze(
@@ -64,7 +66,10 @@ class PytorchHMM(nn.Module):
             return F.softmax(combined_logits / self.temperature, dim=-1)
         else:
             # Just base transition matrix
-            return F.softmax(self.base_transition_logits / self.temperature, dim=-1)
+            base_matrix = F.softmax(
+                self.base_transition_logits / self.temperature, dim=-1
+            )
+            return base_matrix.unsqueeze(0).expand(batch_size, -1, -1)
 
     @property
     def initial_distribution(self):
@@ -122,13 +127,18 @@ class PytorchHMM(nn.Module):
         # Initialize first timestep
         initial_dist = self.initial_distribution  # [hidden_dim]
         alpha[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
-        exog_vars = torch.argmax(
-            observations[:, :, self.target_channel_dim :], dim=-1
-        )  # [batch, seq_len]
-
+        if self.use_activity_labels:
+            exog_vars = torch.argmax(
+                observations[:, :, self.target_channel_dim :], dim=-1
+            )  # [batch, seq_len]
+        else:
+            exog_vars = None
+        batch_size = observations.shape[0]
         for t in range(1, seq_len):
             if self.use_activity_labels:
-                trans_t = self.get_transition_matrices(exog_vars[:, t - 1])
+                trans_t = self.get_transition_matrices(
+                    exog_vars[:, t - 1], batch_size=batch_size
+                )
                 trans_log_t = torch.log(trans_t + 1e-10)
 
                 # Expand alpha for broadcasting: [batch, hidden_dim, 1]
@@ -144,16 +154,19 @@ class PytorchHMM(nn.Module):
                 )
             else:
                 # Time-invariant transitions
-                transition_matrices = self.get_transition_matrices(None)
+
+                transition_matrices = self.get_transition_matrices(
+                    None, batch_size=batch_size
+                )
                 trans_log = torch.log(
                     transition_matrices + 1e-10
-                )  # [hidden_dim, hidden_dim]
+                )  # [batch, hidden_dim, hidden_dim]
 
                 # Expand alpha for broadcasting: [batch, hidden_dim, 1]
                 alpha_prev = alpha[:, t - 1, :].unsqueeze(2)
 
                 # Compute transition scores: [batch, hidden_dim, hidden_dim]
-                transition_scores = alpha_prev + trans_log.unsqueeze(0)
+                transition_scores = alpha_prev + trans_log
 
                 # Log-sum-exp over previous states: [batch, hidden_dim]
                 alpha[:, t, :] = (
@@ -180,8 +193,10 @@ class PytorchHMM(nn.Module):
         last_ex_variable: torch.Tensor = None,
     ) -> torch.Tensor:
         transition_matrix = self.get_transition_matrices(
-            exogenous_variables=last_ex_variable
+            exogenous_variables=last_ex_variable,
+            batch_size=current_state_probs.shape[0],
         )
+
         next_state_probs = torch.bmm(
             current_state_probs.unsqueeze(1), transition_matrix
         ).squeeze(1)
@@ -218,12 +233,11 @@ class PytorchHMM(nn.Module):
         lookback_sequence: torch.Tensor,
         prediction_steps: int,
         deterministic: bool = True,
-        is_training: bool = False,
     ) -> torch.Tensor:
         predictions = []
 
         current_state_probs, log_likelihood = self.infer_current_state(
-            lookback_sequence, is_training=is_training
+            lookback_sequence
         )
         if self.use_activity_labels:
             last_ex_variable = torch.argmax(
