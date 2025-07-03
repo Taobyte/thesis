@@ -33,17 +33,6 @@ class Model(torch.nn.Module):
             hidden_dim  # latent space dimension without adding in additional info
         )
 
-        if use_dynamic_features:
-            hidden_dim += dynamic_exogenous_variables
-
-        if use_static_features:
-            hidden_dim += static_exogenous_variables
-            self.static_start = (
-                self.base_dim
-                if not use_dynamic_features
-                else self.base_dim + dynamic_exogenous_variables
-            )
-
         # learnable transition matrices from motion model
         self.F = torch.nn.ModuleList(
             [torch.nn.Linear(hidden_dim, hidden_dim) for _ in range(self.window_length)]
@@ -72,8 +61,31 @@ class Model(torch.nn.Module):
         )
 
         # learnable noise matrices
-        self.Q = torch.nn.Parameter(torch.randn(hidden_dim, hidden_dim))
-        self.R = torch.nn.Parameter(torch.randn(target_channel_dim, target_channel_dim))
+        self.Q_chol = torch.nn.ParameterList(
+            [
+                torch.nn.Parameter(torch.randn(hidden_dim, hidden_dim))
+                for _ in range(self.window_length)
+            ]
+        )
+        self.R_chol = torch.nn.ParameterList(
+            [
+                torch.nn.Parameter(torch.randn(target_channel_dim, target_channel_dim))
+                for _ in range(self.window_length)
+            ]
+        )
+
+    @property
+    def initial_P(self):
+        L = torch.tril(self.initial_covariance)
+        return L @ L.transpose(-1, -2)
+
+    def get_Q(self, t: int):
+        L = torch.tril(self.Q_chol[t])
+        return L @ L.transpose(-1, -2)
+
+    def get_R(self, t: int):
+        L = torch.tril(self.R_chol[t])
+        return L @ L.transpose(-1, -2)
 
     def find_current_hidden_state(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -86,9 +98,7 @@ class Model(torch.nn.Module):
         device = observation.device
         hidden_state = self.initial_state.unsqueeze(0).repeat(B, 1)  # (B, hidden_dim)
 
-        P = self.initial_covariance.unsqueeze(0).repeat(
-            B, 1, 1
-        )  # (B, hidden_dim, hidden_dim)
+        P = self.initial_P.unsqueeze(0).repeat(B, 1, 1)  # (B, hidden_dim, hidden_dim)
         I = torch.eye(P.size(-1), device=device).unsqueeze(0).repeat(B, 1, 1)
         # pdb.set_trace()
         for t in range(self.look_back_window):
@@ -103,12 +113,12 @@ class Model(torch.nn.Module):
             if self.use_dynamic_features:
                 hidden_state_pred += B_t(dynamic_ex_var)
             F_mat = F_t.weight  # (hidden_dim, hidden_dim)
-            Q = self.Q.unsqueeze(0).repeat(B, 1, 1)
+            Q = self.get_Q(t).unsqueeze(0).repeat(B, 1, 1)
             P_pred = F_mat @ P @ F_mat.transpose(-1, -2) + Q
 
             # (S2) Measurement Update Step
             H_mat = H_t.weight  # (target_channel_dim, hidden_dim)
-            R = self.R.unsqueeze(0).repeat(B, 1, 1)
+            R = self.get_R(t).unsqueeze(0).repeat(B, 1, 1)
             y_pred = H_t(hidden_state_pred)  # (B, target_channel_dim)
             y_obs = observation[
                 :, t, : self.target_channel_dim
@@ -120,7 +130,10 @@ class Model(torch.nn.Module):
             K = P_pred @ H_mat_T @ torch.linalg.inv(S)  # Kalman Gain
 
             hidden_state = hidden_state_pred + (K @ residual.unsqueeze(-1)).squeeze(-1)
-            P = (I - K @ H_mat) @ P_pred
+
+            # Joseph form for better stability
+            I_KH = I - K @ H_mat
+            P = I_KH @ P_pred @ I_KH.transpose(-1, -2) + K @ R @ K.transpose(-1, -2)
 
         return hidden_state
 
