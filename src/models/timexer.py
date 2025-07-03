@@ -245,7 +245,7 @@ class EncoderLayer(nn.Module):
 class Model(nn.Module):
     def __init__(
         self,
-        features: str,
+        use_exo_endo: bool,
         seq_len: int,
         pred_len: int,
         use_norm: bool,
@@ -265,7 +265,7 @@ class Model(nn.Module):
     ):
         super(Model, self).__init__()
         self.target_channel_dim = target_channel_dim
-        self.features = features
+        self.use_exo_endo = use_exo_endo
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.use_norm = use_norm
@@ -279,7 +279,7 @@ class Model(nn.Module):
             )
         self.patch_num = int(seq_len // patch_len)
 
-        self.n_vars = 1 if features else enc_in
+        self.n_vars = 1 if use_exo_endo else enc_in
         # Embedding
         self.en_embedding = EnEmbedding(self.n_vars, d_model, self.patch_len, dropout)
 
@@ -420,10 +420,10 @@ class Model(nn.Module):
         return dec_out
 
     def forward(self, x_enc, x_mark_enc):
-        if self.features == "M":
-            return self.forecast_multi(x_enc, x_mark_enc)
-        else:
+        if self.use_exo_endo:
             return self.forecast(x_enc, x_mark_enc)
+        else:
+            return self.forecast_multi(x_enc, x_mark_enc)
 
 
 class TimeXer(BaseLightningModule):

@@ -64,3 +64,6 @@ timexer:
   d_ff: 512 # 128, 256, 512
   d_model: 512 # 128, 256, 512 
   e_layers: 2 # 2,3 
+  patch_len: 2
+  use_norm: True
+  dropout: 0.1

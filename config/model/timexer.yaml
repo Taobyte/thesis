@@ -2,17 +2,17 @@ name: "timexer"
 
 model:
     _target_: src.models.timexer.Model
-    features: ${use_dynamic_features} # should we use exogenous variables?
+    use_exo_endo: ${use_dynamic_features} # should we use exogenous variables?
     seq_len: ${look_back_window} 
     pred_len: ${prediction_window}
-    use_norm: True
-    patch_len: 4 # ${min:${look_back_window}, 16} 
+    use_norm: ${params.timexer.use_norm}
+    patch_len: ${params.timexer.patch_len} # ${min:${look_back_window}, 16} 
     d_model: ${params.timexer.d_model}
     d_ff: ${params.timexer.d_ff}
     e_layers: ${params.timexer.e_layers} # number of encoding layers
     embed: "timeF"
     freq: "h"
-    dropout: 0.1
+    dropout: ${params.timexer.dropout}
     enc_in: ${dataset.datamodule.look_back_channel_dim}
     factor: 1 # attention factor: afaik not used in the code!
     n_heads: 8

@@ -6,11 +6,6 @@ from typing import Tuple
 
 from src.models.utils import BaseLightningModule
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import Tuple
-
 
 class PytorchHMM(nn.Module):
     def __init__(
