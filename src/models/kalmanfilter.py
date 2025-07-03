@@ -56,6 +56,15 @@ class Model(torch.nn.Module):
             ]
         )
 
+        # learnable control input matrices
+        if use_dynamic_features:
+            self.B = torch.nn.ModuleList(
+                [
+                    torch.nn.Linear(dynamic_exogenous_variables, hidden_dim)
+                    for _ in range(self.window_length)
+                ]
+            )
+
         # learnable initial state distribution
         self.initial_state = torch.nn.Parameter(torch.randn((hidden_dim,)))
         self.initial_covariance = torch.nn.Parameter(
@@ -82,47 +91,17 @@ class Model(torch.nn.Module):
         )  # (B, hidden_dim, hidden_dim)
         I = torch.eye(P.size(-1), device=device).unsqueeze(0).repeat(B, 1, 1)
         # pdb.set_trace()
-        exo_hidden = []
         for t in range(self.look_back_window):
-            # collect the predicted hidden state for further loss calculation
-            if self.use_dynamic_features:
-                exo_hidden.append(
-                    hidden_state[
-                        :,
-                        self.base_dim : self.base_dim
-                        + self.dynamic_exogenous_variables,
-                    ]
-                )
-
-            # add dynamic features to hidden state
-            if self.use_dynamic_features:
-                hidden_state[
-                    :,
-                    self.base_dim : self.base_dim + self.dynamic_exogenous_variables,
-                ] = observation[
-                    :,
-                    t,
-                    self.target_channel_dim : self.target_channel_dim
-                    + self.dynamic_exogenous_variables,
-                ]
-
-            if self.use_static_features:
-                start = self.target_channel_dim + self.dynamic_exogenous_variables
-                hidden_state[
-                    :,
-                    self.static_start : self.static_start
-                    + self.static_exogenous_variables,
-                ] = observation[
-                    :,
-                    t,
-                    start : start + self.static_exogenous_variables,
-                ]
-
             F_t = self.F[t]
             H_t = self.H[t]
+            if self.use_dynamic_features:
+                B_t = self.B[t]
+                dynamic_ex_var = observation[:, t, self.target_channel_dim :]
 
             # (S1) Prediction Step
             hidden_state_pred = F_t(hidden_state)  # (B, hidden_dim)
+            if self.use_dynamic_features:
+                hidden_state_pred += B_t(dynamic_ex_var)
             F_mat = F_t.weight  # (hidden_dim, hidden_dim)
             Q = self.Q.unsqueeze(0).repeat(B, 1, 1)
             P_pred = F_mat @ P @ F_mat.transpose(-1, -2) + Q
@@ -143,11 +122,11 @@ class Model(torch.nn.Module):
             hidden_state = hidden_state_pred + (K @ residual.unsqueeze(-1)).squeeze(-1)
             P = (I - K @ H_mat) @ P_pred
 
-        return hidden_state, exo_hidden
+        return hidden_state
 
     def forward(self, x: torch.Tensor):
         # x.shape == (B, T, 1)
-        hidden_state, exo_hidden = self.find_current_hidden_state(x)
+        hidden_state = self.find_current_hidden_state(x)
         preds = []
         for i in range(self.look_back_window, self.window_length):
             hidden_state = self.F[i](hidden_state)
@@ -156,7 +135,7 @@ class Model(torch.nn.Module):
 
         stacked_preds = torch.cat(preds, dim=1)
 
-        return stacked_preds.unsqueeze(-1), exo_hidden
+        return stacked_preds.unsqueeze(-1)
 
 
 class KalmanFilter(BaseLightningModule):
@@ -182,33 +161,17 @@ class KalmanFilter(BaseLightningModule):
         assert len(look_back_window.shape) == 3
 
         # look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
-        preds, _ = self.model(look_back_window)
+        preds = self.model(look_back_window)
 
         return preds[:, :, : self.model.target_channel_dim]
 
     def model_specific_train_step(self, look_back_window, prediction_window):
-        preds, exo_hidden = self.model(look_back_window)
-        if self.use_dynamic_features:
-            ground_truth_exo = look_back_window[
-                :,
-                :,
-                self.target_channel_dim : self.target_channel_dim
-                + self.dynamic_exogenous_variables,
-            ]
-            exo_predicted = torch.concatenate(exo_hidden, dim=1).unsqueeze(-1)
-            exo_loss = self.criterion(exo_predicted, ground_truth_exo)
-        else:
-            exo_loss = 0
-
+        preds = self.model(look_back_window)
         assert preds.shape == prediction_window.shape
-        obs_loss = self.criterion(preds, prediction_window)
-        total_loss = obs_loss + self.exo_weight * exo_loss
-        self.log("train_loss_obs", obs_loss, on_epoch=True, on_step=True, logger=True)
-        self.log("train_loss_exo", exo_loss, on_epoch=True, on_step=True, logger=True)
-        self.log(
-            "train_loss_total", total_loss, on_epoch=True, on_step=True, logger=True
-        )
-        return total_loss
+        loss = self.criterion(preds, prediction_window)
+        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
+
+        return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
