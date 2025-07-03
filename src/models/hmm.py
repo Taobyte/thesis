@@ -166,14 +166,12 @@ class PytorchHMM(nn.Module):
 
         return alpha, log_likelihood
 
-    def infer_current_state(
-        self, observations: torch.Tensor, is_training: bool = False
-    ) -> torch.Tensor:
-        alpha, _ = self.forward_algorithm(observations)
+    def infer_current_state(self, observations: torch.Tensor) -> torch.Tensor:
+        alpha, log_likelihood = self.forward_algorithm(observations)
         # Normalize the final forward probabilities
         final_alpha = alpha[:, -1, :]  # (batch_size, self.hidden_dim)
         state_probs = F.softmax(final_alpha, dim=-1)
-        return state_probs
+        return state_probs, log_likelihood
 
     def predict_next_timestep(
         self,
@@ -189,7 +187,7 @@ class PytorchHMM(nn.Module):
         ).squeeze(1)
 
         if deterministic:
-            # Expected value prediction
+            # take most probably state and use the mean
             state_samples = torch.argmax(next_state_probs, dim=-1)
             predictions = self.emission_means[state_samples].unsqueeze(1)
 
@@ -224,7 +222,7 @@ class PytorchHMM(nn.Module):
     ) -> torch.Tensor:
         predictions = []
 
-        current_state_probs = self.infer_current_state(
+        current_state_probs, log_likelihood = self.infer_current_state(
             lookback_sequence, is_training=is_training
         )
         if self.use_activity_labels:
@@ -243,7 +241,7 @@ class PytorchHMM(nn.Module):
 
         return torch.cat(
             predictions, dim=1
-        )  # (batch_size, prediction_steps, target_channel_dim)
+        ), log_likelihood  # (batch_size, prediction_steps, target_channel_dim)
 
 
 class HMMLightningModule(BaseLightningModule):
@@ -252,38 +250,44 @@ class HMMLightningModule(BaseLightningModule):
         model: torch.nn.Module,
         learning_rate: float = 1e-3,
         deterministic: bool = True,
+        pred_loss_weight: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
         self.deterministic = deterministic
+        self.pred_loss_weight = pred_loss_weight
 
         self.model = model
 
         self.criterion = torch.nn.MSELoss()
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
-        prediction_window = getattr(self.trainer.datamodule, "prediction_window")
-
-        return self.model.autoregressive_predict(
+        prediction_window_length = getattr(self.trainer.datamodule, "prediction_window")
+        preds, _ = self.model.autoregressive_predict(
             look_back_window,
-            prediction_window,
-            deterministic=True,
+            prediction_window_length,
+            deterministic=self.deterministic,
         )
+        return preds
 
     def model_specific_train_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> torch.Tensor:
+        prediction_window_length = prediction_window.shape[1]
         # full_sequence = torch.cat([look_back_window[:, :, :], prediction_window], dim=1)
         # TODO: currently we do not train with all data!
 
         # _, log_likelihood = self.model.forward_algorithm(look_back_window)
         # loss = -log_likelihood.mean()
 
-        preds = self.model_forward(look_back_window)
+        preds, log_likelihood = self.model.autoregressive_predict(
+            look_back_window, prediction_window_length, deterministic=self.deterministic
+        )
+        ll_loss = log_likelihood.mean()
         mse_loss = self.criterion(preds, prediction_window)
-        loss = mse_loss
+        loss = mse_loss * self.pred_loss_weight + ll_loss * (1 - self.pred_loss_weight)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 

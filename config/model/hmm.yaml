@@ -13,6 +13,7 @@ pl_model:
   _target_: src.models.hmm.HMMLightningModule
   learning_rate: 0.01
   deterministic: True
+  pred_loss_weight: 0.6
 
 trainer:
   max_epochs: 1000
