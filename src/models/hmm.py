@@ -61,7 +61,9 @@ class PytorchHMM(nn.Module):
             ]  # [batch, hidden_dim, hidden_dim]
 
             # Combine base and exogenous
-            combined_logits = base_logits + exog_logits
+            combined_logits = (
+                base_logits + exog_logits
+            )  # TODO: linear layer or multiplication
 
             return F.softmax(combined_logits / self.temperature, dim=-1)
         else:
@@ -299,7 +301,7 @@ class HMMLightningModule(BaseLightningModule):
         preds, log_likelihood = self.model.autoregressive_predict(
             look_back_window, prediction_window_length, deterministic=self.deterministic
         )
-        ll_loss = log_likelihood.mean()
+        ll_loss = -log_likelihood.mean()
         mse_loss = self.criterion(preds, prediction_window)
         loss = mse_loss * self.pred_loss_weight + ll_loss * (1 - self.pred_loss_weight)
 

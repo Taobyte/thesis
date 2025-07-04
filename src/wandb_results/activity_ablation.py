@@ -30,6 +30,7 @@ def dynamic_feature_ablation(
     current_time = int(time.time())
 
     for dataset in datasets:
+        print(f"Processing Activity Ablation for {dataset_to_name[dataset]}")
         dynamic_runs = get_runs(
             dataset,
             models,
@@ -91,6 +92,16 @@ def dynamic_feature_ablation(
                     True,
                     row_delta=2 * p,
                 )
+
+                for lbw in look_back_window:
+                    for metric in test_metrics:
+                        p_act = dynamic_mean_dict[model][str(lbw)][str(pw)][metric]
+                        p_no_act = no_dynamic_mean_dict[model][str(lbw)][str(pw)][
+                            metric
+                        ]
+                        print(
+                            f"Model {model} | lbw {lbw} | pw {pw} | Metric {metric} PI: {round((1 - p_act / p_no_act) * 100, 4)}%"
+                        )
 
             fig.update_layout(
                 title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw} | Window Statistic {window_statistic}",

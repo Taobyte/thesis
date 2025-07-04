@@ -137,9 +137,9 @@ class Model(torch.nn.Module):
 
         return hidden_state
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, look_back_window: torch.Tensor):
         # x.shape == (B, T, 1)
-        hidden_state = self.find_current_hidden_state(x)
+        hidden_state = self.find_current_hidden_state(look_back_window)
         preds = []
         for i in range(self.look_back_window, self.window_length):
             hidden_state = self.F[i](hidden_state)
