@@ -24,6 +24,6 @@ datamodule:
   target_channel_dim: 1 
   dynamic_exogenous_variables: 1
   static_exogenous_variables: 0 
-  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
+  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}, ${use_only_exogenous_features}}
 
 

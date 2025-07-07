@@ -59,6 +59,7 @@ class BaseLightningModule(L.LightningModule):
         use_plots: bool = False,
         normalization: str = "local",
         tune: bool = False,
+        use_only_exogenous_features: bool = False,
     ):
         super().__init__()
 
@@ -68,6 +69,7 @@ class BaseLightningModule(L.LightningModule):
         self.tune = tune
         self.use_plots = use_plots
         self.normalization = normalization
+        self.use_only_exogenous_features = use_only_exogenous_features
 
         self.evaluator = Evaluator()
 
@@ -145,13 +147,11 @@ class BaseLightningModule(L.LightningModule):
         pass
 
     def _normalize_data(
-        self, batch: Tuple[torch.Tensor, torch.Tensor]
+        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
     ]:
-        look_back_window, prediction_window = batch
-
         if self.normalization == "local":
             look_back_window_norm, mean, std = local_z_norm(
                 look_back_window, self.local_norm_channels
@@ -176,30 +176,61 @@ class BaseLightningModule(L.LightningModule):
             raise NotImplementedError()
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+        look_back_window, prediction_window = batch
+
+        if self.use_only_exogenous_features:
+            assert self.use_dynamic_features or self.use_static_features, (
+                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
+            )
+            look_back_window = look_back_window[:, :, self.target_channel_dim :]
         # normalize data
         if self.normalization == "global":
-            look_back_window_norm, prediction_window_norm = self._normalize_data(batch)
+            look_back_window_norm, prediction_window_norm = self._normalize_data(
+                look_back_window, prediction_window
+            )
         elif self.normalization == "local":
             look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
-                batch
+                look_back_window, prediction_window
             )
         elif self.normalization == "none":
             look_back_window_norm, prediction_window_norm = batch
+
+        if self.use_only_exogenous_features:
+            assert self.use_dynamic_features or self.use_static_features, (
+                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
+            )
+            look_back_window_norm = look_back_window_norm[
+                :, :, self.target_channel_dim :
+            ]
+
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
         )
         return loss
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+        look_back_window, prediction_window = batch
+
         # normalize data
         if self.normalization == "global":
-            look_back_window_norm, prediction_window_norm = self._normalize_data(batch)
+            look_back_window_norm, prediction_window_norm = self._normalize_data(
+                look_back_window, prediction_window
+            )
         elif self.normalization == "local":
             look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
-                batch
+                look_back_window, prediction_window
             )
         elif self.normalization == "none":
             look_back_window_norm, prediction_window_norm = batch
+
+        if self.use_only_exogenous_features:
+            assert self.use_dynamic_features or self.use_static_features, (
+                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
+            )
+            look_back_window_norm = look_back_window_norm[
+                :, :, self.target_channel_dim :
+            ]
+
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
         )
@@ -247,13 +278,25 @@ class BaseLightningModule(L.LightningModule):
         self.batch_size.append(look_back_window.shape[0])
 
         if self.normalization == "global":
-            look_back_window_norm, _ = self._normalize_data(batch)
+            look_back_window_norm, _ = self._normalize_data(
+                look_back_window, prediction_window
+            )
         elif self.normalization == "local":
-            look_back_window_norm, _, mean, std = self._normalize_data(batch)
+            look_back_window_norm, _, mean, std = self._normalize_data(
+                look_back_window, prediction_window
+            )
         elif self.normalization == "none":
             look_back_window_norm = look_back_window
         else:
             raise NotImplementedError()
+
+        if self.use_only_exogenous_features:
+            assert self.use_dynamic_features or self.use_static_features, (
+                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
+            )
+            look_back_window_norm = look_back_window_norm[
+                :, :, self.target_channel_dim :
+            ]
 
         # Prediction
         if self.has_probabilistic_forecast:

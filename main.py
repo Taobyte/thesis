@@ -52,6 +52,7 @@ def main(config: DictConfig) -> Optional[float]:
             use_plots=config.use_plots,
             normalization=config.normalization,
             tune=config.tune,
+            use_only_exogenous_features=config.use_only_exogenous_features,
         )
 
         callbacks = []

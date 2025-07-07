@@ -4,7 +4,7 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
-from typing import Tuple
+from typing import Tuple, Union
 
 
 def create_group_run_name(
@@ -18,6 +18,7 @@ def create_group_run_name(
     fold_nr: int = 0,
     fold_datasets: list[str] = None,
     normalization: str = "local",
+    use_only_exogenous_features: bool = False,
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
     dataset_to_signal_type = {
@@ -36,12 +37,15 @@ def create_group_run_name(
 
     # static and dynamic features
     features = ""
-    if use_dynamic_features and use_static_features:
-        features = "df_sf"
-    elif use_dynamic_features and not use_static_features:
-        features = "df"
-    elif not use_dynamic_features and use_static_features:
-        features = "sf"
+    if use_only_exogenous_features:
+        if use_dynamic_features and use_static_features:
+            features = "df_sf"
+        elif use_dynamic_features and not use_static_features:
+            features = "df"
+        elif not use_dynamic_features and use_static_features:
+            features = "sf"
+    else:
+        features = "only_exo"
 
     fold = ""
     if dataset_name in fold_datasets:
@@ -87,7 +91,9 @@ def get_optuna_name(
     return f"optuna_{tags[1]}_{group_name}"
 
 
-def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
+def setup_wandb_logger(
+    config: DictConfig,
+) -> Tuple[Union[WandbLogger, DummyLogger], str]:
     config_dict = yaml.safe_load(OmegaConf.to_yaml(config, resolve=True))
 
     group_name, run_name, tags = create_group_run_name(
@@ -101,6 +107,7 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         config.experiment.fold_nr,
         config.fold_datasets,
         config.normalization,
+        config.use_only_exogenous_features,
     )
 
     # print(config_dict)
@@ -119,7 +126,7 @@ def setup_wandb_logger(config: DictConfig) -> Tuple[WandbLogger, str]:
         if config.use_wandb
         else DummyLogger()
     )
-    print("WanDB Setup complete.")
+    print("Setup complete.")
     print(f"Run name: {run_name}")
     print(f"Group name: {group_name}")
     print(f"Tags: {tags}")
@@ -148,10 +155,21 @@ def compute_input_channel_dims(
     static_exogenous_variables: int,
     use_dynamic_features: bool,
     use_static_features: bool,
+    use_only_exogenous_features: bool,
 ) -> int:
     dims = target_channel_dim
+
+    if use_only_exogenous_features:
+        assert use_dynamic_features or use_static_features, (
+            "Attention you are using only exogenous variables for training, but don't include exogenous variables"
+        )
+        dims = 0
+    else:
+        dims = 1
+
     if use_dynamic_features:
         dims += dynamic_exogenous_variables
     if use_static_features:
         dims += static_exogenous_variables
+
     return dims

@@ -1,7 +1,7 @@
 # baselines
 # we can add in specific parameters with:  ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
 linear:
-  learning_rate: 0.0005
+  learning_rate: 0.001
   weight_decay: 6.627291754394113e-06
 
 hmm:
@@ -13,13 +13,13 @@ kalmanfilter:
   hidden_dim: 1028
 
 xgboost:
-  n_estimators: 538
-  learning_rate: 0.08118777317963338
-  max_depth: 5
-  reg_alpha: 2.3548874442035386
-  reg_lambda: 2.944183580003594
-  subsample: 0.9162495442966206
-  colsample_bytree: 0.6224391217896296
+  n_estimators: 150
+  learning_rate: 0.2
+  max_depth: 8
+  reg_alpha: 1.0
+  reg_lambda: 1.0
+  subsample: 0.8
+  colsample_bytree: 0.8
 
 gp:
   n_points: 2000

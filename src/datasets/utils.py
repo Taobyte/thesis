@@ -99,9 +99,6 @@ class BaseDataModule(L.LightningDataModule):
                       Supported values are "random" for random sampling or "kmeans" for K-Means clustering.
             mode: Specifies which dataset to draw inducing points from.
                   Can be "train" for the training set or "test" for the test set.
-                  Note: For "kmeans" strategy, it typically operates on the training data
-                  to learn a representative set of points from the distribution the model
-                  is trained on.
 
         Returns:
             A `torch.Tensor` of shape `(num_inducing, Time, Channels)` containing the selected
