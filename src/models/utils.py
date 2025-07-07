@@ -178,11 +178,6 @@ class BaseLightningModule(L.LightningModule):
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         look_back_window, prediction_window = batch
 
-        if self.use_only_exogenous_features:
-            assert self.use_dynamic_features or self.use_static_features, (
-                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
-            )
-            look_back_window = look_back_window[:, :, self.target_channel_dim :]
         # normalize data
         if self.normalization == "global":
             look_back_window_norm, prediction_window_norm = self._normalize_data(
@@ -297,6 +292,7 @@ class BaseLightningModule(L.LightningModule):
             look_back_window_norm = look_back_window_norm[
                 :, :, self.target_channel_dim :
             ]
+            look_back_window = look_back_window[:, :, self.target_channel_dim :]
 
         # Prediction
         if self.has_probabilistic_forecast:

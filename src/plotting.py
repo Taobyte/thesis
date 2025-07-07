@@ -580,13 +580,6 @@ if __name__ == "__main__":
         help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' or 'mhc6mwt' ",
     )
 
-    parser.add_argument(
-        "--granger",
-        required=False,
-        action="store_true",
-        help="checks granger causality for the timeseries in the dataset",
-    )
-
     args = parser.parse_args()
 
     with initialize(version_base=None, config_path="../config/"):
@@ -602,57 +595,4 @@ if __name__ == "__main__":
     datamodule = instantiate(cfg.dataset.datamodule)
 
     datamodule.setup("fit")
-    # datamodule.setup("test")
-    if args.granger:
-        from statsmodels.tsa.stattools import grangercausalitytests
-
-        lags = [1, 3, 5, 10, 20, 30]
-        print(
-            f"Computing Granger Causality for dataset {dataset_to_name[datamodule.name]} with lags {lags}"
-        )
-        dataset = datamodule.train_dataset.data
-
-        fig = make_subplots(
-            rows=len(dataset),
-            cols=1,
-            column_titles=[f"Series {i + 1}" for i in range(len(dataset))],
-            shared_xaxes=False,
-            vertical_spacing=0.05,
-        )
-
-        for i, series in tqdm(enumerate(dataset)):
-            p_values = []
-            for lag in lags:
-                gc_res = grangercausalitytests(series, [lag], verbose=False)
-                p_value = gc_res[lag][0]["ssr_ftest"][1]
-                p_values.append(round(p_value, 3))
-            fig.add_trace(
-                go.Scatter(
-                    x=lags,
-                    y=p_values,
-                    showlegend=False,
-                ),
-                row=i + 1,
-                col=1,
-            )
-            fig.update_xaxes(
-                title_text="Lags",
-                tickmode="array",
-                tickvals=lags,
-                row=i + 1,
-                col=1,
-            )
-
-        fig.update_layout(
-            title={
-                "text": f"<b>Granger Causality P-Values for {dataset_to_name[datamodule.name]}</b>",
-                "x": 0.5,
-                "xanchor": "center",
-                "font": dict(size=40, family="Arial", color="black"),
-            },
-        )
-
-        fig.show()
-
-    else:
-        plot_all_data(datamodule, data_type="train", save_html=False)
+    plot_all_data(datamodule, data_type="train", save_html=False)

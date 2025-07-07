@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--type",
-        choices=["granger", "pearson"],
+        choices=["granger", "pearson", "infos", "mutual"],
         required=True,
         help="checks granger causality for the timeseries in the dataset",
     )
@@ -63,7 +63,11 @@ if __name__ == "__main__":
     datamodule.setup("fit")
     # datamodule.setup("test")
     dataset = datamodule.train_dataset.data
-    if args.type == "granger":
+    if args.type == "infos":
+        length = sum([len(s) for s in dataset])
+        print(f"Total length of dataset {args.dataset} is {length}")
+        print([len(s) for s in dataset])
+    elif args.type == "granger":
         lags = [1, 3, 5, 10, 20, 30]
         print(
             f"Computing Granger Causality for dataset {dataset_to_name[datamodule.name]} with lags {lags}"
@@ -76,7 +80,7 @@ if __name__ == "__main__":
             shared_xaxes=False,
             vertical_spacing=0.05,
         )
-
+        mean_p = []
         for i, series in tqdm(enumerate(dataset)):
             p_values = []
             for lag in lags:
@@ -99,6 +103,7 @@ if __name__ == "__main__":
                 row=i + 1,
                 col=1,
             )
+            mean_p.append(np.mean(p_values))
 
         fig.update_layout(
             title={
@@ -109,7 +114,11 @@ if __name__ == "__main__":
             },
         )
 
-        fig.show()
+        mean_means = np.mean(mean_p)
+        std_means = np.std(mean_p)
+        print(f"Mean {mean_means} and std: {std_means}")
+
+        # fig.show()
 
     elif args.type == "pearson":
 
@@ -121,6 +130,8 @@ if __name__ == "__main__":
             best_lag = -len(x) + np.argmax(cors)
             return max_cor, best_lag
 
+        pearsons = []
+        best_lags = []
         for i, series in tqdm(enumerate(dataset)):
             print(f"Processing series {i + 1}")
             heartrate = series[:, 0]
@@ -150,15 +161,26 @@ if __name__ == "__main__":
             print(f"Maximum correlation {max_corr} for lag {best_lag}")
             print(f"Finished processing series {i}")
             # fig.show()
+            pearsons.append(max_corr)
+            best_lags.append(best_lag)
+        mean_cor = np.mean(pearsons)
+        std_cor = np.std(pearsons)
+        median_lag = np.median(best_lags)
+        print(f"Max Abs Corr: {mean_cor} and std {std_cor}")
+        print(f"Median lag {median_lag}")
 
     elif args.type == "mutual":
         # TODO: use Mutual Information to get a score for how important the physical activity is
+        mis = []
         for i, series in enumerate(dataset):
             print(f"Processing series {i}")
             heartrate = series[:, 0]
-            activity = series[:, 1]
+            activity = series[:, 1].reshape(-1, 1)
             mi = mutual_info_regression(activity, heartrate)
-            print(f"Mutual Information Regression Value {mi}")
+            mis.append(mi[0])
+            print(f"Mutual Information Regression Value {mi[0]}")
+
+        print(f"Mean {np.mean(mis)} | Std {np.std(mis)}")
     elif args.type == "dcor":
         # TODO: use distance correlation package 'dcor' to analyze the dataset further
         x = 0

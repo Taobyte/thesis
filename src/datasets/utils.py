@@ -135,6 +135,7 @@ class BaseDataModule(L.LightningDataModule):
             )
             train_x = rearrange(train_x, "B T C -> B (T C)")
             kmeans = KMeans(n_clusters=num_inducing).fit(train_x)
+            # TODO: use the nearest data point to the cluster instead
             inducing_points_tensor = torch.tensor(
                 kmeans.cluster_centers_, requires_grad=True
             )
