@@ -619,7 +619,6 @@ class KalmanFilter(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
-
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
@@ -631,6 +630,7 @@ class KalmanFilter(BaseLightningModule):
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
+        preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
         if self.tune:
             mae_criterion = torch.nn.L1Loss()
