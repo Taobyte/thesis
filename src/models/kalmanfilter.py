@@ -1,154 +1,571 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.autograd.functional as AF
 
 from src.losses import get_loss_fn
 from src.models.utils import BaseLightningModule
 
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Tuple
 
-class Model(torch.nn.Module):
-    def __init__(
-        self,
-        hidden_dim: int = 32,
-        look_back_window: int = 5,
-        prediction_window: int = 3,
-        target_channel_dim: int = 1,
-        look_back_channel_dim: int = 1,
-        use_dynamic_features: bool = False,
-        use_static_features: bool = False,
-        dynamic_exogenous_variables: int = 1,
-        static_exogenous_variables: int = 0,
-    ):
-        super().__init__()
-        self.look_back_window = look_back_window
-        self.prediction_window = prediction_window
-        self.window_length = look_back_window + prediction_window
 
-        self.target_channel_dim = target_channel_dim
-        self.look_back_channel_dim = look_back_channel_dim
-        self.use_dynamic_features = use_dynamic_features
-        self.use_static_features = use_static_features
-        self.dynamic_exogenous_variables = dynamic_exogenous_variables
-        self.static_exogenous_variables = static_exogenous_variables
+class TransitionModule(nn.Module):
+    def reset_states(self, batch_size: int, device: torch.device):
+        """
+        Reset hidden state.
 
-        self.base_dim = (
-            hidden_dim  # latent space dimension without adding in additional info
-        )
+        Dummy implementation: no operation performed.
+        """
 
-        # learnable transition matrices from motion model
-        self.F = torch.nn.ModuleList(
-            [torch.nn.Linear(hidden_dim, hidden_dim) for _ in range(self.window_length)]
-        )
-        # learnable observation matrices from sensor model
-        self.H = torch.nn.ModuleList(
-            [
-                torch.nn.Linear(hidden_dim, target_channel_dim)
-                for _ in range(self.window_length)
-            ]
-        )
+    @torch.jit.ignore()
+    def jacobian(
+        self, x: torch.Tensor, u: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        """
+        Compute Jacobian matrix of the transition function w.r.t. state
 
-        # learnable control input matrices
-        if use_dynamic_features:
-            self.B = torch.nn.ModuleList(
-                [
-                    torch.nn.Linear(dynamic_exogenous_variables, hidden_dim)
-                    for _ in range(self.window_length)
-                ]
+        Args:
+            x: Current state [batch_size, state_dim]
+            u: Control input [batch_size, control_dim] (optional)
+
+        Returns:
+            jacobian: Batch of Jacobian matrices [batch_size, state_dim, state_dim]
+        """
+        batch_size = x.shape[0]
+
+        # Compute the Jacobian
+        # This will return a tensor of shape [batch_size, state_dim, batch_size, state_dim]
+        if u is not None and self.control_dim > 0:
+            jacobians = AF.jacobian(
+                lambda x_: self.forward(x_, u), x.detach(), create_graph=self.training
+            )
+        else:
+            jacobians = AF.jacobian(
+                self.forward, x.detach(), create_graph=self.training
             )
 
-        # learnable initial state distribution
-        self.initial_state = torch.nn.Parameter(torch.randn((hidden_dim,)))
-        self.initial_covariance = torch.nn.Parameter(
-            torch.randn((hidden_dim, hidden_dim))
+        # Extract the diagonal elements corresponding to each batch item
+        batch_indices = torch.arange(batch_size, device=x.device)
+        jacobians = jacobians[batch_indices, :, batch_indices, :]
+
+        return jacobians
+
+
+class LinearTransitionModule(TransitionModule):
+    """Linear backbone: x_{t+1} = Ax_t + Bu_t"""
+
+    def __init__(
+        self,
+        state_dim: int,
+        control_dim: int,
+        learnable: bool = True,
+        explicit_covariance: bool = False,
+        initial_covariance: float = 1e-3,
+    ):
+        super().__init__()
+        self.state_dim = state_dim
+        self.control_dim = control_dim
+
+        # Initialize transition matrix A
+        A = torch.eye(state_dim) + 0.01 * torch.randn(state_dim, state_dim)
+        if learnable:
+            self.transition_matrix = nn.Parameter(A)
+        else:
+            self.register_buffer("A", A)
+
+        # Initialize control matrix B (if control_dim > 0)
+        if control_dim > 0:
+            B = 0.01 * torch.randn(state_dim, control_dim)
+            if learnable:
+                self.control_matrix = nn.Parameter(B)
+            else:
+                self.register_buffer("B", B)
+        else:
+            self.control_matrix = None
+
+        is_learnable_cov = explicit_covariance and control_dim > 0
+        log_process_noise = torch.ones(state_dim) * torch.log(
+            torch.tensor(initial_covariance)
         )
+        if is_learnable_cov:
+            self.log_process_noise = nn.Parameter(log_process_noise)
+        else:
+            self.register_buffer("log_process_noise", log_process_noise)
+        # logging.getLogger(__name__).info(
+        #     f"{self.__class__.__name__}: log_process_noise learnable: {is_learnable_cov}"
+        # )
 
-        # learnable noise matrices
-        self.Q_chol = torch.nn.ParameterList(
-            [
-                torch.nn.Parameter(torch.randn(hidden_dim, hidden_dim))
-                for _ in range(self.window_length)
-            ]
-        )
-        self.R_chol = torch.nn.ParameterList(
-            [
-                torch.nn.Parameter(torch.randn(target_channel_dim, target_channel_dim))
-                for _ in range(self.window_length)
-            ]
-        )
+    def forward(
+        self, state: torch.Tensor, control: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        next_state = torch.matmul(state, self.transition_matrix.t())
 
-    @property
-    def initial_P(self):
-        L = torch.tril(self.initial_covariance)
-        return L @ L.transpose(-1, -2)
+        if control is not None and self.control_matrix is not None:
+            next_state = next_state + torch.matmul(control, self.control_matrix.t())
 
-    def get_Q(self, t: int):
-        L = torch.tril(self.Q_chol[t])
-        return L @ L.transpose(-1, -2)
+        return next_state
 
-    def get_R(self, t: int):
-        L = torch.tril(self.R_chol[t])
-        return L @ L.transpose(-1, -2)
-
-    def find_current_hidden_state(self, observation: torch.Tensor) -> torch.Tensor:
+    def jacobian(
+        self, x: torch.Tensor, u: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
-        observation.shape == (B, T, self.look_back_channel_dim)
+        Return transition matrix as the Jacobian
+
+        Args:
+            x: Current state [batch_size, state_dim]
+            u: Control input [batch_size, control_dim] (optional)
+
         Returns:
-            hidden_state: (B, hidden_dim)
+            jacobian: Batch of Jacobian matrices [batch_size, state_dim, state_dim]
+        """
+        batch_size = x.shape[0]
+        # Expand transition matrix to batch dimension
+        return self.transition_matrix.expand(batch_size, self.state_dim, self.state_dim)
+
+    def covariance(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """
+        Return process noise covariance matrix
+
+        Args:
+            batch_size: Batch size
+            device: Device to create tensor on
+
+        Returns:
+            Q: Process noise covariance [batch_size, state_dim, state_dim]
+        """
+        cov_diag = torch.exp(self.log_process_noise)
+        cov_matrix = torch.diag(cov_diag).to(device)
+        return cov_matrix.expand(batch_size, self.state_dim, self.state_dim)
+
+
+class BaseInnovationModule(nn.Module):
+    def __init__(self, obs_dim: int):
+        super(BaseInnovationModule, self).__init__()
+        self.obs_dim = obs_dim
+
+    def forward(
+        self, observation: torch.Tensor, pred_observation: torch.Tensor
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class ClassicalInnovationModule(BaseInnovationModule):
+    def forward(
+        self, observation: torch.Tensor, pred_observation: torch.Tensor
+    ) -> torch.Tensor:
+        return observation - pred_observation
+
+
+class ObservationModule(nn.Module):
+    """Base class for observation models"""
+
+    def __init__(
+        self,
+        state_dim: int,
+        obs_dim: int,
+    ):
+        super().__init__()
+        self.state_dim = state_dim
+        self.obs_dim = obs_dim
+
+    def reset_states(self, batch_size: int, device: torch.device):
+        """Reset hidden state. Dummy implementation: no operation performed."""
+        pass
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute observation from state"""
+        raise NotImplementedError
+
+    def jacobian(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute Jacobian matrix of the observation function w.r.t. state"""
+        batch_size = x.shape[0]
+        jacobians = torch.autograd.functional.jacobian(
+            self.forward, x.detach(), create_graph=self.training
+        )
+        batch_indices = torch.arange(batch_size, device=x.device)
+        jacobians = jacobians[batch_indices, :, batch_indices, :]
+        return jacobians
+
+
+class LinearObservationModule(ObservationModule):
+    """Linear observation model: y_k = Cx_k + v_k"""
+
+    def __init__(
+        self,
+        state_dim: int,
+        obs_dim: int,
+        learnable: bool = True,
+        explicit_covariance: bool = False,
+        initial_covariance: float = 1e-3,
+    ):
+        super().__init__(state_dim, obs_dim)
+
+        observation_matrix = torch.eye(obs_dim, state_dim)
+        if learnable:
+            self.observation_matrix = nn.Parameter(observation_matrix)
+        else:
+            self.register_buffer("observation_matrix", observation_matrix)
+
+        # Observation noise covariance
+        log_observation_cov = torch.ones(obs_dim) * torch.log(
+            torch.tensor(initial_covariance)
+        )
+        if explicit_covariance:
+            self.register_buffer("log_observation_cov", log_observation_cov)
+        else:
+            self.log_observation_cov = nn.Parameter(log_observation_cov)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.matmul(x, self.observation_matrix.t())
+
+    def jacobian(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size = x.shape[0]
+        return self.observation_matrix.expand(batch_size, self.obs_dim, self.state_dim)
+
+    def covariance(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """Return observation noise covariance matrix"""
+        cov_diag = torch.exp(self.log_observation_cov)
+        cov_matrix = torch.diag(cov_diag).to(device)
+        return cov_matrix.expand(batch_size, self.obs_dim, self.obs_dim)
+
+
+class BaseKalmanFilter(nn.Module, ABC):
+    """
+    Extended base class for traditional Kalman filter variants that use
+    modular transition/observation/innovation components.
+    """
+
+    def __init__(
+        self,
+        state_dim: int,
+        obs_dim: int,
+        control_dim: int,
+    ):
+        super().__init__()
+        self.state_dim = state_dim
+        self.obs_dim = obs_dim
+        self.control_dim = control_dim
+
+        # Register initial state
+        self.register_buffer("initial_state", torch.zeros(self.state_dim))
+
+    @abstractmethod
+    def predict(
+        self,
+        observations: torch.Tensor,
+        controls: Optional[torch.Tensor] = None,
+        initial_state: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Full forward pass: encode -> decode.
+
+        Args:
+            observations: [B, T, obs_dim]
+            controls: [B, T, control_dim] or None
+            initial_state: [B, state_dim] or None
+
+        Returns:
+            Dictionary containing:
+                - "recon_observations": [B, T, obs_dim]
+                - "filtered_states": [B, T, state_dim]
+                - Additional filter-specific outputs
         """
 
-        B, T, _ = observation.shape
-        device = observation.device
-        hidden_state = self.initial_state.unsqueeze(0).repeat(B, 1)  # (B, hidden_dim)
+    @abstractmethod
+    def compute_losses(
+        self,
+        observations: torch.Tensor,
+        controls: Optional[torch.Tensor] = None,
+        true_states: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute all losses for training.
 
-        P = self.initial_P.unsqueeze(0).repeat(B, 1, 1)  # (B, hidden_dim, hidden_dim)
-        I = torch.eye(P.size(-1), device=device).unsqueeze(0).repeat(B, 1, 1)
-        # pdb.set_trace()
-        for t in range(self.look_back_window):
-            F_t = self.F[t]
-            H_t = self.H[t]
-            if self.use_dynamic_features:
-                B_t = self.B[t]
-                dynamic_ex_var = observation[:, t, self.target_channel_dim :]
+        Args:
+            observations: [B, T, obs_dim]
+            controls: [B, T, control_dim] or None
+            true_states: [B, T, state_dim] or None for supervision
 
-            # (S1) Prediction Step
-            hidden_state_pred = F_t(hidden_state)  # (B, hidden_dim)
-            if self.use_dynamic_features:
-                hidden_state_pred += B_t(dynamic_ex_var)
-            F_mat = F_t.weight  # (hidden_dim, hidden_dim)
-            Q = self.get_Q(t).unsqueeze(0).repeat(B, 1, 1)
-            P_pred = F_mat @ P @ F_mat.transpose(-1, -2) + Q
+        Returns:
+            Dictionary of loss components including "total"
+        """
 
-            # (S2) Measurement Update Step
-            H_mat = H_t.weight  # (target_channel_dim, hidden_dim)
-            R = self.get_R(t).unsqueeze(0).repeat(B, 1, 1)
-            y_pred = H_t(hidden_state_pred)  # (B, target_channel_dim)
-            y_obs = observation[
-                :, t, : self.target_channel_dim
-            ]  # (B, target_channel_dim)
-            residual = y_obs - y_pred  # (B, target_channel_dim)
+    def get_current_params(self) -> Dict[str, Any]:
+        """
+        Returns a dictionary of key model parameters useful for monitoring.
+        """
+        return {
+            "state_dim": self.state_dim,
+            "obs_dim": self.obs_dim,
+            "control_dim": self.control_dim,
+        }
 
-            H_mat_T = H_mat.transpose(-1, -2)
-            S = H_mat @ P_pred @ H_mat_T + R
-            K = P_pred @ H_mat_T @ torch.linalg.inv(S)  # Kalman Gain
 
-            hidden_state = hidden_state_pred + (K @ residual.unsqueeze(-1)).squeeze(-1)
+class Model(BaseKalmanFilter):
+    """
+    Classical Kalman Filter with unified API matching dkf.py interface.
+    """
 
-            # Joseph form for better stability
-            I_KH = I - K @ H_mat
-            P = I_KH @ P_pred @ I_KH.transpose(-1, -2) + K @ R @ K.transpose(-1, -2)
+    def __init__(
+        self,
+        state_dim: int,
+        obs_dim: int,
+        control_dim: int,
+        smoothness_weight: float = 0.01,
+        reconstruction_weight: float = 0.00,
+        use_dynamic_features: bool = False,
+        use_static_features: bool = False,
+        dynamic_exogenous_variables: int = 0,
+        static_exogenous_variables: int = 0,
+        look_back_channel_dim: int = 1,
+        target_channel_dim: int = 1,
+    ):
+        control_dim = 0
+        if use_dynamic_features:
+            control_dim += dynamic_exogenous_variables
+        if use_static_features:
+            control_dim += static_exogenous_variables
 
-        return hidden_state
+        super().__init__(
+            state_dim=state_dim,
+            obs_dim=obs_dim,
+            control_dim=control_dim,
+        )
+        self.transition_model = LinearTransitionModule(state_dim, control_dim)
+        self.observation_model = LinearObservationModule(state_dim, obs_dim)
+        self.innovation_model = ClassicalInnovationModule(obs_dim)
+        self.smoothness_weight = smoothness_weight
+        self.reconstruction_weight = reconstruction_weight
 
-    def forward(self, look_back_window: torch.Tensor):
-        # x.shape == (B, T, 1)
-        hidden_state = self.find_current_hidden_state(look_back_window)
-        preds = []
-        for i in range(self.look_back_window, self.window_length):
-            hidden_state = self.F[i](hidden_state)
-            emission = self.H[i](hidden_state)
-            preds.append(emission)  # (B, 1, 1)
+        self.use_dynamic_features = use_dynamic_features
+        self.use_static_features = use_static_features
 
-        stacked_preds = torch.cat(preds, dim=1)
+        self.look_back_channel_dim = look_back_channel_dim
+        self.target_channel_dim = target_channel_dim
 
-        return stacked_preds.unsqueeze(-1)
+    def _prediction_step(
+        self,
+        prev_state: torch.Tensor,
+        prev_covariance: torch.Tensor,
+        control: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Prediction step of the Kalman filter.
+
+        Args:
+            prev_state: Previous state estimate.
+            prev_covariance: Previous state covariance.
+            control: Control input.
+
+        Returns:
+            Prior state estimate and prior state covariance.
+        """
+        batch_size = prev_state.shape[0]
+        device = prev_state.device
+
+        # Predict state using dynamics model
+        prior_state = self.transition_model(prev_state, control)
+
+        # Get Jacobian of dynamics function
+        F = self.transition_model.jacobian(prev_state, control)
+
+        # Get process noise covariance
+        Q = self.transition_model.covariance(batch_size, device)
+
+        # Update covariance
+        prior_covariance = (
+            torch.bmm(torch.bmm(F, prev_covariance), F.transpose(1, 2)) + Q
+        )
+
+        return prior_state, prior_covariance
+
+    def _kgain_step(
+        self,
+        prior_covariance: torch.Tensor,
+        observation_matrix: torch.Tensor,
+        observation_noise: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute the Kalman gain.
+
+        Args:
+            prior_covariance: Prior state covariance.
+            observation_matrix: Observation matrix.
+            observation_noise: Observation noise covariance.
+
+        Returns:
+            Kalman gain.
+        """
+        device = prior_covariance.device
+
+        # Compute innovation covariance
+        S = (
+            torch.bmm(
+                torch.bmm(observation_matrix, prior_covariance),
+                observation_matrix.transpose(1, 2),
+            )
+            + observation_noise
+        )
+
+        # Add small diagonal for numerical stability
+        S = S + torch.eye(S.size(1), device=device) * 1e-6
+
+        # Compute Kalman gain
+        K = torch.bmm(
+            torch.bmm(prior_covariance, observation_matrix.transpose(1, 2)),
+            torch.inverse(S),
+        )
+
+        return K
+
+    def _update_step(
+        self,
+        prior_state: torch.Tensor,
+        prior_covariance: torch.Tensor,
+        observation: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Update step of the Kalman filter.
+
+        Args:
+            prior_state: Prior state.
+            prior_covariance: Prior state covariance.
+            observation: Observation.
+            innovation: Innovation.
+
+        Returns:
+            Posterior state and covariance.
+        """
+        batch_size = prior_state.shape[0]
+        device = prior_state.device
+
+        # Get Jacobian of observation function
+        H = self.observation_model.jacobian(prior_state)
+
+        # Get observation noise covariance
+        R = self.observation_model.covariance(batch_size, device)
+
+        # Compute the kalman gain
+        K = self._kgain_step(prior_covariance, H, R)
+
+        # Compute predicted observation and innovation
+        pred_observation = self.observation_model(prior_state)
+        innovation = self.innovation_model(observation, pred_observation)
+
+        # Update state
+        posterior_state = prior_state + torch.bmm(K, innovation.unsqueeze(-1)).squeeze(
+            -1
+        )
+
+        # Get Jacobian of observation function
+        H = self.observation_model.jacobian(prior_state)
+
+        # Update covariance
+        I = torch.eye(self.state_dim, device=device).expand(batch_size, -1, -1)
+        posterior_covariance = torch.bmm((I - torch.bmm(K, H)), prior_covariance)
+
+        return posterior_state, posterior_covariance, pred_observation
+
+    def predict(
+        self,
+        observations: torch.Tensor,
+        controls: Optional[torch.Tensor] = None,
+        initial_state: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Encode observations to filtered latent states using Kalman filtering.
+
+        Args:
+            observations: Tensor of shape (batch_size, seq_len, obs_dim).
+            controls: Tensor of shape (batch_size, seq_len, control_dim).
+            initial_state: Tensor of shape (batch_size, state_dim).
+
+        Returns:
+            Tensor of shape (batch_size, seq_len, state_dim).
+        """
+        batch_size, seq_len, _ = observations.shape
+        device = observations.device
+
+        # Initialize state and covariance
+        if initial_state is None:
+            state_estimate = self.initial_state.expand(batch_size, -1).to(device)
+        else:
+            state_estimate = initial_state
+
+        state_covariance = (
+            torch.eye(self.state_dim, device=device).expand(batch_size, -1, -1) * 1e-3
+        )
+
+        # Storage for results
+        filtered_states = torch.zeros(
+            batch_size, seq_len, self.state_dim, device=device
+        )
+
+        predicted_observations = torch.zeros(
+            batch_size, seq_len, self.obs_dim, device=device
+        )
+
+        # Process sequence
+        for t in range(seq_len):
+            observation = observations[:, t]
+            control = controls[:, t] if controls is not None else None
+
+            # Prediction step
+            prior_state, prior_covariance = self._prediction_step(
+                state_estimate, state_covariance, control
+            )
+
+            # Update step
+            posterior_state, posterior_covariance, pred_observations = (
+                self._update_step(prior_state, prior_covariance, observation)
+            )
+
+            # Store results
+            state_estimate = posterior_state
+            state_covariance = posterior_covariance
+            filtered_states[:, t] = state_estimate
+            predicted_observations[:, t] = pred_observations
+
+        return {
+            "filtered_states": filtered_states,
+            "recon_observations": predicted_observations,
+        }
+
+    def compute_losses(
+        self,
+        observations: torch.Tensor,
+        controls: Optional[torch.Tensor] = None,
+        true_states: Optional[torch.Tensor] = None,
+        initial_state: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute Classical Kalman Filter losses.
+        """
+        # Get filtered states and predicted observations
+        result = self.predict(observations, controls, initial_state)
+        filtered_states = result["filtered_states"]
+        pred_observations = result["recon_observations"]
+
+        # Compute base losses
+        losses = {}
+
+        # Primary loss
+        if true_states is not None:
+            state_loss = F.mse_loss(filtered_states, true_states)
+            losses["state_loss"] = state_loss
+            losses["total"] = state_loss
+        else:
+            recon_loss = F.mse_loss(pred_observations, observations)
+            losses["reconstruction_loss"] = recon_loss
+            losses["total"] = recon_loss
+
+        # Smoothness regularization
+        if filtered_states.shape[1] > 1 and self.smoothness_weight > 0:
+            smoothness_loss = F.mse_loss(
+                filtered_states[:, 1:], filtered_states[:, :-1]
+            )
+            losses["smoothness_loss"] = smoothness_loss * self.smoothness_weight
+            losses["total"] = losses["total"] + losses["smoothness_loss"]
+
+        return losses
 
 
 class KalmanFilter(BaseLightningModule):

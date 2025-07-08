@@ -257,6 +257,9 @@ class BaseLightningModule(L.LightningModule):
             # plot metric histograms
             plot_metric_histograms(self.logger, self.metric_full)
 
+            # plot best, worst and median prediction for each metric
+            plot_max_min_median_predictions(self)
+
             # plot the whole timeseries with the metrics
             datamodule = self.trainer.datamodule
             plot_entire_series(
@@ -264,9 +267,6 @@ class BaseLightningModule(L.LightningModule):
                 datamodule,
                 self.metric_full,
             )
-
-            # plot best, worst and median prediction for each metric
-            plot_max_min_median_predictions(self)
 
     def evaluate(self, batch, batch_idx):
         look_back_window, prediction_window = batch

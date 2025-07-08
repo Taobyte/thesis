@@ -6,18 +6,20 @@ model:
   prediction_window: ${prediction_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
-  hidden_dim: ${params.kalmanfilter.hidden_dim}
+  state_dim: ${params.kalmanfilter.hidden_dim}
   use_dynamic_features: ${use_dynamic_features}
   use_static_features: ${use_static_features}
   dynamic_exogenous_variables: ${dataset.datamodule.dynamic_exogenous_variables}
   static_exogenous_variables: ${dataset.datamodule.static_exogenous_variables}
+
+  smoothness_weight: 0.01
+  reconstruction_weight: 0.0
 
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter
   learning_rate: ${params.kalmanfilter.learning_rate}
   loss: "MSE"
   weight_decay: 0.0
-  exo_weight: 0.1
 
 trainer:
   max_epochs: 1000
