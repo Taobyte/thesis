@@ -4,16 +4,18 @@ model:
   _target_: src.models.hmm.PytorchHMM
   base_dim: 128
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
   temperature: 1.0
   min_var: 1e-6
-  use_activity_labels: ${use_static_features}
-  n_activity_states: ${dataset.datamodule.static_exogenous_variables}
+  use_exo: ${use_dynamic_features}
 
 pl_model: 
   _target_: src.models.hmm.HMMLightningModule
   learning_rate: 0.01
   deterministic: True
-  pred_loss_weight: 0.6
+  pred_loss_weight: 0.0
 
 trainer:
   max_epochs: 1000

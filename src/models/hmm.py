@@ -2,9 +2,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from einops import rearrange
 from typing import Tuple
 
 from src.models.utils import BaseLightningModule
+
+
+class ExoToMatrix(nn.Module):
+    def __init__(self, exo_dim: int, base_dim: int):
+        super().__init__()
+        self.base_dim = base_dim
+        self.linear = nn.Linear(exo_dim, base_dim**2)
+
+    def forward(self, x):
+        B, T, C = x.shape
+        x_reshaped = rearrange(x, "B T C -> (B T) C")
+        output = self.linear(x_reshaped)
+        output_reshaped = rearrange(
+            output, "(B T) (E F) -> B T E F", B=B, T=T, E=self.base_dim, F=self.base_dim
+        )
+        return output_reshaped
 
 
 class PytorchHMM(nn.Module):
@@ -12,29 +29,38 @@ class PytorchHMM(nn.Module):
         self,
         base_dim: int = 5,
         target_channel_dim: int = 1,
+        look_back_channel_dim: int = 2,
+        look_back_window: int = 5,
+        prediction_window: int = 3,
         temperature: float = 1.0,
         min_var: float = 1e-6,
-        use_activity_labels: bool = False,
-        n_activity_states: int = 1,
+        use_exo: bool = False,
     ):
         super().__init__()
 
         self.hidden_dim = base_dim
-        self.use_activity_labels = use_activity_labels
+        self.use_exo = use_exo
         self.target_channel_dim = target_channel_dim
+        self.look_back_channel_dim = look_back_channel_dim
+        self.look_back_window = look_back_window
+        self.prediction_window = prediction_window
+        self.exo_dim = look_back_channel_dim - target_channel_dim
         self.temperature = temperature
         self.min_var = min_var
-        self.n_activity_states = n_activity_states
 
         # Transition matrix parameters (learnable)
         self.base_transition_logits = nn.Parameter(
             torch.randn(self.hidden_dim, self.hidden_dim)
         )
-        if use_activity_labels:
-            # Stack all exogenous transition matrices
-            self.exogenous_transition_logits = nn.Parameter(
-                torch.randn(n_activity_states, self.hidden_dim, self.hidden_dim)
+        if use_exo:
+            self.exo_linear = ExoToMatrix(self.exo_dim, base_dim)
+            self.linear_exo_forecast = nn.Linear(
+                look_back_channel_dim * look_back_window,
+                prediction_window * self.exo_dim,
             )
+
+            self.linear_exo_mean = nn.Linear(self.exo_dim, self.target_channel_dim)
+            self.linear_exo_std = nn.Linear(self.exo_dim, self.target_channel_dim**2)
 
         # Initial state distribution parameters
         self.initial_logits = nn.Parameter(torch.randn(self.hidden_dim))
@@ -47,24 +73,13 @@ class PytorchHMM(nn.Module):
         )
 
     def get_transition_matrices(
-        self, exogenous_variables: torch.Tensor = None, batch_size: int = 0
+        self, exo_logits: torch.Tensor = None, batch_size: int = 0
     ):
         """Get normalized transition matrices for all exogenous states or base."""
-        if self.use_activity_labels and exogenous_variables is not None:
-            base_logits = self.base_transition_logits.unsqueeze(
-                0
-            )  # [1, hidden_dim, hidden_dim]
-
-            # Get exogenous transition logits
-            exog_logits = self.exogenous_transition_logits[
-                exogenous_variables
-            ]  # [batch, hidden_dim, hidden_dim]
-
+        if self.use_exo and exo_logits is not None:
+            base_logits = self.base_transition_logits  # (B, hidden_dim, hidden_dim)
             # Combine base and exogenous
-            combined_logits = (
-                base_logits + exog_logits
-            )  # TODO: linear layer or multiplication
-
+            combined_logits = base_logits + exo_logits  # (B, hidden_dim, hidden_dim)
             return F.softmax(combined_logits / self.temperature, dim=-1)
         else:
             # Just base transition matrix
@@ -78,10 +93,36 @@ class PytorchHMM(nn.Module):
         """Get normalized initial state distribution."""
         return F.softmax(self.initial_logits / self.temperature, dim=-1)
 
-    @property
-    def emission_variances(self):
-        """Get emission variances with minimum threshold."""
-        return torch.exp(self.emission_log_vars) + self.min_var
+    def get_emission_means(self, exo_variables=None):
+        base_mean = self.emission_means.unsqueeze(0).unsqueeze(0)
+        if self.use_exo:
+            exo_mean_delta = self.linear_exo_mean(
+                exo_variables
+            )  # (B, T, target_channel_dim)
+            B, T, target_channel_dim = exo_mean_delta.shape
+            exo_mean_delta = exo_mean_delta.unsqueeze(2).expand(
+                B, T, self.hidden_dim, target_channel_dim
+            )
+
+            mean = base_mean + exo_mean_delta
+        else:
+            mean = base_mean
+        return mean  # (B, T, hidden_dim, target_channel_dim)
+
+    def get_emission_variances(self, exo_variables=None):
+        base_var = torch.exp(self.emission_log_vars).unsqueeze(0).unsqueeze(0)
+        if self.use_exo:
+            log_var = self.linear_exo_std(exo_variables)  # (B, T, target_channel_dim)
+            B, T, target_channel_dim = log_var.shape
+            log_var = log_var.unsqueeze(2).expand(
+                B, T, self.hidden_dim, target_channel_dim
+            )
+            exo_var_delta = torch.exp(log_var)
+            var = torch.exp(self.emission_log_vars) + exo_var_delta
+        else:
+            var = base_var
+
+        return var + self.min_var
 
     def compute_emission_probabilities(
         self, observations: torch.Tensor
@@ -89,15 +130,22 @@ class PytorchHMM(nn.Module):
         """Compute emission log probabilities for all states and time steps."""
         batch_size, seq_len, obs_dim = observations.shape
 
-        # Expand dimensions for broadcasting
+        if self.use_exo:
+            exo_variables = observations[
+                :, :, self.target_channel_dim :
+            ]  # (B, T, C_exo)
+        else:
+            exo_variables = None
+
         # observations: [batch, seq_len, obs_dim] -> [batch, seq_len, 1, obs_dim]
         obs_expanded = observations.unsqueeze(2)
 
         # means: [hidden_dim, target_channel_dim] -> [1, 1, hidden_dim, target_channel_dim]
-        means_expanded = self.emission_means.unsqueeze(0).unsqueeze(0)
+
+        means_expanded = self.get_emission_means(exo_variables)
 
         # vars: [hidden_dim, target_channel_dim] -> [1, 1, hidden_dim, target_channel_dim]
-        vars_expanded = self.emission_variances.unsqueeze(0).unsqueeze(0)
+        vars_expanded = self.get_emission_variances(exo_variables)
 
         # Compute Gaussian log probability for all states at once
         # [batch, seq_len, hidden_dim, target_channel_dim]
@@ -117,11 +165,13 @@ class PytorchHMM(nn.Module):
         batch_size, seq_len, _ = observations.shape
         device = observations.device
 
+        if self.use_exo:
+            exo_variables = observations[:, :, self.target_channel_dim :]
+            exo_logits = self.exo_linear(exo_variables)  # (B, hidden_dim, hidden_dim)
+
         # Compute all emission probabilities at once
         # [batch, seq_len, hidden_dim]
-        emission_log_probs = self.compute_emission_probabilities(
-            observations[:, :, : self.target_channel_dim]
-        )
+        emission_log_probs = self.compute_emission_probabilities(observations)
 
         # Initialize alpha (log probabilities)
         alpha = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
@@ -129,56 +179,30 @@ class PytorchHMM(nn.Module):
         # Initialize first timestep
         initial_dist = self.initial_distribution  # [hidden_dim]
         alpha[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
-        if self.use_activity_labels:
-            exog_vars = torch.argmax(
-                observations[:, :, self.target_channel_dim :], dim=-1
-            )  # [batch, seq_len]
-        else:
-            exog_vars = None
+
         batch_size = observations.shape[0]
         for t in range(1, seq_len):
-            if self.use_activity_labels:
-                trans_t = self.get_transition_matrices(
-                    exog_vars[:, t - 1], batch_size=batch_size
-                )
-                trans_log_t = torch.log(trans_t + 1e-10)
-
-                # Expand alpha for broadcasting: [batch, hidden_dim, 1]
-                alpha_prev = alpha[:, t - 1, :].unsqueeze(2)
-
-                # Compute transition scores: [batch, hidden_dim, hidden_dim]
-                transition_scores = alpha_prev + trans_log_t
-
-                # Log-sum-exp over previous states: [batch, hidden_dim]
-                alpha[:, t, :] = (
-                    torch.logsumexp(transition_scores, dim=1)
-                    + emission_log_probs[:, t, :]
-                )
+            if self.use_exo:
+                transition_matrix = self.get_transition_matrices(exo_logits[:, t - 1])
             else:
-                # Time-invariant transitions
+                transition_matrix = self.get_transition_matrices(batch_size=batch_size)
+            trans_log = torch.log(
+                transition_matrix + 1e-10
+            )  # [batch, hidden_dim, hidden_dim]
 
-                transition_matrices = self.get_transition_matrices(
-                    None, batch_size=batch_size
-                )
-                trans_log = torch.log(
-                    transition_matrices + 1e-10
-                )  # [batch, hidden_dim, hidden_dim]
+            # Expand alpha for broadcasting: [batch, hidden_dim, 1]
+            alpha_prev = alpha[:, t - 1, :].unsqueeze(2)
 
-                # Expand alpha for broadcasting: [batch, hidden_dim, 1]
-                alpha_prev = alpha[:, t - 1, :].unsqueeze(2)
+            # Compute transition scores: [batch, hidden_dim, hidden_dim]
+            transition_scores = alpha_prev + trans_log
 
-                # Compute transition scores: [batch, hidden_dim, hidden_dim]
-                transition_scores = alpha_prev + trans_log
-
-                # Log-sum-exp over previous states: [batch, hidden_dim]
-                alpha[:, t, :] = (
-                    torch.logsumexp(transition_scores, dim=1)
-                    + emission_log_probs[:, t, :]
-                )
+            # Log-sum-exp over previous states: [batch, hidden_dim]
+            alpha[:, t, :] = (
+                torch.logsumexp(transition_scores, dim=1) + emission_log_probs[:, t, :]
+            )
 
         # Compute total log likelihood
         log_likelihood = torch.logsumexp(alpha[:, -1, :], dim=-1)
-
         return alpha, log_likelihood
 
     def infer_current_state(self, observations: torch.Tensor) -> torch.Tensor:
@@ -194,10 +218,17 @@ class PytorchHMM(nn.Module):
         deterministic: bool = False,
         last_ex_variable: torch.Tensor = None,
     ) -> torch.Tensor:
+        batch_size, _ = current_state_probs.shape
+        if self.use_exo:
+            exo_logits = self.exo_linear(last_ex_variable)
+        else:
+            exo_logits = None
         transition_matrix = self.get_transition_matrices(
-            exogenous_variables=last_ex_variable,
-            batch_size=current_state_probs.shape[0],
+            exo_logits=exo_logits, batch_size=batch_size
         )
+
+        if self.use_exo:
+            transition_matrix = transition_matrix.squeeze(1)
 
         next_state_probs = torch.bmm(
             current_state_probs.unsqueeze(1), transition_matrix
@@ -205,12 +236,20 @@ class PytorchHMM(nn.Module):
 
         if deterministic:
             # take most probably state and use the mean
-            state_samples = torch.argmax(next_state_probs, dim=-1)
-            predictions = self.emission_means[state_samples].unsqueeze(1)
+            state_samples = torch.argmax(next_state_probs, dim=-1)  # (B, )
+            predictions = self.emission_means[state_samples].unsqueeze(
+                1
+            )  # (B, 1, target_channel_dim)
+            if self.use_exo:
+                # add delta mean from the exogenous variables
+                reshaped_ex = rearrange(
+                    last_ex_variable, "B T C -> B (T C)"
+                )  # in here T = 1
+                delta_mean = self.linear_exo_mean(
+                    reshaped_ex
+                )  # (B, 1 * target_channel_dim)
+                predictions = predictions + delta_mean.unsqueeze(1)
 
-            #  predictions = torch.sum(
-            #      next_state_probs.unsqueeze(-1) * self.emission_means.unsqueeze(0), dim=1
-            #  ).unsqueeze(1)  # (batch_size, 1, target_channel_dim)
         else:
             state_samples = torch.multinomial(next_state_probs, 1).squeeze(
                 -1
@@ -241,17 +280,25 @@ class PytorchHMM(nn.Module):
         current_state_probs, log_likelihood = self.infer_current_state(
             lookback_sequence
         )
-        if self.use_activity_labels:
-            last_ex_variable = torch.argmax(
-                lookback_sequence[:, -1, self.target_channel_dim :], dim=-1
-            )
-        else:
-            last_ex_variable = None
 
-        for _ in range(prediction_steps):
+        if self.use_exo:
+            last_exo_lbw = lookback_sequence[
+                :, -1, self.target_channel_dim :
+            ].unsqueeze(1)  # (B, 1, C_exo)
+            input = rearrange(lookback_sequence, "B T C -> B (T C)")
+            output = self.linear_exo_forecast(input)  # (B, L * C_exo)
+            predicted_exo = rearrange(
+                output, "B (L C) -> B L C", L=self.prediction_window
+            )
+
+            exo = torch.concat((last_exo_lbw, predicted_exo), dim=1)
+
+        for i in range(prediction_steps):
             # Predict next timestep
             pred, current_state_probs = self.predict_next_timestep(
-                current_state_probs, deterministic, last_ex_variable
+                current_state_probs,
+                deterministic,
+                exo[:, i, :].unsqueeze(1) if self.use_exo else None,
             )
             predictions.append(pred)
 
