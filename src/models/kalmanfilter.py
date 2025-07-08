@@ -580,11 +580,16 @@ class Model(BaseKalmanFilter):
         prediction_dict = self.predict(heartrate, controls)
 
         current_state = prediction_dict["filtered_states"][:, -1, :]
+        prediction = lookback_seq[:, -1, :]
         preds = []
         for _ in range(self.prediction_window):
-            current_state = self.transition_model(current_state, None)
-            prediction = self.observation_model(current_state)
-            preds.append(prediction.unsqueeze(1))
+            if self.control_dim > 0:
+                last_pred_control = prediction[:, 0, self.target_channel_dim :]
+            else:
+                last_pred_control = None
+            current_state = self.transition_model(current_state, last_pred_control)
+            prediction = self.observation_model(current_state).unsqueeze(1)
+            preds.append(prediction)
 
         concat_preds = torch.concat(preds, dim=1)
         return concat_preds
