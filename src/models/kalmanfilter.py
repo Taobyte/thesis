@@ -311,15 +311,15 @@ class Model(BaseKalmanFilter):
         self,
         state_dim: int,
         obs_dim: int,
-        control_dim: int,
         smoothness_weight: float = 0.01,
         reconstruction_weight: float = 0.00,
         use_dynamic_features: bool = False,
         use_static_features: bool = False,
         dynamic_exogenous_variables: int = 0,
         static_exogenous_variables: int = 0,
-        look_back_channel_dim: int = 1,
         target_channel_dim: int = 1,
+        look_back_window: int = 5,
+        prediction_window: int = 3,
     ):
         control_dim = 0
         if use_dynamic_features:
@@ -341,8 +341,10 @@ class Model(BaseKalmanFilter):
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
 
-        self.look_back_channel_dim = look_back_channel_dim
         self.target_channel_dim = target_channel_dim
+
+        self.look_back_window = look_back_window
+        self.prediction_window = prediction_window
 
     def _prediction_step(
         self,
@@ -567,11 +569,31 @@ class Model(BaseKalmanFilter):
 
         return losses
 
+    def forward(self, lookback_seq: torch.Tensor) -> torch.Tensor:
+        if self.control_dim > 0:
+            controls = lookback_seq[:, :, self.target_channel_dim :]
+            heartrate = lookback_seq[:, :, : self.target_channel_dim]
+        else:
+            heartrate = lookback_seq
+            controls = None
+
+        prediction_dict = self.predict(heartrate, controls)
+
+        current_state = prediction_dict["filtered_states"][:, -1, :]
+        preds = []
+        for _ in range(self.prediction_window):
+            current_state = self.transition_model(current_state, None)
+            prediction = self.observation_model(current_state)
+            preds.append(prediction.unsqueeze(1))
+
+        concat_preds = torch.concat(preds, dim=1)
+        return concat_preds
+
 
 class KalmanFilter(BaseLightningModule):
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: BaseKalmanFilter,
         loss: str = "MSE",
         learning_rate: float = 0.001,
         weight_decay: float = 0.0,
@@ -598,7 +620,9 @@ class KalmanFilter(BaseLightningModule):
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
         assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
+        # loss = self.criterion(preds, prediction_window)
+        loss = self.model.compute_losses(look_back_window, None, None)["total"]
+
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
 
         return loss
