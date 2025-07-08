@@ -37,7 +37,7 @@ def create_group_run_name(
 
     # static and dynamic features
     features = ""
-    if use_only_exogenous_features:
+    if not use_only_exogenous_features:
         if use_dynamic_features and use_static_features:
             features = "df_sf"
         elif use_dynamic_features and not use_static_features:
