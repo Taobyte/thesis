@@ -619,6 +619,8 @@ class KalmanFilter(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
+
+        preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
         # loss = self.model.compute_losses(look_back_window, None, None)["total"]
