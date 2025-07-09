@@ -106,6 +106,19 @@ def main():
         help="Which window statistic for the heartrate value to use. Can be 'mean', 'var' or 'power'. Only supported by DaLia dataset at the moment.",
     )
 
+    parser.add_argument(
+        "--use_std",
+        required=False,
+        action="store_true",
+        help="plot standard deviation",
+    )
+    parser.add_argument(
+        "--table",
+        required=False,
+        action="store_true",
+        help="Plot table.",
+    )
+
     args = parser.parse_args()
 
     if args.type == "table":
@@ -129,6 +142,7 @@ def main():
             args.normalization,
             save_html=args.save_html,
             start_time="2025-6-24",
+            use_std=args.use_std,
         )
     elif args.type == "activity_ablation":
         dynamic_feature_ablation(
@@ -142,6 +156,8 @@ def main():
             normalization=args.normalization,
             save_html=args.save_html,
             window_statistic=args.window_statistic,
+            use_std=args.use_std,
+            table=args.table,
         )
     elif args.type == "norm_ablation":
         visualize_normalization_difference(

@@ -108,7 +108,7 @@ def visualize_look_back_window_difference(
                             name=f"{dataset_name} {model_name}",
                             line=dict(color=color),
                             showlegend=(j == 0) and row == 1,
-                            legendgroup=f"{dataset_name} {model_name}",
+                            legendgroup=model_name,
                             # legendgrouptitle_text=dataset_name,
                         ),
                         row=row,
@@ -157,7 +157,7 @@ def visualize_look_back_window_difference(
         #          size=40, family="Arial", color="black"
         #      ),  # bold by default for many fonts
         #  },
-        # height=num_rows * 200,
+        height=num_rows * 600,
         # width=num_cols * 600,
         template="plotly_white",
         # margin=dict(t=100, b=100, l=100, r=100),

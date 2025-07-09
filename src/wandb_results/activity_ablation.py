@@ -1,6 +1,7 @@
 import os
 import time
 import plotly.io as pio
+import plotly.graph_objects as go
 
 from tqdm import tqdm
 from plotly.subplots import make_subplots
@@ -26,12 +27,12 @@ def dynamic_feature_ablation(
     save_html: bool = False,
     window_statistic: str = None,
     use_std: bool = False,
+    table: bool = True,
 ):
     n_models = len(models)
     current_time = int(time.time())
 
     for dataset in datasets:
-        print(f"Processing Activity Ablation for {dataset_to_name[dataset]}")
         dynamic_runs = get_runs(
             dataset,
             models,
@@ -59,52 +60,47 @@ def dynamic_feature_ablation(
         )
         dynamic_mean_dict, dynamic_std_dict = get_metrics(dynamic_runs)
         no_dynamic_mean_dict, no_dynamic_std_dict = get_metrics(no_dynamic_runs)
-        for p, pw in enumerate(prediction_window):
-            fig = make_subplots(
-                rows=n_models,
-                cols=4,
-                column_titles=[metric_to_name[metric] for metric in test_metrics],
-                row_titles=[model_to_name[model] for model in models],
-                shared_xaxes=False,
+
+        if not table:
+            print(
+                f"Processing Activity Ablation Visualization for {dataset_to_name[dataset]}"
             )
-            for i, model in tqdm(enumerate(models), total=len(models)):
-                add_model_mean_std_to_fig(
-                    model,
-                    f"Activity {model_to_name[model]}",
-                    model_colors[2],
-                    dynamic_mean_dict,
-                    dynamic_std_dict,
-                    fig,
-                    dataset,
-                    i + 1,
-                    True,
-                    row_delta=2 * p,
-                    use_std=use_std,
+            for p, pw in enumerate(prediction_window):
+                fig = make_subplots(
+                    rows=n_models,
+                    cols=4,
+                    column_titles=[metric_to_name[metric] for metric in test_metrics],
+                    row_titles=[model_to_name[model] for model in models],
+                    shared_xaxes=False,
                 )
+                for i, model in tqdm(enumerate(models), total=len(models)):
+                    add_model_mean_std_to_fig(
+                        model,
+                        f"Activity {model_to_name[model]}",
+                        model_colors[2],
+                        dynamic_mean_dict,
+                        dynamic_std_dict,
+                        fig,
+                        dataset,
+                        i + 1,
+                        True,
+                        row_delta=2 * p,
+                        use_std=use_std,
+                    )
 
-                add_model_mean_std_to_fig(
-                    model,
-                    f"No Activity {model_to_name[model]}",
-                    model_colors[0],
-                    no_dynamic_mean_dict,
-                    no_dynamic_std_dict,
-                    fig,
-                    dataset,
-                    i + 1,
-                    True,
-                    row_delta=2 * p,
-                    use_std=use_std,
-                )
-
-                for lbw in look_back_window:
-                    for metric in test_metrics:
-                        p_act = dynamic_mean_dict[model][str(lbw)][str(pw)][metric]
-                        p_no_act = no_dynamic_mean_dict[model][str(lbw)][str(pw)][
-                            metric
-                        ]
-                        print(
-                            f"Model {model} | lbw {lbw} | pw {pw} | Metric {metric} PI: {round((1 - p_act / p_no_act) * 100, 4)}%"
-                        )
+                    add_model_mean_std_to_fig(
+                        model,
+                        f"No Activity {model_to_name[model]}",
+                        model_colors[0],
+                        no_dynamic_mean_dict,
+                        no_dynamic_std_dict,
+                        fig,
+                        dataset,
+                        i + 1,
+                        True,
+                        row_delta=2 * p,
+                        use_std=use_std,
+                    )
 
             fig.update_layout(
                 title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw} | Window Statistic {window_statistic}",
@@ -128,3 +124,71 @@ def dynamic_feature_ablation(
                 print(f"Saved successfully: {plot_name}")
             else:
                 fig.show()
+
+        else:
+            print(f"Processing Activity Ablation Table for {dataset_to_name[dataset]}")
+            pw = prediction_window[0]
+
+            for metric in test_metrics:
+                cols = []
+                first_col = []
+                for model in models:
+                    name = model_to_name[model]
+                    first_col.append(f"{name} (Act)")
+                    first_col.append(f"{name} (No Act)")
+                    first_col.append(f"{name} (Imprv)")
+                cols.append(first_col)
+
+                for lbw in look_back_window:
+                    cells = []
+                    for model in models:
+                        dyn_perf = dynamic_mean_dict[model][str(lbw)][str(pw)][metric]
+                        no_dyn_perf = no_dynamic_mean_dict[model][str(lbw)][str(pw)][
+                            metric
+                        ]
+                        cells.append(
+                            round(
+                                float(dyn_perf),
+                                4,
+                            )
+                        )
+                        cells.append(
+                            round(
+                                float(no_dyn_perf),
+                                4,
+                            )
+                        )
+                        if metric in ["test_cross_correlation", "test_dir_acc_single"]:
+                            improvement = round(
+                                float(((dyn_perf - no_dyn_perf) / no_dyn_perf) * 100), 4
+                            )
+                        else:
+                            improvement = round(
+                                float(((no_dyn_perf - dyn_perf) / no_dyn_perf) * 100), 4
+                            )
+                        cells.append(f"{improvement}%")
+                    cols.append(cells)
+                table_fig = go.Figure(
+                    data=[
+                        go.Table(
+                            header=dict(
+                                values=["Model (Metric)"]
+                                + [str(lbw) for lbw in look_back_window]
+                            ),
+                            cells=dict(
+                                values=cols,
+                                align="center",
+                            ),
+                        )
+                    ]
+                )
+                table_fig.update_layout(
+                    title=dict(
+                        text=f"Model Performance Table {metric_to_name[metric]}",
+                        x=0.5,
+                        xanchor="center",
+                        font=dict(size=20, family="Arial", color="black"),
+                    )
+                )
+
+                table_fig.show()
