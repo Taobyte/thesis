@@ -3,7 +3,7 @@ defaults:
   - model: pattn
   - params: base 
   - dataset: dalia
-  - path: local
+  - path: cluster
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
