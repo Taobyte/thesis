@@ -13,6 +13,7 @@ model:
 pl_model: 
   _target_: src.models.gp.GaussianProcess
   learning_rate: ${params.gp.learning_rate}
+  jitter: 1e-4
 
 trainer:
   max_epochs: 1000

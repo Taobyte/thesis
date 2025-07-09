@@ -1,5 +1,6 @@
 import torch
 import gpytorch
+import gpytorch.settings
 
 from einops import rearrange
 from gpytorch.models import ApproximateGP
@@ -12,6 +13,7 @@ from gpytorch.likelihoods import MultitaskGaussianLikelihood
 from typing import Tuple
 
 from src.models.utils import BaseLightningModule
+
 
 # -----------------------------------------------------------------------------
 # Standard Gaussian Process
@@ -33,6 +35,7 @@ class GPModel(ApproximateGP):
         self.num_tasks = num_tasks
         self.train_dataset_length = train_dataset_length
         # we first have to rearrange the inducing points to have only two dimensions
+
         inducing_points = rearrange(inducing_points, "B T C -> B (T C)")
         inducing_points = inducing_points.unsqueeze(0).expand(num_latents, -1, -1)
 
@@ -115,10 +118,13 @@ class GPModel(ApproximateGP):
 
 
 class GaussianProcess(BaseLightningModule):
-    def __init__(self, model, learning_rate: int = 0.001, **kwargs):
+    def __init__(
+        self, model, learning_rate: int = 0.001, jitter: float = 1e-6, **kwargs
+    ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
+        self.jitter = jitter
         self.likelihood = MultitaskGaussianLikelihood(num_tasks=model.num_tasks)
 
         self.mll = VariationalELBO(
@@ -131,7 +137,8 @@ class GaussianProcess(BaseLightningModule):
         look_back_window = rearrange(
             look_back_window, "B T C -> B (T C)"
         )  # GPytorch assumes flattened channels
-        preds = self.model(look_back_window)
+        with gpytorch.settings.cholesky_jitter(self.jitter):
+            preds = self.model(look_back_window)
         mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
         std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
         return mean, std
@@ -143,7 +150,8 @@ class GaussianProcess(BaseLightningModule):
         look_back_window = rearrange(
             look_back_window, "B T C -> B (T C)"
         )  # GPytorch assumes flattened channels
-        preds = self.model(look_back_window)
+        with gpytorch.settings.cholesky_jitter(self.jitter):
+            preds = self.model(look_back_window)
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
         loss = -self.mll(preds, prediction_window)
         mae_loss = self.mae_loss(preds.mean, prediction_window)

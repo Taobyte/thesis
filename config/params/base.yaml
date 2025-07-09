@@ -22,7 +22,7 @@ xgboost:
   colsample_bytree: 0.8
 
 gp:
-  n_points: 400
+  n_points: 250
   learning_rate: 0.001
   num_latents: 10
   kernel: "matern"
