@@ -17,7 +17,7 @@ pl_model:
   _target_: src.models.xgboost.XGBoost
   loss: "MSE"
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
-  verbose: True
+  verbose: False
 
 trainer:
   max_epochs: 1 # we don't train here, because we use the flattened dataset at once and don't use batched training

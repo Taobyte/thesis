@@ -10,19 +10,19 @@ hmm:
 
 kalmanfilter:
   learning_rate: 0.001
-  hidden_dim: 1028
+  hidden_dim: 32
 
 xgboost:
-  n_estimators: 150
-  learning_rate: 0.2
-  max_depth: 8
-  reg_alpha: 1.0
-  reg_lambda: 1.0
-  subsample: 0.8
+  n_estimators: 600
+  learning_rate: 0.01
+  max_depth: 5
+  reg_alpha: 0.0001
+  reg_lambda: 0.0
+  subsample: 0.7
   colsample_bytree: 0.8
 
 gp:
-  n_points: 2000
+  n_points: 500
   learning_rate: 0.001
   num_latents: 10
   kernel: "matern"
@@ -34,19 +34,25 @@ gp:
 
 timesnet:
   learning_rate: 0.006757553589352132
+  e_layers: 2
+  num_kernels: 6
+  top_k: 5
   d_model: 32
   d_ff: 32
   dropout: 0.01696330173575103
 
+
 simpletm:
   learning_rate: 0.0038826539697481037
+  e_layers: 1
   d_model: 256
+  d_ff: 32
   dropout: 0.014237860899953811
   geomattn_dropout: 0.25380888118473355
-  d_ff: 32
 
 adamshyper:
   learning_rate: 0.0023752166039571958
+  hyper_num: [50, 20, 10]
   d_model: 768
   inner_size: 16
 

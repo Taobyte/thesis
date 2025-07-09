@@ -91,6 +91,10 @@ def create_ieee_npz_files(datadir: str):
     print("End processing IEEE files.")
 
 
+def create_wildppg_npy_files(datadir: str):
+    pass
+
+
 def create_capture24_npy_files(datadir: str):
     capture24_preprocessed = os.path.join(datadir, "capture24_preprocessed")
     os.makedirs(capture24_preprocessed, exist_ok=True)

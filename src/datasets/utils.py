@@ -7,6 +7,8 @@ from einops import rearrange
 from torch.utils.data import DataLoader
 from typing import Tuple
 
+from src.normalization import local_z_norm, global_z_norm
+
 
 class BaseDataModule(L.LightningDataModule):
     def __init__(
@@ -167,8 +169,6 @@ class BaseDataModule(L.LightningDataModule):
             dataloader = self.val_dataloader()
         else:
             dataloader = self.test_dataloader()
-
-        from src.normalization import local_z_norm, global_z_norm
 
         lbws = []
         pws = []

@@ -4,19 +4,22 @@ model:
   _target_: src.models.timesnet.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  e_layers: 2
-  top_k: 5
-  d_model: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.d_model}  # chosen according to min(max(2^log(C), d_min), d_max) Long-term: (d_min=32, d_max=512) |  Short-term: (d_min=16, d_max=64) 
-  d_ff: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.d_ff} 
-  num_kernels: 6
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   c_out: ${dataset.datamodule.look_back_channel_dim}
-  dropout: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.dropout} 
+  
+  # tunable parameters
+  e_layers: ${params.timesnet.e_layers}
+  num_kernels: ${params.timesnet.num_kernels}
+  top_k: ${params.timesnet.top_k}
+  d_model: ${params.timesnet.d_model}
+  d_ff: ${params.timesnet.d_ff}
+  dropout:  ${params.timesnet.dropout} 
+  
 
 
 pl_model: 
   _target_: src.models.timesnet.TimesNet
-  learning_rate: ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
+  learning_rate: ${params.timesnet.learning_rate} 
   loss_fn: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
   lradj: "type1"
   beta_1: 0.9

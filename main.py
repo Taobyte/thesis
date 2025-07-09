@@ -42,7 +42,9 @@ def main(config: DictConfig) -> Optional[float]:
         multi_gpu_dict = config.multi
 
     def setup(config: DictConfig):
-        datamodule = instantiate(config.dataset.datamodule)
+        datamodule = instantiate(
+            config.dataset.datamodule, normalization=config.normalization
+        )
         model_kwargs = get_model_kwargs(config, datamodule)
         model = instantiate(config.model.model, **model_kwargs)
         pl_model = instantiate(
