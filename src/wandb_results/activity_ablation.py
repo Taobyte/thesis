@@ -25,6 +25,7 @@ def dynamic_feature_ablation(
     normalization: str = "global",
     save_html: bool = False,
     window_statistic: str = None,
+    use_std: bool = False,
 ):
     n_models = len(models)
     current_time = int(time.time())
@@ -78,6 +79,7 @@ def dynamic_feature_ablation(
                     i + 1,
                     True,
                     row_delta=2 * p,
+                    use_std=use_std,
                 )
 
                 add_model_mean_std_to_fig(
@@ -91,6 +93,7 @@ def dynamic_feature_ablation(
                     i + 1,
                     True,
                     row_delta=2 * p,
+                    use_std=use_std,
                 )
 
                 for lbw in look_back_window:

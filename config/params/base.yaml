@@ -22,7 +22,7 @@ xgboost:
   colsample_bytree: 0.8
 
 gp:
-  n_points: 500
+  n_points: 400
   learning_rate: 0.001
   num_latents: 10
   kernel: "matern"
@@ -33,22 +33,22 @@ gp:
 # SOTA Deep Learning Architectures
 
 timesnet:
-  learning_rate: 0.006757553589352132
+  learning_rate: 0.005
   e_layers: 2
   num_kernels: 6
   top_k: 5
   d_model: 32
   d_ff: 32
-  dropout: 0.01696330173575103
+  dropout: 0.01
 
 
 simpletm:
-  learning_rate: 0.0038826539697481037
+  learning_rate: 0.004
   e_layers: 1
   d_model: 256
   d_ff: 32
-  dropout: 0.014237860899953811
-  geomattn_dropout: 0.25380888118473355
+  dropout: 0.015
+  geomattn_dropout: 0.25
 
 adamshyper:
   learning_rate: 0.0023752166039571958

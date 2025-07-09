@@ -133,6 +133,7 @@ def add_model_mean_std_to_fig(
     ablation: bool = False,
     row_delta: int = 0,
     col_delta: int = 0,
+    use_std: bool = False,
 ):
     look_back_windows = sorted(list(mean_dict[model].keys()), key=int)
     prediction_windows = [
@@ -192,25 +193,25 @@ def add_model_mean_std_to_fig(
                 row=row,
                 col=col,
             )
-
-            # Std deviation band (fill between)
-            fig.add_trace(
-                go.Scatter(
-                    x=x + x[::-1],
-                    y=upper + lower[::-1],
-                    fill="toself",
-                    fillcolor=color.replace("1.0", "0.2")
-                    if "rgba" in color
-                    else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
-                    line=dict(color="rgba(255,255,255,0)"),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name=model_name,
-                    legendgroup=model_name,
-                ),
-                row=row,
-                col=col,
-            )
+            if use_std:
+                # Std deviation band (fill between)
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=upper + lower[::-1],
+                        fill="toself",
+                        fillcolor=color.replace("1.0", "0.2")
+                        if "rgba" in color
+                        else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                        line=dict(color="rgba(255,255,255,0)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                        name=model_name,
+                        legendgroup=model_name,
+                    ),
+                    row=row,
+                    col=col,
+                )
             # Set y-axis range for this subplot
             # ig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
             # Set x-axis to look_back_window values
