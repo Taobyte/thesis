@@ -1,9 +1,9 @@
 defaults:
   - _self_
-  - model: pattn
+  - model: linear
   - params: base 
   - dataset: dalia
-  - path: cluster
+  - path: local
   - experiment: fold_0
   # - override hydra/sweeper: pattn_sweeper
 
@@ -20,10 +20,10 @@ look_back_window: 5
 prediction_window: 3
 use_heart_rate: True
 use_static_features: False
-use_dynamic_features: True
+use_dynamic_features: False
 use_only_exogenous_features: False
 
-normalization: "none" # can be either "local", "global" or "none"
+normalization: "global" # can be either "local", "global" or "none"
 
 seed: 123
 overfit: False

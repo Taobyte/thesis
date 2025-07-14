@@ -327,11 +327,8 @@ class Model(BaseKalmanFilter):
         if use_static_features:
             control_dim += static_exogenous_variables
 
-        super().__init__(
-            state_dim=state_dim,
-            obs_dim=obs_dim,
-            control_dim=control_dim,
-        )
+        super().__init__(state_dim=state_dim, obs_dim=obs_dim, control_dim=control_dim)
+
         self.transition_model = LinearTransitionModule(state_dim, control_dim)
         self.observation_model = LinearObservationModule(state_dim, obs_dim)
         self.innovation_model = ClassicalInnovationModule(obs_dim)
@@ -483,6 +480,7 @@ class Model(BaseKalmanFilter):
         Returns:
             Tensor of shape (batch_size, seq_len, state_dim).
         """
+
         batch_size, seq_len, _ = observations.shape
         device = observations.device
 
@@ -572,12 +570,10 @@ class Model(BaseKalmanFilter):
     def forward(self, lookback_seq: torch.Tensor) -> torch.Tensor:
         if self.control_dim > 0:
             controls = lookback_seq[:, :, self.target_channel_dim :]
-            heartrate = lookback_seq[:, :, : self.target_channel_dim]
         else:
-            heartrate = lookback_seq
             controls = None
 
-        prediction_dict = self.predict(heartrate, controls)
+        prediction_dict = self.predict(lookback_seq, controls)
 
         current_state = prediction_dict["filtered_states"][:, -1, :]
         prediction = lookback_seq[:, -1, :].unsqueeze(1)

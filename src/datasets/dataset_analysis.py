@@ -9,6 +9,7 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from sklearn.feature_selection import mutual_info_regression
+from statsmodels.tsa.stattools import kpss, adfuller
 
 from src.constants import (
     dataset_to_name,
@@ -41,7 +42,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--type",
-        choices=["granger", "pearson", "infos", "mutual"],
+        choices=["granger", "pearson", "infos", "mutual", "test"],
         required=True,
         help="checks granger causality for the timeseries in the dataset",
     )
@@ -181,6 +182,25 @@ if __name__ == "__main__":
             print(f"Mutual Information Regression Value {mi[0]}")
 
         print(f"Mean {np.mean(mis)} | Std {np.std(mis)}")
-    elif args.type == "dcor":
+
+    elif args.type == "test":
         # TODO: use distance correlation package 'dcor' to analyze the dataset further
-        x = 0
+        for i, series in enumerate(dataset):
+            print(f"Processing series {i}")
+            heartrate = series[:, 0]
+            activity = series[:, 1].reshape(-1, 1)
+
+            ad_hr = adfuller(heartrate)
+            print(f"adfuller heartrate: {ad_hr[1]}")
+            ad_act = adfuller(activity)
+            print(f"adfuller activity: {ad_act[1]}")
+
+            kpps_c_hr = kpss(heartrate, regression="c")
+            print(f"KPPS heartrate constant: {kpps_c_hr[1]}")
+            kpps_ct_hr = kpss(heartrate, regression="ct")
+            print(f"KPPS heartrate linear: {kpps_ct_hr[1]}")
+
+            kpps_c_act = kpss(activity, regression="c")
+            print(f"KPPS activity constant: {kpps_c_act[1]}")
+            kpps_ct_act = kpss(activity, regression="ct")
+            print(f"KPPS activity linear: {kpps_ct_act[1]}")

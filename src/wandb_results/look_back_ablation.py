@@ -33,7 +33,9 @@ def visualize_look_back_window_difference(
 
     readable_metric_names = [metric_to_name[m] for m in test_metrics]
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
-    subplot_titles = num_datasets * readable_metric_names
+    subplot_titles = subplot_titles = readable_metric_names + [""] * (
+        (num_datasets - 1) * n_metrics
+    )
     row_titles = readable_dataset_names
 
     fig = make_subplots(
@@ -41,9 +43,9 @@ def visualize_look_back_window_difference(
         cols=n_metrics,
         subplot_titles=subplot_titles,
         row_titles=row_titles,
-        # shared_xaxes=True,
-        # horizontal_spacing=0.1,
-        # vertical_spacing=0.1,
+        shared_xaxes=True,
+        horizontal_spacing=0.03,
+        vertical_spacing=0.03,
     )
     for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
         runs = get_runs(
@@ -58,8 +60,6 @@ def visualize_look_back_window_difference(
             start_time,
         )
 
-        dataset_name = dataset_to_name[dataset]
-
         mean_dict, std_dict = get_metrics(runs)
 
         for i, pw in enumerate(prediction_window):
@@ -67,19 +67,9 @@ def visualize_look_back_window_difference(
                 assert set(mean_dict.keys()) == set(models), (
                     f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
                 )
-                for m, model in enumerate(mean_dict.keys()):
+                for m, model in enumerate(models):
                     row = b + 1
                     col = j + 1
-
-                    # mse_upper = {"dalia": 10, "wildppg": 200, "ieee": 100}
-                    # mae_upper = {"dalia": 5, "wildppg": 20, "ieee": 10}
-
-                    # y_axis_ranges = {
-                    #     test_metrics[0]: [0, mse_upper[dataset]],
-                    #     test_metrics[1]: [0, mae_upper[dataset]],
-                    #     test_metrics[2]: [-1, 1],
-                    #     test_metrics[3]: [0, 1],
-                    # }
 
                     model_name = model_to_name[model]
 
@@ -105,7 +95,7 @@ def visualize_look_back_window_difference(
                             x=x,
                             y=means,
                             mode="lines+markers",
-                            name=f"{dataset_name} {model_name}",
+                            name=model_name,
                             line=dict(color=color),
                             showlegend=(j == 0) and row == 1,
                             legendgroup=model_name,
@@ -134,46 +124,46 @@ def visualize_look_back_window_difference(
                             row=row,
                             col=col,
                         )
-                    # Set y-axis range for this subplot
-                    # fig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
-                    # Set x-axis to look_back_window values
-                    fig.update_xaxes(
-                        title_text="Lookback Window",
-                        tickmode="array",
-                        tickvals=look_back_windows,
-                        row=row,
-                        col=col,
-                    )
+                    if row == len(datasets):
+                        fig.update_xaxes(
+                            title_text="Lookback Window",
+                            tickmode="array",
+                            tickvals=look_back_windows,
+                            row=row,
+                            col=col,
+                        )
 
     num_rows = num_datasets
-    num_cols = n_metrics
-    activity_string = "Activity" if use_dynamic_features else "No Activity"
     fig.update_layout(
-        #  title={
-        #      "text": f"<b>Lookback Window Ablations | {activity_string}</b>",
-        #      "x": 0.5,
-        #      "xanchor": "center",
-        #      "font": dict(
-        #          size=40, family="Arial", color="black"
-        #      ),  # bold by default for many fonts
-        #  },
-        height=num_rows * 600,
-        # width=num_cols * 600,
+        height=num_rows * 400,
         template="plotly_white",
-        # margin=dict(t=100, b=100, l=100, r=100),
+    )
+
+    fig.update_layout(
+        legend=dict(
+            font=dict(
+                size=16  # <-- Change this value to increase/decrease size
+            )
+        )
     )
 
     for annotation in fig["layout"]["annotations"]:
         if annotation["text"] in row_titles:
             annotation["x"] = -0.02
             annotation["xanchor"] = "right"  # Align text to the right of x position
-            annotation["font"] = dict(size=16, color="black", family="Arial")
+            annotation["font"] = dict(size=20, color="black", family="Arial")
             annotation["text"] = f"<b>{annotation['text']}</b>"  # Make text bold
 
     if save_html:
         plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join([str(lbw) for lbw in look_back_window])}_{'_'.join([str(pw) for pw in prediction_window])}"
         pio.write_html(
             fig, file=f"./plots/ablations/look_back/{plot_name}.html", auto_open=True
+        )
+        fig.write_image(
+            f"./plots/ablations/look_back/{plot_name}.pdf",
+            width=1920,  # width in pixels
+            height=1080,
+            scale=2,
         )
         print(f"Successfully saved {plot_name}")
     else:

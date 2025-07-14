@@ -15,10 +15,14 @@ def global_z_norm(
     C = min(
         C, local_norm_channels
     )  # for look back window, this will be local_norm_channels and for prediction window it will be C
+    x_static = x[:, :, C:]
+    x_norm = (x[:, :, :C] - mean[:, :, :C]) / (
+        std[:, :, :C] + 1e-8
+    )  # TODO: THIS IS NOT CORRECT
 
-    x_norm = (x[:, :, :C] - mean[:, :, :C]) / (std[:, :, :C] + 1e-8)
+    combined = torch.concat((x_norm, x_static), dim=2)
 
-    return x_norm
+    return combined
 
 
 def global_z_denorm(
@@ -32,9 +36,10 @@ def global_z_denorm(
     C = min(
         C, local_norm_channels
     )  # for look back window, this will be local_norm_channels and for prediction window it will be C
-
+    x_static = x[:, :, C:]
     x_denorm = x[:, :, :C] * std[:, :, :C] + mean[:, :, :C]
-    return x_denorm
+    combined = torch.concat((x_denorm, x_static), dim=2)
+    return combined
 
 
 def local_z_norm(

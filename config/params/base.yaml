@@ -33,14 +33,13 @@ gp:
 # SOTA Deep Learning Architectures
 
 timesnet:
-  learning_rate: 0.005
+  learning_rate: 0.001
   e_layers: 2
   num_kernels: 6
   top_k: 5
   d_model: 32
   d_ff: 32
   dropout: 0.01
-
 
 simpletm:
   learning_rate: 0.004
@@ -56,16 +55,6 @@ adamshyper:
   d_model: 768
   inner_size: 16
 
-pattn:
-  learning_rate: 0.002428582457141732
-  tmax: 10
-  patch_size: 4 
-  d_model: 128
-
-gpt4ts:
-  d_ff: 128
-  d_model: 64
-
 timexer:
   d_ff: 256 # 128, 256, 512
   d_model: 128 # 128, 256, 512 
@@ -73,3 +62,20 @@ timexer:
   patch_len: 2
   use_norm: True
   dropout: 0.1
+
+gpt4ts:
+  learning_rate: 0.0001
+  patch_size: 1
+  stride: 1
+  d_ff: 128
+  d_model: 64
+  gpt_layers: 6
+
+
+
+
+pattn:
+  learning_rate: 0.002428582457141732
+  tmax: 10
+  patch_size: 4 
+  d_model: 128

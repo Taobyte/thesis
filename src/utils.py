@@ -165,7 +165,7 @@ def compute_input_channel_dims(
         )
         dims = 0
     else:
-        dims = 1
+        dims = dims
 
     if use_dynamic_features:
         dims += dynamic_exogenous_variables

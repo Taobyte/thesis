@@ -271,6 +271,7 @@ class Model(nn.Module):
         )
         self.gpt2.h = self.gpt2.h[:gpt_layers]
 
+        # here the GPT2 layers are frozen
         for i, (name, param) in enumerate(self.gpt2.named_parameters()):
             if "ln" in name or "wpe" in name:  # or 'mlp' in name:
                 param.requires_grad = True
@@ -308,6 +309,7 @@ class Model(nn.Module):
         enc_out = self.predict_linear_pre(enc_out.permute(0, 2, 1)).permute(
             0, 2, 1
         )  # align temporal dimension
+
         enc_out = torch.nn.functional.pad(enc_out, (0, 768 - enc_out.shape[-1]))
 
         # enc_out = rearrange(enc_out, 'b l m -> b m l')

@@ -5,20 +5,23 @@ model:
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
   ln: 0 
-  patch_size: 1
-  stride: 1
-  d_ff: 128
-  d_model: 64
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   c_out: ${dataset.datamodule.look_back_channel_dim}
-  gpt_layers: 6
+  
+  # tunable parameters
+  patch_size: ${params.gpt4ts.patch_size} # default 16
+  stride: ${params.gpt4ts.stride}
+  d_ff: ${params.gpt4ts.d_ff}
+  d_model: ${params.gpt4ts.d_model} # max dimension is 768
+  gpt_layers: ${params.gpt4ts.gpt_layers}
+  
   embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
   freq: 'm'
 
 
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
-  learning_rate: 0.0024543152601071328
+  learning_rate: ${params.gpt4ts.learning_rate}
   loss: 'MSE'
   lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
   # lradj: "none"

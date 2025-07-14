@@ -31,7 +31,11 @@ def ucihar_load_data(datadir: str, participants: list[int], use_static_features:
             y_expanded = np.repeat(y_test[:, np.newaxis, :], repeats=128, axis=1)
             series = np.concatenate((X_test, y_expanded), axis=-1)
 
-    return series
+    stacked = np.concatenate(series, axis=0)
+    mean = np.mean(stacked, axis=0)
+    std = np.std(stacked, axis=0)
+
+    return series, mean, std
 
 
 class UCIHARDataset(Dataset):
@@ -52,7 +56,9 @@ class UCIHARDataset(Dataset):
         self.target_channel_dim = target_channel_dim
         self.use_static_features = use_static_features
 
-        self.X = ucihar_load_data(datadir, participants, use_static_features)
+        self.X, self.mean, self.std = ucihar_load_data(
+            datadir, participants, use_static_features
+        )
 
     def __len__(self) -> int:
         return len(self.X) * (128 - self.window + 1)
@@ -61,6 +67,7 @@ class UCIHARDataset(Dataset):
         row_idx = idx // (128 - self.window + 1)
         window_pos = idx % (128 - self.window + 1)
         window = self.X[row_idx, window_pos : window_pos + self.window]
+
         look_back_window = torch.from_numpy(window[: self.look_back_window]).float()
         prediction_window = torch.from_numpy(
             window[self.look_back_window :, : self.target_channel_dim]
@@ -71,37 +78,11 @@ class UCIHARDataset(Dataset):
 class UCIHARDataModule(BaseDataModule):
     def __init__(
         self,
-        data_dir: str,
-        batch_size: int = 32,
-        num_workers: int = 0,
-        look_back_window: int = 128,
-        prediction_window: int = 64,
         train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
         val_participants: list = [23, 25, 26, 27, 28, 29, 30],
-        freq: int = 50,
-        name: str = "ucihar",
-        use_dynamic_features: bool = False,
-        use_static_features: bool = False,
-        target_channel_dim: int = 1,
-        dynamic_exogenous_variables: int = 1,
-        static_exogenous_variables: int = 6,
-        look_back_channel_dim: int = 1,
+        **kwargs,
     ):
-        super().__init__(
-            data_dir=data_dir,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            name=name,
-            freq=freq,
-            look_back_window=look_back_window,
-            prediction_window=prediction_window,
-            use_dynamic_features=use_dynamic_features,
-            use_static_features=use_static_features,
-            target_channel_dim=target_channel_dim,
-            dynamic_exogenous_variables=dynamic_exogenous_variables,
-            static_exogenous_variables=static_exogenous_variables,
-            look_back_channel_dim=look_back_channel_dim,
-        )
+        super().__init__(**kwargs)
 
         self.train_participants = train_participants
         self.val_participants = val_participants

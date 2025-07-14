@@ -121,6 +121,12 @@ def dynamic_feature_ablation(
                     file=f"{base_dir}/{plot_name}.html",
                     auto_open=True,
                 )
+                fig.write_image(
+                    f"./plots/ablations/look_back/{plot_name}.pdf",
+                    width=1920,  # width in pixels
+                    height=1080,
+                    scale=2,
+                )
                 print(f"Saved successfully: {plot_name}")
             else:
                 fig.show()

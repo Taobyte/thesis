@@ -3,16 +3,27 @@ n_points: ${params.gp.n_points}
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
-  _target_: src.models.gp.GPModel
+  _target_: src.models.gp.Model
+  
+  use_feature_extractor: ${model.pl_model.use_feature_extractor}
+  
+  # GP layer
   num_latents: ${params.gp.num_latents}
   num_tasks: ${prediction_window}
   kernel: ${params.gp.kernel} 
   periodic_type: ${params.gp.periodic_type}
   use_linear_trend: ${params.gp.use_linear_trend} 
 
+  #Feature Extractor
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  hidden_dim: 8
+  out_dim: 16
+  dropout: 0.0
+
 pl_model: 
   _target_: src.models.gp.GaussianProcess
   learning_rate: ${params.gp.learning_rate}
+  use_feature_extractor: True
   jitter: 1e-4
 
 trainer:
