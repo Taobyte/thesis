@@ -69,7 +69,6 @@ class GPModel(ApproximateGP):
         periodic_type: str = "",
         use_feature_extractor: bool = False,
         out_dim: int = 16,
-        grid_bounds=(-10.0, 10.0),
     ):
         self.num_latents = num_latents
         self.num_tasks = num_tasks
@@ -259,8 +258,8 @@ class GaussianProcess(BaseLightningModule):
         self.use_feature_extractor = use_feature_extractor
 
     def model_forward(self, look_back_window: torch.Tensor):
+        T = self.trainer.datamodule.prediction_window
         if not self.use_feature_extractor:
-            T = self.trainer.datamodule.prediction_window
             look_back_window = rearrange(
                 look_back_window, "B T C -> B (T C)"
             )  # GPytorch assumes flattened channels
