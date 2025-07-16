@@ -383,6 +383,7 @@ class HMMWithPredictionLayer(nn.Module):
         )
 
         # Store dimensions for prediction layer
+        self.base_dim = base_dim
         self.target_channel_dim = target_channel_dim
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -396,8 +397,12 @@ class HMMWithPredictionLayer(nn.Module):
 
     def forward(self, look_back_window: torch.Tensor):
         states, _ = self.hmm.viterbi_algorithm(look_back_window)  # (B, T)
-        states_expanded = states.unsqueeze(-1).float()  # (B, T, 1)
-        combined = torch.cat((look_back_window, states_expanded), dim=-1)  # (B, T, C+1)
+        states_onehot = torch.nn.functional.one_hot(
+            states, num_classes=self.base_dim
+        ).float()
+        combined = torch.cat(
+            (look_back_window, states_onehot), dim=-1
+        )  # (B, T, C + base_dim)
         reshaped = rearrange(combined, "B T C -> B (T C)")
         preds = self.prediction_layer(reshaped)
         preds_reshaped = rearrange(
