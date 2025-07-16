@@ -19,7 +19,7 @@ class ExoToMatrix(nn.Module):
         x_reshaped = rearrange(x, "B T C -> (B T) C")
         output = self.linear(x_reshaped)
         output_reshaped = rearrange(
-            output, "(B T) (E F) -> B T E F", B=B, T=T, E=self.base_dim, F=self.base_dim
+            output, "(B T) (D D) -> B T D D", B=B, T=T, D=self.base_dim
         )
         return output_reshaped
 
@@ -137,25 +137,15 @@ class PytorchHMM(nn.Module):
         else:
             exo_variables = None
 
-        # observations: [batch, seq_len, obs_dim] -> [batch, seq_len, 1, obs_dim]
         obs_expanded = observations.unsqueeze(2)
-
-        # means: [hidden_dim, target_channel_dim] -> [1, 1, hidden_dim, target_channel_dim]
-
         means_expanded = self.get_emission_means(exo_variables)
-
-        # vars: [hidden_dim, target_channel_dim] -> [1, 1, hidden_dim, target_channel_dim]
         vars_expanded = self.get_emission_variances(exo_variables)
 
-        # Compute Gaussian log probability for all states at once
-        # [batch, seq_len, hidden_dim, target_channel_dim]
         log_prob = -0.5 * (
             torch.log(2 * torch.pi * vars_expanded)
             + ((obs_expanded - means_expanded) ** 2) / vars_expanded
         )
 
-        # Sum over target channel dimensions
-        # [batch, seq_len, hidden_dim]
         return log_prob.sum(dim=-1)
 
     def forward_algorithm(
@@ -169,14 +159,10 @@ class PytorchHMM(nn.Module):
             exo_variables = observations[:, :, self.target_channel_dim :]
             exo_logits = self.exo_linear(exo_variables)  # (B, hidden_dim, hidden_dim)
 
-        # Compute all emission probabilities at once
-        # [batch, seq_len, hidden_dim]
         emission_log_probs = self.compute_emission_probabilities(observations)
 
-        # Initialize alpha (log probabilities)
         alpha = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
 
-        # Initialize first timestep
         initial_dist = self.initial_distribution  # [hidden_dim]
         alpha[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
 
@@ -190,25 +176,88 @@ class PytorchHMM(nn.Module):
                 transition_matrix + 1e-10
             )  # [batch, hidden_dim, hidden_dim]
 
-            # Expand alpha for broadcasting: [batch, hidden_dim, 1]
             alpha_prev = alpha[:, t - 1, :].unsqueeze(2)
 
-            # Compute transition scores: [batch, hidden_dim, hidden_dim]
             transition_scores = alpha_prev + trans_log
 
-            # Log-sum-exp over previous states: [batch, hidden_dim]
             alpha[:, t, :] = (
                 torch.logsumexp(transition_scores, dim=1) + emission_log_probs[:, t, :]
             )
 
-        # Compute total log likelihood
         log_likelihood = torch.logsumexp(alpha[:, -1, :], dim=-1)
         return alpha, log_likelihood
 
+    def viterbi_algorithm(
+        self, observations: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch_size, seq_len, _ = observations.shape
+        device = observations.device
+
+        # Get exogenous variables if using exogenous inputs
+        if self.use_exo:
+            exo_variables = observations[:, :, self.target_channel_dim :]
+            exo_logits = self.exo_linear(
+                exo_variables
+            )  # (B, T, hidden_dim, hidden_dim)
+
+        # Compute emission log probabilities for all states and time steps
+        emission_log_probs = self.compute_emission_probabilities(observations)
+
+        # Initialize Viterbi tables
+        viterbi = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
+        backpointer = torch.zeros(
+            batch_size, seq_len, self.hidden_dim, dtype=torch.long, device=device
+        )
+
+        # Initialize first time step
+        initial_dist = self.initial_distribution  # [hidden_dim]
+        viterbi[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
+
+        # Forward pass
+        for t in range(1, seq_len):
+            # Get transition matrix for current time step
+            if self.use_exo:
+                transition_matrix = self.get_transition_matrices(exo_logits[:, t - 1])
+            else:
+                transition_matrix = self.get_transition_matrices(batch_size=batch_size)
+
+            trans_log = torch.log(
+                transition_matrix + 1e-10
+            )  # [batch, hidden_dim, hidden_dim]
+
+            # For each current state, find the best previous state
+            for j in range(self.hidden_dim):
+                # Score for transitioning to state j from all previous states
+                transition_scores = (
+                    viterbi[:, t - 1, :] + trans_log[:, :, j]
+                )  # [batch, hidden_dim]
+
+                # Find the best previous state
+                best_prev_state = torch.argmax(transition_scores, dim=-1)  # [batch]
+                viterbi[:, t, j] = (
+                    torch.max(transition_scores, dim=-1)[0]
+                    + emission_log_probs[:, t, j]
+                )
+                backpointer[:, t, j] = best_prev_state
+
+        # Backward pass - find the best path
+        best_path = torch.zeros(batch_size, seq_len, dtype=torch.long, device=device)
+
+        # Find the best final state
+        max_prob, best_final_state = torch.max(viterbi[:, -1, :], dim=-1)
+        best_path[:, -1] = best_final_state
+
+        # Backtrack to find the full path
+        for t in range(seq_len - 2, -1, -1):
+            # Get the best previous state for each batch
+            batch_indices = torch.arange(batch_size, device=device)
+            best_path[:, t] = backpointer[batch_indices, t + 1, best_path[:, t + 1]]
+
+        return best_path, max_prob
+
     def infer_current_state(self, observations: torch.Tensor) -> torch.Tensor:
         alpha, log_likelihood = self.forward_algorithm(observations)
-        # Normalize the final forward probabilities
-        final_alpha = alpha[:, -1, :]  # (batch_size, self.hidden_dim)
+        final_alpha = alpha[:, -1, :]  # (batch_size, hidden_dim)
         state_probs = F.softmax(final_alpha, dim=-1)
         return state_probs, log_likelihood
 
@@ -307,154 +356,158 @@ class PytorchHMM(nn.Module):
         ), log_likelihood  # (batch_size, prediction_steps, target_channel_dim)
 
 
+class HMMWithPredictionLayer(nn.Module):
+    def __init__(
+        self,
+        base_dim: int = 5,
+        target_channel_dim: int = 1,
+        look_back_channel_dim: int = 2,
+        look_back_window: int = 5,
+        prediction_window: int = 3,
+        temperature: float = 1.0,
+        min_var: float = 1e-6,
+        use_exo: bool = False,
+    ):
+        super().__init__()
+
+        # Initialize the HMM component (your existing PytorchHMM)
+        self.hmm = PytorchHMM(
+            base_dim=base_dim,
+            target_channel_dim=target_channel_dim,
+            look_back_channel_dim=look_back_channel_dim,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            temperature=temperature,
+            min_var=min_var,
+            use_exo=use_exo,
+        )
+
+        # Store dimensions for prediction layer
+        self.target_channel_dim = target_channel_dim
+        self.look_back_window = look_back_window
+        self.prediction_window = prediction_window
+
+        # Input to prediction layer: lookback observations + decoded states
+        pred_input_dim = look_back_window * (look_back_channel_dim + 1)  # +1 for state
+        pred_output_dim = prediction_window * target_channel_dim
+
+        # Simple linear prediction layer
+        self.prediction_layer = nn.Linear(pred_input_dim, pred_output_dim)
+
+    def forward(self, look_back_window: torch.Tensor):
+        states, _ = self.hmm.viterbi_algorithm(look_back_window)  # (B, T)
+        states_expanded = states.unsqueeze(-1).float()  # (B, T, 1)
+        combined = torch.cat((look_back_window, states_expanded), dim=-1)  # (B, T, C+1)
+        reshaped = rearrange(combined, "B T C -> B (T C)")
+        preds = self.prediction_layer(reshaped)
+        preds_reshaped = rearrange(
+            preds,
+            "B (T C) -> B T C",
+            T=self.prediction_window,
+            C=self.target_channel_dim,
+        )
+
+        return preds_reshaped
+
+
 class HMMLightningModule(BaseLightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
         learning_rate: float = 1e-3,
+        hmm_learning_rate: float = 1e-3,
+        pred_learning_rate: float = 1e-3,
         deterministic: bool = True,
         pred_loss_weight: float = 1.0,
+        optimize_separately: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
+        self.hmm_learning_rate = hmm_learning_rate
+        self.pred_learning_rate = pred_learning_rate
         self.deterministic = deterministic
         self.pred_loss_weight = pred_loss_weight
-
-        self.model = model
+        self.optimize_separately = optimize_separately
 
         self.criterion = torch.nn.MSELoss()
 
+        # Track losses separately
+        self.automatic_optimization = False  # We'll handle optimization manually
+
+    def get_hmm_parameters(self):
+        """Get parameters that belong to the HMM component"""
+        return list(self.model.hmm.parameters())
+
+    def get_prediction_parameters(self):
+        """Get parameters that belong to the prediction layer"""
+        return list(self.model.prediction_layer.parameters())
+
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
-        prediction_window_length = getattr(self.trainer.datamodule, "prediction_window")
-        preds, _ = self.model.autoregressive_predict(
-            look_back_window,
-            prediction_window_length,
-            deterministic=self.deterministic,
+        return self.model(look_back_window)
+
+    def training_step(self, batch, batch_idx):
+        look_back_window, prediction_window = batch
+
+        hmm_opt, pred_opt = self.optimizers()
+
+        hmm_opt.zero_grad()
+        _, log_likelihood = self.model.hmm.forward_algorithm(look_back_window)
+        hmm_loss = -log_likelihood.mean()
+        self.manual_backward(hmm_loss)
+        hmm_opt.step()
+
+        pred_opt.zero_grad()
+        with torch.no_grad():
+            # Get states without gradients to avoid updating HMM
+            states, _ = self.model.hmm.viterbi_algorithm(look_back_window)
+            states_expanded = states.unsqueeze(-1).float()
+            combined = torch.cat((look_back_window, states_expanded), dim=-1)
+            reshaped = rearrange(combined, "B T C -> B (T C)")
+
+        preds = self.model.prediction_layer(reshaped)
+        preds_reshaped = rearrange(
+            preds,
+            "B (T C) -> B T C",
+            T=self.model.prediction_window,
+            C=self.model.target_channel_dim,
         )
-        return preds
+        pred_loss = self.criterion(preds_reshaped, prediction_window)
+        self.manual_backward(pred_loss)
+        pred_opt.step()
 
-    def model_specific_train_step(
-        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
-    ) -> torch.Tensor:
-        prediction_window_length = prediction_window.shape[1]
-        # full_sequence = torch.cat([look_back_window[:, :, :], prediction_window], dim=1)
-        # TODO: currently we do not train with all data!
-
-        # _, log_likelihood = self.model.forward_algorithm(look_back_window)
-        # loss = -log_likelihood.mean()
-
-        preds, log_likelihood = self.model.autoregressive_predict(
-            look_back_window, prediction_window_length, deterministic=self.deterministic
+        self.log("train_hmm_loss", hmm_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log(
+            "train_pred_loss", pred_loss, on_step=True, on_epoch=True, prog_bar=True
         )
-        ll_loss = -log_likelihood.mean()
-        mse_loss = self.criterion(preds, prediction_window)
-        loss = mse_loss * self.pred_loss_weight + ll_loss * (1 - self.pred_loss_weight)
 
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+    def validation_step(self, batch, batch_idx):
+        look_back_window, prediction_window = batch
 
-        return loss
-
-    def model_specific_val_step(
-        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
-    ) -> torch.Tensor:
         preds = self.model_forward(look_back_window)
 
-        mse_loss = self.criterion(preds, prediction_window)
+        val_loss = self.criterion(preds, prediction_window)
 
-        self.log("val_loss", mse_loss, on_step=False, on_epoch=True, prog_bar=True)
+        _, log_likelihood = self.model.hmm.forward_algorithm(look_back_window)
+        hmm_loss = -log_likelihood.mean()
 
-        return mse_loss
+        # Log losses
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_hmm_loss", hmm_loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        return val_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.learning_rate,
+        # Separate optimizers for HMM and prediction components
+        hmm_optimizer = torch.optim.Adam(
+            self.get_hmm_parameters(),
+            lr=self.hmm_learning_rate,
         )
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=10, verbose=True
+        pred_optimizer = torch.optim.Adam(
+            self.get_prediction_parameters(),
+            lr=self.pred_learning_rate,
         )
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "monitor": "val_loss",
-            },
-        }
-
-
-"""
-
-    def viterbi_decode(self, observations: torch.Tensor) -> torch.Tensor:
-        batch_size, seq_len, _ = observations.shape
-        device = observations.device
-
-        # Extract exogenous variables if using activity labels
-        if self.use_activity_labels:
-            exog_vars = torch.argmax(
-                observations[:, :-1, self.target_channel_dim :], dim=-1
-            )
-        else:
-            exog_vars = None
-
-        # Compute emission probabilities
-        emission_log_probs = self.compute_emission_probabilities(
-            observations[:, :, : self.target_channel_dim]
-        )
-
-        # Get transition matrices
-        if self.use_activity_labels:
-            transition_matrices = self.get_transition_matrices(exog_vars)
-        else:
-            transition_matrices = self.get_transition_matrices()
-
-        # Initialize delta and path tracking
-        delta = torch.zeros(batch_size, seq_len, self.hidden_dim, device=device)
-        path_indices = torch.zeros(
-            batch_size, seq_len - 1, self.hidden_dim, dtype=torch.long, device=device
-        )
-
-        # Initialize first timestep
-        initial_dist = self.initial_distribution
-        delta[:, 0, :] = torch.log(initial_dist + 1e-10) + emission_log_probs[:, 0, :]
-
-        # Forward pass
-        for t in range(1, seq_len):
-            if self.use_activity_labels:
-                trans_t = transition_matrices[:, t - 1, :, :]
-                trans_log_t = torch.log(trans_t + 1e-10)
-
-                # [batch, hidden_dim, 1] + [batch, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
-                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log_t
-
-                # Find best previous state for each current state
-                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
-                delta[:, t, :] += emission_log_probs[:, t, :]
-            else:
-                trans_log = torch.log(transition_matrices + 1e-10)
-
-                # [batch, hidden_dim, 1] + [1, hidden_dim, hidden_dim] -> [batch, hidden_dim, hidden_dim]
-                scores = delta[:, t - 1, :].unsqueeze(2) + trans_log.unsqueeze(0)
-
-                delta[:, t, :], path_indices[:, t - 1, :] = torch.max(scores, dim=1)
-                delta[:, t, :] += emission_log_probs[:, t, :]
-
-        # Backtrack to find best path
-        best_paths = torch.zeros(batch_size, seq_len, dtype=torch.long, device=device)
-
-        # Find best final state
-        _, best_paths[:, -1] = torch.max(delta[:, -1, :], dim=1)
-
-        # Backtrack
-        for t in range(seq_len - 2, -1, -1):
-            best_paths[:, t] = path_indices[
-                torch.arange(batch_size), t, best_paths[:, t + 1]
-            ]
-
-        return best_paths
-
-
-"""
+        return [hmm_optimizer, pred_optimizer]

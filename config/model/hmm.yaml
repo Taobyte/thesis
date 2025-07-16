@@ -1,7 +1,7 @@
 name: "hmm"
 
 model:
-  _target_: src.models.hmm.PytorchHMM
+  _target_: src.models.hmm.HMMWithPredictionLayer
   base_dim: 128
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}

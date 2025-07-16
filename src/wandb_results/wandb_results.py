@@ -152,7 +152,7 @@ def main():
             prediction_window=args.prediction_window,
             use_heart_rate=args.use_heart_rate,
             use_static_features=args.use_static_features,
-            start_time="2025-6-24",
+            start_time="2025-7-14",
             normalization=args.normalization,
             save_html=args.save_html,
             window_statistic=args.window_statistic,

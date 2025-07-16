@@ -51,19 +51,6 @@ class Linear(BaseLightningModule):
             weight_decay=self.weight_decay,
         )
 
-        if self.use_scheduler:
-            scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer, 1, gamma=0.1, last_epoch=-1
-            )
-
-            scheduler_dict = {
-                "scheduler": scheduler,
-                "interval": "epoch",
-                "frequency": 1,
-                "name": "StepLR",
-            }
-            return {"optimizer": optimizer, "lr_scheduler": scheduler_dict}
-
         return optimizer
 
     def on_fit_end(self):

@@ -68,7 +68,7 @@ gpt4ts:
   patch_size: 1
   stride: 1
   d_ff: 128
-  d_model: 64
+  d_model: 64 
   gpt_layers: 6
 
 
