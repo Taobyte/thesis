@@ -469,8 +469,12 @@ class HMMLightningModule(BaseLightningModule):
         with torch.no_grad():
             # Get states without gradients to avoid updating HMM
             states, _ = self.model.hmm.viterbi_algorithm(look_back_window)
-            states_expanded = states.unsqueeze(-1).float()
-            combined = torch.cat((look_back_window, states_expanded), dim=-1)
+            states_onehot = torch.nn.functional.one_hot(
+                states, num_classes=self.base_dim
+            ).float()
+            combined = torch.cat(
+                (look_back_window, states_onehot), dim=-1
+            )  # (B, T, C + base_dim)
             reshaped = rearrange(combined, "B T C -> B (T C)")
 
         preds = self.model.prediction_layer(reshaped)
