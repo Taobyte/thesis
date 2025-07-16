@@ -389,7 +389,9 @@ class HMMWithPredictionLayer(nn.Module):
         self.prediction_window = prediction_window
 
         # Input to prediction layer: lookback observations + decoded states
-        pred_input_dim = look_back_window * (look_back_channel_dim + 1)  # +1 for state
+        pred_input_dim = look_back_window * (
+            look_back_channel_dim + base_dim
+        )  # +1 for state
         pred_output_dim = prediction_window * target_channel_dim
 
         # Simple linear prediction layer
