@@ -470,7 +470,7 @@ class HMMLightningModule(BaseLightningModule):
             # Get states without gradients to avoid updating HMM
             states, _ = self.model.hmm.viterbi_algorithm(look_back_window)
             states_onehot = torch.nn.functional.one_hot(
-                states, num_classes=self.base_dim
+                states, num_classes=self.model.base_dim
             ).float()
             combined = torch.cat(
                 (look_back_window, states_onehot), dim=-1
