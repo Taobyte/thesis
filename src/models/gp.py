@@ -258,6 +258,13 @@ class GaussianProcess(BaseLightningModule):
         self.use_feature_extractor = use_feature_extractor
 
     def model_forward(self, look_back_window: torch.Tensor):
+        if self.use_norm:
+            means = look_back_window.mean(1, keepdim=True).detach()
+            look_back_window = look_back_window - means
+            stdev = torch.sqrt(
+                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            look_back_window /= stdev
         T = self.trainer.datamodule.prediction_window
         if not self.use_feature_extractor:
             look_back_window = rearrange(
@@ -268,6 +275,17 @@ class GaussianProcess(BaseLightningModule):
 
         mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
         std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
+
+        if self.use_norm:
+            mean = mean * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            mean = mean + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            std = std * stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
 
         return mean, std
 

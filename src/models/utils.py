@@ -20,16 +20,12 @@ from collections import defaultdict
 
 from src.metrics import Evaluator
 from src.plotting import (
-    plot_max_min_median_predictions,
+    # plot_max_min_median_predictions,
     plot_metric_histograms,
     plot_entire_series,
 )
-from src.normalization import (
-    local_z_denorm,
-    local_z_norm,
-    global_z_denorm,
-    global_z_norm,
-)
+
+from src.normalization import global_z_denorm
 
 
 def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
@@ -59,7 +55,7 @@ class BaseLightningModule(L.LightningModule):
         use_plots: bool = False,
         normalization: str = "local",
         tune: bool = False,
-        use_only_exogenous_features: bool = False,
+        probabilistic_models: list = [],
     ):
         super().__init__()
 
@@ -69,7 +65,6 @@ class BaseLightningModule(L.LightningModule):
         self.tune = tune
         self.use_plots = use_plots
         self.normalization = normalization
-        self.use_only_exogenous_features = use_only_exogenous_features
 
         self.evaluator = Evaluator()
 
@@ -80,13 +75,15 @@ class BaseLightningModule(L.LightningModule):
         self.static_exogenous_variables = None
         self.dynamic_exogenous_variables = None
 
+        self.probabilistic_forecast_models = probabilistic_models
+
     @property
     def has_probabilistic_forecast(self) -> bool:
         """
         Indicates whether the model provides probabilistic forecasts (mean and std).
         This property should be overridden in subclasses for probabilistic models.
         """
-        return self.name in ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"]
+        return self.name in self.probabilistic_forecast_models
 
     def model_forward(
         self, look_back_window: torch.Tensor
@@ -146,90 +143,23 @@ class BaseLightningModule(L.LightningModule):
         # self.compute_shap_values()
         pass
 
-    def _normalize_data(
-        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
-        if self.normalization == "local":
-            look_back_window_norm, mean, std = local_z_norm(
-                look_back_window, self.local_norm_channels
-            )
-            prediction_window_norm, _, _ = local_z_norm(
-                prediction_window, self.local_norm_channels, mean, std
-            )
-            return look_back_window_norm, prediction_window_norm, mean, std
-        elif self.normalization == "global":
-            datamodule = self.trainer.datamodule
-            mean = datamodule.train_dataset.mean
-            std = datamodule.train_dataset.std
+    def get_batch_size(self, batch):
+        look_back_window, prediction_window, input, output, mean, std = batch
 
-            look_back_window_norm = global_z_norm(
-                look_back_window, self.local_norm_channels, mean, std
-            )
-            prediction_window_norm = global_z_norm(
-                prediction_window, self.local_norm_channels, mean, std
-            )
-            return look_back_window_norm, prediction_window_norm
-        else:
-            raise NotImplementedError()
+        return input.size(0)
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
-        look_back_window, prediction_window = batch
-
-        # normalize data
-        if self.normalization == "global":
-            look_back_window_norm, prediction_window_norm = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "local":
-            look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "none":
-            look_back_window_norm, prediction_window_norm = batch
-
-        if self.use_only_exogenous_features:
-            assert self.use_dynamic_features or self.use_static_features, (
-                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
-            )
-            look_back_window_norm = look_back_window_norm[
-                :, :, self.target_channel_dim :
-            ]
-
+        _, _, look_back_window_norm, prediction_window_norm, _, _ = batch
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
         )
         return loss
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
-        look_back_window, prediction_window = batch
-
-        # normalize data
-        if self.normalization == "global":
-            look_back_window_norm, prediction_window_norm = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "local":
-            look_back_window_norm, prediction_window_norm, _, _ = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "none":
-            look_back_window_norm, prediction_window_norm = batch
-
-        if self.use_only_exogenous_features:
-            assert self.use_dynamic_features or self.use_static_features, (
-                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
-            )
-            look_back_window_norm = look_back_window_norm[
-                :, :, self.target_channel_dim :
-            ]
-
+        _, _, look_back_window_norm, prediction_window_norm, _, _ = batch
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
         )
-
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -258,7 +188,7 @@ class BaseLightningModule(L.LightningModule):
             plot_metric_histograms(self.logger, self.metric_full)
 
             # plot best, worst and median prediction for each metric
-            plot_max_min_median_predictions(self)
+            # plot_max_min_median_predictions(self)
 
             # plot the whole timeseries with the metrics
             datamodule = self.trainer.datamodule
@@ -269,59 +199,30 @@ class BaseLightningModule(L.LightningModule):
             )
 
     def evaluate(self, batch, batch_idx):
-        look_back_window, prediction_window = batch
+        (
+            look_back_window,
+            prediction_window,
+            look_back_window_norm,
+            _,
+            mean,
+            std,
+        ) = batch
         self.batch_size.append(look_back_window.shape[0])
-
-        if self.normalization == "global":
-            look_back_window_norm, _ = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "local":
-            look_back_window_norm, _, mean, std = self._normalize_data(
-                look_back_window, prediction_window
-            )
-        elif self.normalization == "none":
-            look_back_window_norm = look_back_window
-        else:
-            raise NotImplementedError()
-
-        if self.use_only_exogenous_features:
-            assert self.use_dynamic_features or self.use_static_features, (
-                "Attention! You train with only exogenous variables, but don't use dynamic or static exogenous features"
-            )
-            look_back_window_norm = look_back_window_norm[
-                :, :, self.target_channel_dim :
-            ]
-            look_back_window = look_back_window[:, :, self.target_channel_dim :]
-
         # Prediction
         if self.has_probabilistic_forecast:
             preds, _ = self.model_forward(look_back_window_norm)
         else:
             preds = self.model_forward(look_back_window_norm)
 
-        preds = preds[:, :, : prediction_window.shape[-1]]
-
+        preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
-        if self.normalization == "local":
-            denormalized_preds = local_z_denorm(
-                preds, self.local_norm_channels, mean, std
-            )
-        elif self.normalization == "global":
-            datamodule = self.trainer.datamodule
-            mean = datamodule.train_dataset.mean
-            std = datamodule.train_dataset.std
-            denormalized_preds = global_z_denorm(
-                preds, self.local_norm_channels, mean, std
-            )
-        elif self.normalization == "none":
-            denormalized_preds = preds
-        else:
-            raise NotImplementedError()
+
+        if self.normalization == "global":
+            preds = global_z_denorm(preds, self.local_norm_channels, mean, std)
 
         # Metric Calculation
         metrics, current_metrics = self.evaluator(
-            prediction_window, denormalized_preds, look_back_window
+            prediction_window, preds, look_back_window
         )
         self.update_metrics(metrics)
 
@@ -342,8 +243,6 @@ class BaseLightningModule(L.LightningModule):
         return metrics
 
     def compute_shap_values(self):
-        assert self.normalization != "local"
-
         import shap
         from einops import rearrange
 

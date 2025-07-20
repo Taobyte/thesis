@@ -245,6 +245,7 @@ class Model(nn.Module):
         gpt_layers: int = 6,
         mlp: str = 0,
         use_gpu: bool = False,
+        use_norm: bool = True,
     ):
         super(Model, self).__init__()
         self.is_ln = ln
@@ -291,6 +292,8 @@ class Model(nn.Module):
         self.ln = nn.LayerNorm(d_ff)
         self.out_layer = nn.Linear(d_ff, c_out)
 
+        self.use_norm = use_norm
+
     def forward(self, x_enc, x_mark_enc):
         dec_out = self.forecast(x_enc, x_mark_enc)
         return dec_out[:, -self.pred_len :, :]  # [B, L, D]
@@ -299,10 +302,13 @@ class Model(nn.Module):
         B, L, M = x_enc.shape
 
         # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            x_enc /= stdev
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
@@ -328,12 +334,13 @@ class Model(nn.Module):
         # dec_out = dec_out.reshape(B, self.pred_len + self.seq_len, -1)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (
-            stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
-        )
-        dec_out = dec_out + (
-            means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
-        )
+        if self.use_norm:
+            dec_out = dec_out * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
+            )
+            dec_out = dec_out + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
+            )
 
         return dec_out
 

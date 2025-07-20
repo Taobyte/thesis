@@ -13,12 +13,10 @@ def create_group_run_name(
     use_heart_rate: bool,
     look_back_window: int,
     prediction_window: int,
-    use_dynamic_features: bool,
-    use_static_features: bool,
     fold_nr: int = 0,
     fold_datasets: list[str] = None,
-    normalization: str = "local",
-    use_only_exogenous_features: bool = False,
+    normalization: str = "global",
+    experiment_name: str = "endo_only",
 ) -> Tuple[str, str, list[str]]:
     hr_or_ppg = "hr" if use_heart_rate else "ppg"
     dataset_to_signal_type = {
@@ -35,34 +33,21 @@ def create_group_run_name(
 
     signal_type = dataset_to_signal_type[dataset_name]
 
-    # static and dynamic features
-    features = ""
-    if not use_only_exogenous_features:
-        if use_dynamic_features and use_static_features:
-            features = "df_sf"
-        elif use_dynamic_features and not use_static_features:
-            features = "df"
-        elif not use_dynamic_features and use_static_features:
-            features = "sf"
-    else:
-        features = "only_exo"
-
     fold = ""
     if dataset_name in fold_datasets:
         fold = f"fold_{fold_nr}_"
 
-    group_name = f"{normalization}_{dataset_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
-    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{signal_type}_{features}_{look_back_window}_{prediction_window}"
+    group_name = f"{normalization}_{dataset_name}_{signal_type}_{experiment_name}_{look_back_window}_{prediction_window}"
+    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{signal_type}_{experiment_name}_{look_back_window}_{prediction_window}"
 
-    tags = [dataset_name, model_name, signal_type, normalization]
-    if features != "":
-        tags.append(features)
+    tags = [dataset_name, model_name, signal_type, normalization, experiment_name]
     if dataset_name in fold_datasets:
         tags.append(fold)
 
     return group_name, run_name, tags
 
 
+# TODO: Add in Experiment name!
 def get_optuna_name(
     dataset_name: str,
     model_name: str,
@@ -102,12 +87,10 @@ def setup_wandb_logger(
         config.use_heart_rate,
         config.look_back_window,
         config.prediction_window,
-        config.use_dynamic_features,
-        config.use_static_features,
-        config.experiment.fold_nr,
+        config.folds.fold_nr,
         config.fold_datasets,
         config.normalization,
-        config.use_only_exogenous_features,
+        config.experiment.experiment_name,
     )
 
     # print(config_dict)

@@ -9,6 +9,8 @@ from einops import rearrange
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
 
+from src.normalization import local_z_norm_numpy
+
 
 class XGBoostModel(torch.nn.Module):
     def __init__(
@@ -18,7 +20,7 @@ class XGBoostModel(torch.nn.Module):
         lbw_val_dataset: np.ndarray,
         pw_val_dataset: np.ndarray,
         learning_rate: float = 0.001,
-        objective: str = "reg:squarederror",
+        loss: str = "MSE",
         n_estimators: int = 300,
         max_depth: int = 4,
         reg_alpha: int = 1,
@@ -34,6 +36,13 @@ class XGBoostModel(torch.nn.Module):
         self.pw_train_dataset = pw_train_dataset
         self.lbw_val_dataset = lbw_val_dataset
         self.pw_val_dataset = pw_val_dataset
+
+        if loss == "MSE":
+            objective = "reg:squarederror"
+        elif loss == "MAE":
+            objective = "reg:absoluteerror"
+        else:
+            raise NotImplementedError()
 
         callbacks = []
         if use_early_stopping:
@@ -66,19 +75,29 @@ class XGBoost(BaseLightningModule):
     def __init__(
         self,
         loss: str = "MSE",
-        target_channel_dim: int = 1,
         model: torch.nn.Module = None,
         verbose: bool = False,
+        use_norm: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.target_channel_dim = target_channel_dim
+        self.use_norm = use_norm
+
         self.model = model.model
-        self.X_train = rearrange(model.lbw_train_dataset, "B T C -> B (T C)")
-        self.y_train = rearrange(model.pw_train_dataset, "B T C -> B (T C)")
-        self.X_val = rearrange(model.lbw_val_dataset, "B T C -> B (T C)")
-        self.y_val = rearrange(model.pw_val_dataset, "B T C -> B (T C)")
+        lbw_train = model.lbw_train_dataset
+        pw_train = model.pw_train_dataset
+        lbw_val = model.lbw_val_dataset
+        pw_val = model.pw_val_dataset
+        if use_norm:
+            lbw_train, mean, std = local_z_norm_numpy(lbw_train)
+            pw_train = local_z_norm_numpy(pw_train, mean, std)
+            lbw_val, mean, std = local_z_norm_numpy(lbw_val)
+            pw_val = local_z_norm_numpy(pw_val, mean, std)
+        self.X_train = rearrange(lbw_train, "B T C -> B (T C)")
+        self.y_train = rearrange(pw_train, "B T C -> B (T C)")
+        self.X_val = rearrange(lbw_val, "B T C -> B (T C)")
+        self.y_val = rearrange(pw_val, "B T C -> B (T C)")
 
         self.criterion = get_loss_fn(loss)
         self.automatic_optimization = False
@@ -86,6 +105,13 @@ class XGBoost(BaseLightningModule):
         self.verbose = verbose
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
+        if self.use_norm:
+            means = look_back_window.mean(1, keepdim=True).detach()
+            look_back_window = look_back_window - means
+            stdev = torch.sqrt(
+                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            look_back_window /= stdev
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         look_back_window = look_back_window.detach().cpu().numpy()
         preds = self.model.predict(look_back_window)
@@ -94,6 +120,14 @@ class XGBoost(BaseLightningModule):
         preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         # we need to have a pytorch tensor for evaluation
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
+        if self.use_norm:
+            preds = preds * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            preds = preds + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
         return preds
 
     def log_feature_importance(self):
@@ -117,32 +151,6 @@ class XGBoost(BaseLightningModule):
                 )
             }
         )
-
-    def log_tree_plots(self):
-        import matplotlib.pyplot as plt
-
-        num_trees_to_plot = 5
-        for i in range(num_trees_to_plot):
-            print(f"Plotting tree {i}")
-            fig, ax = plt.subplots(figsize=(20, 12))
-
-            xgb.plot_tree(
-                self.model,
-                num_trees=i,
-                ax=ax,
-                rankdir="LR",
-            )
-            ax.set_title(f"XGBoost Tree {i}", fontsize=16)
-            plt.tight_layout()
-
-            # Log the image to WandB using your Lightning logger's experiment
-            self.logger.experiment.log(
-                {
-                    f"xgboost/tree_structure/tree_{i}": wandb.Image(
-                        fig, caption=f"Tree {i}"
-                    )
-                },
-            )
 
     # we use this hack!
     def on_train_epoch_start(self):

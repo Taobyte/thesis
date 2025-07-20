@@ -2,7 +2,8 @@ name: "xgboost"
 
 model:
   _target_: src.models.xgboost.XGBoostModel
-  objective: "reg:squarederror"
+  # objective: "reg:squarederror"
+  loss: ${loss_fn}
   learning_rate: ${params.xgboost.learning_rate} 
   n_estimators: ${params.xgboost.n_estimators}
   max_depth: ${params.xgboost.max_depth} 
@@ -13,10 +14,12 @@ model:
   use_early_stopping: ${model.trainer.use_early_stopping}
   patience: ${model.trainer.patience}
 
+  use_norm: ${use_norm_baseline}
+
 pl_model:
   _target_: src.models.xgboost.XGBoost
-  loss: "MSE"
-  target_channel_dim: ${dataset.datamodule.target_channel_dim}
+  loss: ${loss_fn}
+  use_norm: ${use_norm_baseline}
   verbose: False
 
 trainer:

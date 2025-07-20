@@ -14,6 +14,7 @@ from torch.nn import Linear
 from lightning.pytorch.core.optimizer import LightningOptimizer
 
 from src.models.utils import BaseLightningModule
+from src.losses import get_loss_fn
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -956,6 +957,7 @@ class Model(nn.Module):
         hyper_num: list = [50, 20, 10],
         k: int = 3,
         inner_size: int = 5,
+        use_norm: bool = True,
     ):
         super(Model, self).__init__()
         window_size = list(window_size)
@@ -1016,14 +1018,17 @@ class Model(nn.Module):
             self.argg.append(nn.Linear(self.all_size[i], self.pred_len))
         self.chan_tran = nn.Linear(channels, channels)
 
+        self.use_norm = use_norm
+
     def forward(self, x):
         # normalization
-        mean_enc = x.mean(1, keepdim=True).detach()
-        x = x - mean_enc
-        std_enc = torch.sqrt(
-            torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5
-        ).detach()
-        x = x / std_enc
+        if self.use_norm:
+            mean_enc = x.mean(1, keepdim=True).detach()
+            x = x - mean_enc
+            std_enc = torch.sqrt(
+                torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5
+            ).detach()
+            x = x / std_enc
 
         adj_matrix = self.multiadphyper(x)
         seq_enc = self.conv_layers(x)
@@ -1080,7 +1085,9 @@ class Model(nn.Module):
 
         x = x_out + x + x_out_inter
         x = self.Linear_Tran(x).permute(0, 2, 1)
-        x = x * std_enc + mean_enc
+
+        if self.use_norm:
+            x = x * std_enc + mean_enc
 
         return x, result_conloss  # [Batch, Output length, Channel]
 
@@ -1336,7 +1343,7 @@ class AdaMSHyper(BaseLightningModule):
         super().__init__(**kwargs)
         self.model = model
 
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = get_loss_fn(loss)
         self.learning_rate = learning_rate
         self.automatic_optimization = False
 

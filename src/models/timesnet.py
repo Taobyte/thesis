@@ -322,6 +322,7 @@ class Model(nn.Module):
         embed_type: str = "fixed",
         freq: str = "h",
         dropout: float = 0.0,
+        use_norm: bool = True,
     ):
         super(Model, self).__init__()
         self.look_back_window = look_back_window
@@ -353,12 +354,17 @@ class Model(nn.Module):
         )
         self.projection = nn.Linear(d_model, c_out, bias=True)
 
+        self.use_norm = use_norm
+
     def forecast(self, x_enc: torch.Tensor, x_mark_enc: torch.Tensor) -> torch.Tensor:
         # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            x_enc /= stdev
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
@@ -373,17 +379,18 @@ class Model(nn.Module):
         dec_out = self.projection(enc_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (
-            stdev[:, 0, :]
-            .unsqueeze(1)
-            .repeat(1, self.prediction_window + self.look_back_window, 1)
-        )
+        if self.use_norm:
+            dec_out = dec_out * (
+                stdev[:, 0, :]
+                .unsqueeze(1)
+                .repeat(1, self.prediction_window + self.look_back_window, 1)
+            )
 
-        dec_out = dec_out + (
-            means[:, 0, :]
-            .unsqueeze(1)
-            .repeat(1, self.prediction_window + self.look_back_window, 1)
-        )
+            dec_out = dec_out + (
+                means[:, 0, :]
+                .unsqueeze(1)
+                .repeat(1, self.prediction_window + self.look_back_window, 1)
+            )
         return dec_out
 
     def forward(self, x_enc, x_mark_enc):

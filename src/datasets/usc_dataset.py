@@ -80,12 +80,15 @@ class USCDataset(Dataset):
         self.participant_data = usc_load_data(
             data_dir, participants, use_static_features
         )
+        self.data = []
         for participant_idx in range(len(self.participant_data)):
             lengths = [
                 len(series) - self.window_length + 1
                 for (series, _, _, _) in self.participant_data[participant_idx]
             ]
             self.part_cum_sum.append(np.cumsum([0] + lengths))
+            for series, _, _, _ in self.participant_data[participant_idx]:
+                self.data.append(series)
         outer_lengths = [cumsum[-1] for cumsum in self.part_cum_sum]
         self.cumulative_lengths = np.cumsum([0] + outer_lengths)
         self.total_length = self.cumulative_lengths[-1]

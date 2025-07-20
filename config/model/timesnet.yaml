@@ -14,13 +14,15 @@ model:
   d_model: ${params.timesnet.d_model}
   d_ff: ${params.timesnet.d_ff}
   dropout:  ${params.timesnet.dropout} 
+
+  use_norm: ${use_norm_dl}
   
 
 
 pl_model: 
   _target_: src.models.timesnet.TimesNet
   learning_rate: ${params.timesnet.learning_rate} 
-  loss_fn: 'MSE' # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
+  loss_fn: ${loss_fn} # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
   lradj: "type1"
   beta_1: 0.9
   beta_2: 0.999

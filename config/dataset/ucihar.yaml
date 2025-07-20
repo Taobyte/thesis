@@ -6,8 +6,8 @@ datamodule:
   data_dir: ${path.datadir}/UCIHAR/ 
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: ${experiment.ucihar.train_participants} 
-  val_participants: ${experiment.ucihar.val_participants}
+  train_participants: ${folds.ucihar.train_participants} 
+  val_participants: ${folds.ucihar.val_participants}
   # we don't need test participants, since we get a train test split
   batch_size: ${model.data.batch_size}
   num_workers: ${num_workers}

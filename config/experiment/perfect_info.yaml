@@ -1,0 +1,17 @@
+experiment_name: "perfect_info"
+
+use_heart_rate: True 
+use_dynamic_features: False
+use_static_features: False 
+
+use_norm_dl: True
+use_norm_baseline: False
+
+use_only_exogenous_features: False 
+use_perfect_info: True
+beta: 0.5
+
+loss_fn: "MSE"
+
+
+

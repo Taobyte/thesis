@@ -1,0 +1,17 @@
+experiment_name: "exo_only"
+
+use_heart_rate: True 
+use_dynamic_features: True
+use_static_features: False 
+
+use_norm_dl: True
+use_norm_baseline: False
+
+use_only_exogenous_features: True
+use_perfect_info: False
+beta: 0.0
+
+loss_fn: "MSE"
+
+
+

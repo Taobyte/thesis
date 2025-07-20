@@ -4,21 +4,23 @@ model:
   _target_: src.models.mlp.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  base_channel_dim: ${dataset.base_channel_dim}
-  input_channels: ${dataset.input_channels}
+  base_channel_dim: ${dataset.datamodule.target_channel_dim}
+  input_channels: ${dataset.datamodule.look_back_channel_dim}
   hid_dim: 10
   n_hid_layers: 2
   activation: "relu" # can be tanh, relu or none
 
+  use_norm: ${use_norm_baseline}
+
 pl_model: 
   _target_: src.models.mlp.MLP
   learning_rate: 0.01
-  loss: "MSE"
+  loss: ${loss_fn}
 
 trainer:
-  max_epochs: 50
+  max_epochs: 10000
   use_early_stopping: True
-  patience: 2
+  patience: 5
 
 data:
-  batch_size: 32
+  batch_size: 256

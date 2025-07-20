@@ -17,6 +17,7 @@ class Model(torch.nn.Module):
         n_hid_layers: int = 2,
         activation: str = "relu",
         dropout: float = 0.0,
+        use_norm: bool = False,
     ):
         super().__init__()
 
@@ -29,6 +30,7 @@ class Model(torch.nn.Module):
         else:
             raise NotImplementedError(f"Unknown activation: {activation}")
 
+        self.prediction_window = prediction_window
         self.base_channel_dim = base_channel_dim
         in_dim = look_back_window * input_channels
         out_dim = prediction_window * base_channel_dim
@@ -45,21 +47,41 @@ class Model(torch.nn.Module):
 
         # Final layer without BatchNorm or Activation
         self.layers.append(torch.nn.Linear(prev_dim, out_dim))
-
         self.network = torch.nn.Sequential(*self.layers)
 
+        self.use_norm = use_norm
+
     def forward(self, x: torch.Tensor):
+        if self.use_norm:
+            means = x.mean(1, keepdim=True).detach()
+            x = x - means
+            stdev = torch.sqrt(torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x /= stdev
+
         x = rearrange(x, "B T C -> B (T C)")
         pred = self.network(x)
         pred = rearrange(pred, "B (T C) -> B T C", C=self.base_channel_dim)
+
+        if self.use_norm:
+            pred = pred * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            pred = pred + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
         return pred
 
 
 class MLP(BaseLightningModule):
     def __init__(
-        self, model: torch.nn.Module, learning_rate: float = 0.001, loss: str = "MSE"
+        self,
+        model: torch.nn.Module,
+        learning_rate: float = 0.001,
+        loss: str = "MSE",
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
         self.criterion = get_loss_fn(loss)

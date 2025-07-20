@@ -43,7 +43,11 @@ def main(config: DictConfig) -> Optional[float]:
 
     def setup(config: DictConfig):
         datamodule = instantiate(
-            config.dataset.datamodule, normalization=config.normalization
+            config.dataset.datamodule,
+            normalization=config.normalization,
+            use_only_exo=config.use_only_exo,
+            use_perfect_info=config.use_perfect_info,
+            beta=config.beta,
         )
         model_kwargs = get_model_kwargs(config, datamodule)
         model = instantiate(config.model.model, **model_kwargs)
@@ -54,7 +58,7 @@ def main(config: DictConfig) -> Optional[float]:
             use_plots=config.use_plots,
             normalization=config.normalization,
             tune=config.tune,
-            use_only_exogenous_features=config.use_only_exogenous_features,
+            probabilistic_models=config.probabilistic_models,
         )
 
         callbacks = []
@@ -109,14 +113,14 @@ def main(config: DictConfig) -> Optional[float]:
             if dataset_name in config.fold_datasets:
                 base_path = get_original_cwd()
                 fold_name = f"fold_{i}"
-                fold_conf_path = f"{base_path}/config/experiment/{fold_name}.yaml"
+                fold_conf_path = f"{base_path}/config/folds/{fold_name}.yaml"
                 fold_config = OmegaConf.load(fold_conf_path)
 
-                config["experiment"][dataset_name]["train_participants"] = fold_config[
+                config["folds"][dataset_name]["train_participants"] = fold_config[
                     dataset_name
                 ]["train_participants"]
 
-                config["experiment"][dataset_name]["val_participants"] = fold_config[
+                config["folds"][dataset_name]["val_participants"] = fold_config[
                     dataset_name
                 ]["val_participants"]
 

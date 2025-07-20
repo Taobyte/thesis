@@ -8,21 +8,12 @@ import plotly.colors as pcolors
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from tqdm import tqdm
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
 from src.constants import (
     dataset_to_name,
 )
-
-from src.normalization import (
-    local_z_denorm,
-    local_z_norm,
-    global_z_denorm,
-    global_z_norm,
-)
-
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
 name_to_title = {
@@ -465,6 +456,7 @@ def plot_prediction_wandb(
     plt.close(fig)
 
 
+"""
 def plot_max_min_median_predictions(lightning_module) -> None:
     normalization = lightning_module.normalization
     local_norm_channels = lightning_module.local_norm_channels
@@ -550,7 +542,7 @@ def plot_max_min_median_predictions(lightning_module) -> None:
                 dataset=lightning_module.trainer.datamodule.name,
                 pred_denorm_std=pred_std,
             )
-
+"""
 
 if __name__ == "__main__":
     from hydra import initialize, compose

@@ -7,7 +7,7 @@ from einops import rearrange
 from torch.utils.data import DataLoader
 from typing import Tuple
 
-from src.normalization import local_z_norm, global_z_norm
+from src.normalization import global_z_norm
 
 
 class BaseDataModule(L.LightningDataModule):
@@ -26,7 +26,10 @@ class BaseDataModule(L.LightningDataModule):
         dynamic_exogenous_variables: int = 1,
         static_exogenous_variables: int = 6,
         look_back_channel_dim: int = 1,
-        normalization: str = "local",
+        normalization: str = "global",
+        use_only_exo: bool = False,
+        use_perfect_info: bool = False,
+        beta: float = 0.5,
     ):
         super().__init__()
 
@@ -40,8 +43,12 @@ class BaseDataModule(L.LightningDataModule):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
 
+        # Experiment Flags
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
+        self.use_only_exo = use_only_exo
+        self.use_perfect_info = use_perfect_info
+        self.beta = beta
 
         self.dynamic_exogenous_variables = dynamic_exogenous_variables
         self.static_exogenous_variables = static_exogenous_variables
@@ -61,12 +68,46 @@ class BaseDataModule(L.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
 
+    def postprocess_batch(self, look_back_window, prediction_window):
+        mean, std = self.train_dataset.mean, self.train_dataset.std
+
+        if self.normalization == "global":
+            input = global_z_norm(look_back_window, self.local_norm_channels, mean, std)
+            output = global_z_norm(
+                prediction_window, self.local_norm_channels, mean, std
+            )
+        else:
+            input = look_back_window
+            output = prediction_window
+
+        if self.use_only_exo:
+            input = input[
+                :, :, self.target_channel_dim :
+            ]  # rely only on exogenous variables
+        elif self.use_perfect_info:
+            B, _, _ = look_back_window.shape
+            perf_info_channel = torch.concat(
+                (
+                    torch.zeros(
+                        B,
+                        self.look_back_window - self.prediction_window,
+                        self.target_channel_dim,
+                    ),
+                    self.beta * output,
+                ),
+                dim=1,
+            )
+            input = torch.concat((input, perf_info_channel), dim=-1)
+
+        return (look_back_window, prediction_window, input, output, mean, std)
+
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
+            collate_fn=self.collate_fn_with_postprocessing,
         )
 
     def val_dataloader(self):
@@ -75,6 +116,7 @@ class BaseDataModule(L.LightningDataModule):
             batch_size=min(self.batch_size, len(self.val_dataset)),
             num_workers=self.num_workers,
             shuffle=False,
+            collate_fn=self.collate_fn_with_postprocessing,
         )
 
     def test_dataloader(self):
@@ -83,30 +125,19 @@ class BaseDataModule(L.LightningDataModule):
             batch_size=min(self.batch_size, len(self.test_dataset)),
             num_workers=self.num_workers,
             shuffle=False,
+            collate_fn=self.collate_fn_with_postprocessing,
         )
+
+    def collate_fn_with_postprocessing(self, batch):
+        look_back, prediction = zip(*batch)
+        look_back = torch.stack(look_back)
+        prediction = torch.stack(prediction)
+        return self.postprocess_batch(look_back, prediction)
 
     # used for Gaussian Process model & shap calculation
     def get_inducing_points(
         self, num_inducing: int = 500, strategy: str = "random", mode: str = "train"
     ) -> torch.Tensor:
-        """
-        Selects a subset of data points to serve as inducing points for sparse Gaussian Process
-        (GP) models or other methods that require a representative subset of the input space.
-
-        This function supports two strategies: random sampling and K-Means clustering.
-
-        Args:
-            num_inducing: The desired number of inducing points.
-            strategy: The strategy to use for selecting inducing points.
-                      Supported values are "random" for random sampling or "kmeans" for K-Means clustering.
-            mode: Specifies which dataset to draw inducing points from.
-                  Can be "train" for the training set or "test" for the test set.
-
-        Returns:
-            A `torch.Tensor` of shape `(num_inducing, Time, Channels)` containing the selected
-            inducing points. Each channel is z-normalized.
-        """
-
         # Ensure the train/test dataset is ready
         if mode == "train":
             self.setup(stage="fit")
@@ -172,36 +203,9 @@ class BaseDataModule(L.LightningDataModule):
 
         lbws = []
         pws = []
-        for look_back_window, prediction_window in dataloader:
-            if self.normalization == "local":
-                look_back_window_norm, mean, std = local_z_norm(
-                    look_back_window, self.local_norm_channels
-                )
-                prediction_window_norm, _, _ = local_z_norm(
-                    prediction_window, self.local_norm_channels, mean, std
-                )
-            elif self.normalization == "global":
-                look_back_window_norm = global_z_norm(
-                    look_back_window,
-                    self.local_norm_channels,
-                    self.train_dataset.mean,
-                    self.train_dataset.std,
-                )
-                prediction_window_norm = global_z_norm(
-                    prediction_window,
-                    self.local_norm_channels,
-                    self.train_dataset.mean,
-                    self.train_dataset.std,
-                )
-
-            elif self.normalization == "none":
-                look_back_window_norm = look_back_window
-                prediction_window_norm = prediction_window
-            else:
-                raise NotImplementedError()
+        for _, _, look_back_window_norm, prediction_window_norm, _, _ in dataloader:
             look_back_window_norm = look_back_window_norm.detach().cpu().numpy()
             prediction_window_norm = prediction_window_norm.detach().cpu().numpy()
-
             lbws.append(look_back_window_norm)
             pws.append(prediction_window_norm)
 

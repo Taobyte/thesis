@@ -5,7 +5,6 @@ model:
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
   n_channels: ${dataset.datamodule.look_back_channel_dim}
-  use_norm: True # instance normalization in forward function of the model
   alpha: 1 
   kernel_size: 3  
   wv: "db1"
@@ -21,10 +20,13 @@ model:
   dropout: ${params.simpletm.dropout} 
   geomattn_dropout: ${params.simpletm.geomattn_dropout}
 
+  use_norm: ${use_norm_dl} # instance normalization in forward function of the model
+  
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
   learning_rate: ${params.simpletm.learning_rate}
   lradj: 'type1'
+  loss_fn: ${loss_fn}
 
 trainer: 
   max_epochs: 1000

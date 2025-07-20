@@ -4,9 +4,9 @@ datamodule:
   data_dir: "${path.datadir}/USC-HAD/" 
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  train_participants: ${experiment.usc.train_participants} 
-  val_participants: ${experiment.usc.val_participants} 
-  test_participants: ${experiment.usc.test_participants} 
+  train_participants: ${folds.usc.train_participants} 
+  val_participants: ${folds.usc.val_participants} 
+  test_participants: ${folds.usc.test_participants} 
   num_workers: ${num_workers}
   batch_size: 32
 
@@ -19,5 +19,5 @@ datamodule:
   target_channel_dim: 6 
   dynamic_exogenous_variables: 0 
   static_exogenous_variables: 15 # 12 activity classes, AGE, HEIGHT, WEIGHT 
-  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
+  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}, ${use_only_exogenous_features}}
 

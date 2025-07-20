@@ -4,10 +4,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning as L
 import pywt
 
 from src.models.utils import BaseLightningModule
+from src.losses import get_loss_fn
 from math import sqrt
 from typing import Tuple
 
@@ -429,6 +429,7 @@ class SimpleTM(BaseLightningModule):
     def __init__(
         self,
         model: nn.Module,
+        loss_fn: str = "MSE",
         learning_rate: float = 0.02,
         lradj: str = "TST",
         data: str = "custom",
@@ -436,7 +437,7 @@ class SimpleTM(BaseLightningModule):
     ):
         super().__init__(**kwargs)
         self.model = model
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = get_loss_fn(loss_fn)
         self.save_hyperparameters(ignore=["model", "criterion"])
 
     def model_forward(self, x):
