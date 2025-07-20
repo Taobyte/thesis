@@ -9,7 +9,7 @@ model:
   hid_dim: 32
   n_hid_layers: 2
   activation: "relu" # can be tanh, relu or none
-
+  autoregressive: True
   use_norm: ${use_norm_baseline}
 
 pl_model: 

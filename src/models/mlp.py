@@ -18,6 +18,7 @@ class Model(torch.nn.Module):
         activation: str = "relu",
         dropout: float = 0.0,
         use_norm: bool = False,
+        autoregressive: bool = False,
     ):
         super().__init__()
 
@@ -31,13 +32,14 @@ class Model(torch.nn.Module):
             raise NotImplementedError(f"Unknown activation: {activation}")
 
         self.prediction_window = prediction_window
-        self.base_channel_dim = base_channel_dim
+        self.input_channels = input_channels
         in_dim = look_back_window * input_channels
-        out_dim = prediction_window * base_channel_dim
+        out_dim = (
+            input_channels if autoregressive else prediction_window * input_channels
+        )
 
         self.layers = torch.nn.ModuleList()
         prev_dim = in_dim
-
         for _ in range(n_hid_layers):
             self.layers.append(torch.nn.Linear(prev_dim, hid_dim))
             self.layers.append(torch.nn.BatchNorm1d(hid_dim))
@@ -50,6 +52,7 @@ class Model(torch.nn.Module):
         self.network = torch.nn.Sequential(*self.layers)
 
         self.use_norm = use_norm
+        self.autoregressive = autoregressive
 
     def forward(self, x: torch.Tensor):
         if self.use_norm:
@@ -59,8 +62,22 @@ class Model(torch.nn.Module):
             x /= stdev
 
         x = rearrange(x, "B T C -> B (T C)")
-        pred = self.network(x)
-        pred = rearrange(pred, "B (T C) -> B T C", C=self.base_channel_dim)
+        if self.autoregressive:
+            preds = []
+            for h in range(self.prediction_window):
+                next_pred = self.network(x)
+                preds.append(next_pred)
+                x_unflattened = rearrange(x, "B (T C) -> B T C", C=self.input_channels)
+                x = torch.concat(
+                    (x_unflattened[:, 1:, :], next_pred.unsqueeze(1)), dim=1
+                )
+                x = rearrange(x, "B T C -> B (T C)")
+
+            pred = torch.concat(preds, dim=1)
+        else:
+            pred = self.network(x)
+
+        pred = rearrange(pred, "B (T C) -> B T C", C=self.input_channels)
 
         if self.use_norm:
             pred = pred * (
