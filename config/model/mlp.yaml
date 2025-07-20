@@ -6,7 +6,7 @@ model:
   prediction_window: ${prediction_window}
   base_channel_dim: ${dataset.datamodule.target_channel_dim}
   input_channels: ${dataset.datamodule.look_back_channel_dim}
-  hid_dim: 10
+  hid_dim: 32
   n_hid_layers: 2
   activation: "relu" # can be tanh, relu or none
 
@@ -14,7 +14,7 @@ model:
 
 pl_model: 
   _target_: src.models.mlp.MLP
-  learning_rate: 0.01
+  learning_rate: 0.001
   loss: ${loss_fn}
 
 trainer:
