@@ -1,14 +1,16 @@
 experiment_name: "mae_loss"
 
-use_heart_rate: True 
+loss_fn: "MAE"
+
+# Exogenous Variables Experiments
 use_dynamic_features: True
 use_static_features: False 
-
-use_norm_dl: True
-use_norm_baseline: False
 
 use_only_exogenous_features: False 
 use_perfect_info: False
 beta: 0.5
 
-loss_fn: "MAE"
+# Non-Stationary Experiments
+use_norm_dl: True
+use_norm_baseline: False
+

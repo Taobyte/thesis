@@ -117,7 +117,9 @@ def setup_wandb_logger(
     return wandb_logger, run_name
 
 
+# -------------------------------------------------------------------------------------------------------
 # OmegaConf custom resolver functions
+# -------------------------------------------------------------------------------------------------------
 
 
 # this function is needed, because AdaMSHyper does not support short look_back_window lengths

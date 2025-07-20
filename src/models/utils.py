@@ -25,7 +25,7 @@ from src.plotting import (
     plot_entire_series,
 )
 
-from src.normalization import global_z_denorm
+from src.normalization import global_z_denorm, undo_differencing
 
 
 def get_model_kwargs(config: DictConfig, datamodule: L.LightningDataModule) -> dict:
@@ -219,6 +219,8 @@ class BaseLightningModule(L.LightningModule):
 
         if self.normalization == "global":
             preds = global_z_denorm(preds, self.local_norm_channels, mean, std)
+        elif self.normalization == "difference":
+            preds = undo_differencing(look_back_window, preds)
 
         # Metric Calculation
         metrics, current_metrics = self.evaluator(

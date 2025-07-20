@@ -69,12 +69,20 @@ class BaseDataModule(L.LightningDataModule):
         self.test_dataset = None
 
     def postprocess_batch(self, look_back_window, prediction_window):
+        B, _, C = look_back_window.shape
         mean, std = self.train_dataset.mean, self.train_dataset.std
 
         if self.normalization == "global":
             input = global_z_norm(look_back_window, self.local_norm_channels, mean, std)
             output = global_z_norm(
                 prediction_window, self.local_norm_channels, mean, std
+            )
+        elif self.normalization == "difference":
+            pad = torch.zeros(B, 1, C)
+            input = torch.cat([pad, torch.diff(look_back_window, dim=1)], dim=1)
+            last_value = look_back_window[:, -1:, : self.target_channel_dim]
+            output = torch.diff(
+                torch.cat([last_value, prediction_window], dim=1), dim=1
             )
         else:
             input = look_back_window
@@ -85,7 +93,6 @@ class BaseDataModule(L.LightningDataModule):
                 :, :, self.target_channel_dim :
             ]  # rely only on exogenous variables
         elif self.use_perfect_info:
-            B, _, _ = look_back_window.shape
             perf_info_channel = torch.concat(
                 (
                     torch.zeros(

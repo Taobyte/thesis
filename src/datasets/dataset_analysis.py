@@ -73,9 +73,6 @@ if __name__ == "__main__":
     datamodule.setup("fit")
     # datamodule.setup("test")
     dataset = datamodule.train_dataset.data
-    import pdb
-
-    pdb.set_trace()
 
     if args.type == "infos":
 

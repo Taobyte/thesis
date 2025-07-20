@@ -46,3 +46,11 @@ def local_z_norm_numpy(batch: np.ndarray, mean=None, std=None):
         std = np.std(batch, axis=1, keepdims=True) + 1e-5
     normed = (batch - mean) / std
     return normed, mean, std
+
+
+def undo_differencing(look_back_window: torch.Tensor, predicted_deltas: torch.Tensor):
+    B, _, C = predicted_deltas.shape
+    last_value = look_back_window[:, -1:, :C]
+    cumsum_deltas = torch.cumsum(predicted_deltas, dim=1)
+    reconstructed = last_value + cumsum_deltas
+    return reconstructed

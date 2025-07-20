@@ -16,7 +16,7 @@ use_plots: False # flag for plotting test predictions and test timeseries
 # data
 n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets have folds defined in config/experiments
-normalization: "global" # can be either "global" or "none"
+normalization: "global" # can be either "global", "difference" or  "none"
 use_heart_rate: True
 
 special_models: ["xgboost", "naive"] # these models are not trained with pytorch
