@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -9,7 +10,7 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from sklearn.feature_selection import mutual_info_regression
-from statsmodels.tsa.stattools import kpss, adfuller, acf
+from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
 
 from src.constants import (
     dataset_to_name,
@@ -47,13 +48,14 @@ if __name__ == "__main__":
             "pearson",
             "infos",
             "mutual",
-            "test",
             "scatter",
+            "test",
             "acf",
+            "window_stats",
             "difference",
+            "pct",
         ],
         required=True,
-        help="checks granger causality for the timeseries in the dataset",
     )
 
     args = parser.parse_args()
@@ -278,6 +280,9 @@ if __name__ == "__main__":
 
     elif args.type == "test":
         # Augmented Dicky-Fuller Test
+        fuller = []
+        kpss_cs = []
+        kpss_cts = []
         for i, series in enumerate(dataset):
             print(f"Processing series {i}")
             heartrate = series[:, 0]
@@ -285,18 +290,22 @@ if __name__ == "__main__":
 
             ad_hr = adfuller(heartrate)
             print(f"adfuller heartrate: {ad_hr[1]}")
-            ad_act = adfuller(activity)
-            print(f"adfuller activity: {ad_act[1]}")
 
             kpps_c_hr = kpss(heartrate, regression="c")
             print(f"KPPS heartrate constant: {kpps_c_hr[1]}")
             kpps_ct_hr = kpss(heartrate, regression="ct")
             print(f"KPPS heartrate linear: {kpps_ct_hr[1]}")
+            fuller.append(ad_hr[0])
+            kpss_cs.append(kpps_c_hr[0])
+            kpss_cts.append(kpps_ct_hr[0])
 
-            kpps_c_act = kpss(activity, regression="c")
-            print(f"KPPS activity constant: {kpps_c_act[1]}")
-            kpps_ct_act = kpss(activity, regression="ct")
-            print(f"KPPS activity linear: {kpps_ct_act[1]}")
+        for name, stats in zip(
+            ["ADF", "KPSS-C", "KPSS-CT"], [fuller, kpss_cs, kpss_cts]
+        ):
+            print(
+                f"{name} Test Statistic Mean: {np.mean(stats):.3f} | Std Dev: {np.std(stats):.3f}"
+            )
+            print(stats)
 
     elif args.type == "scatter":
         lags = 12
@@ -330,10 +339,21 @@ if __name__ == "__main__":
 
     elif args.type == "acf":
         lags = 50
-        fig = make_subplots(rows=len(dataset), cols=1)
+        fig = make_subplots(rows=len(dataset) * 3, cols=1)
         for i, series in enumerate(dataset):
             heartrate = series[:, 0]
             autocorr = acf(heartrate, nlags=lags, fft=True)
+            pautocorr = pacf(heartrate, nlags=lags)
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(heartrate))),
+                    y=heartrate,
+                    mode="markers+lines",
+                    line=dict(width=2),
+                ),
+                row=3 * i + 1,
+                col=1,
+            )
 
             fig.add_trace(
                 go.Scatter(
@@ -342,9 +362,23 @@ if __name__ == "__main__":
                     mode="markers+lines",
                     line=dict(width=2),
                 ),
-                row=i + 1,
+                row=3 * i + 2,
                 col=1,
             )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(lags + 1)),
+                    y=pautocorr,
+                    mode="markers+lines",
+                    line=dict(width=2),
+                ),
+                row=3 * i + 3,
+                col=1,
+            )
+
+        fig.update_layout(
+            title="ACF and PACF", height=3 * 200 * len(dataset), showlegend=False
+        )
 
         fig.show()
 
@@ -399,5 +433,109 @@ if __name__ == "__main__":
                     row=2 * i + 2,
                     col=j + 1,
                 )
+
+        fig.show()
+    elif args.type == "pct":
+        fig = make_subplots(rows=len(dataset) * 3, cols=1)
+        # dataset = [dataset[0]]
+        for i, series in enumerate(dataset):
+            heartrate = series[:, 0]
+            activity = series[:, 1]
+            pct = np.log(heartrate[1:] / heartrate[:-1])
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(pct))),
+                    y=heartrate[1:],
+                    mode="lines",
+                    # line=dict(width=2),
+                ),
+                row=3 * i + 1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(pct))),
+                    y=pct,
+                    mode="lines",
+                    # line=dict(width=2),
+                ),
+                row=3 * i + 2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(pct))),
+                    y=activity[1:],
+                    mode="lines",
+                    # line=dict(width=2),
+                ),
+                row=3 * i + 3,
+                col=1,
+            )
+        fig.update_layout(
+            title_text="PCT Transform",
+            height=200 * 3 * len(dataset),  # Calculate total height
+            showlegend=True,
+            hovermode="x unified",
+        )
+        fig.show()
+
+    elif args.type == "window_stats":
+        window_length = 20
+        fig = make_subplots(
+            rows=len(dataset),
+            cols=4,
+            column_titles=["HR Mean", "HR Std", "ACT Mean", "ACT Std"],
+        )
+        for i, series in enumerate(dataset):
+            heartrate = series[:, 0]
+            activity = series[:, 1]
+            hr_df = pd.DataFrame(heartrate)
+            ac_df = pd.DataFrame(activity)
+
+            hr_mean = hr_df.rolling(window=window_length).mean().dropna()[0].to_numpy()
+            hr_std = hr_df.rolling(window=window_length).std().dropna()[0].to_numpy()
+
+            ac_mean = ac_df.rolling(window=window_length).mean().dropna()[0].to_numpy()
+            ac_std = ac_df.rolling(window=window_length).std().dropna()[0].to_numpy()
+
+            x = list(range(len(hr_mean)))
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=hr_mean,
+                    mode="lines",
+                ),
+                row=i + 1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=hr_std,
+                    mode="lines",
+                ),
+                row=i + 1,
+                col=2,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=ac_mean,
+                    mode="lines",
+                ),
+                row=i + 1,
+                col=3,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=ac_std,
+                    mode="lines",
+                ),
+                row=i + 1,
+                col=4,
+            )
 
         fig.show()

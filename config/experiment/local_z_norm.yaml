@@ -1,5 +1,7 @@
 experiment_name: "local_z_norm"
 
+loss_fn: "MSE"
+
 use_heart_rate: True 
 use_dynamic_features: True
 use_static_features: False 
@@ -10,5 +12,3 @@ use_norm_baseline: True
 use_only_exogenous_features: False 
 use_perfect_info: False
 beta: 0.5
-
-loss_fn: "MAE"

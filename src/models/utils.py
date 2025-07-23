@@ -180,6 +180,11 @@ class BaseLightningModule(L.LightningModule):
         avg_metrics = self.calculate_weighted_average(
             self.metrics_dict, self.batch_size
         )
+
+        avg_metrics["RMSE"] = avg_metrics["MSE"] ** 0.5
+        avg_metrics["NRMSE"] = avg_metrics["RMSE"] / avg_metrics["abs_target_mean"]
+        avg_metrics["ND"] = avg_metrics["MAE"] / avg_metrics["abs_target_mean"]
+        avg_metrics["MASE"] = avg_metrics["MAE"] / avg_metrics["naive_mae"]
         self.log_dict(avg_metrics, logger=True, sync_dist=True)
 
         # plot if use_plots is true and process rank equals to 0 (multi gpu training)
@@ -231,17 +236,16 @@ class BaseLightningModule(L.LightningModule):
         return metrics, current_metrics
 
     def update_metrics(self, new_metrics: Dict):
-        prefix = "test"
         for metric_name, metric_value in new_metrics.items():
-            metric_key = f"{prefix}_{metric_name}"
-            if metric_key not in self.metrics_dict:
-                self.metrics_dict[metric_key] = []
-            self.metrics_dict[metric_key].append(metric_value)
+            if metric_name not in self.metrics_dict:
+                self.metrics_dict[metric_name] = []
+            self.metrics_dict[metric_name].append(metric_value)
 
     def calculate_weighted_average(self, metrics_dict: Dict, batch_size: list):
         metrics = {}
         for key, value in metrics_dict.items():
             metrics[key] = np.sum(value * np.array(batch_size)) / np.sum(batch_size)
+
         return metrics
 
     def compute_shap_values(self):

@@ -22,16 +22,15 @@ class Evaluator:
         metrics = {
             "MSE": mse(targets, preds),
             "MAE": mae(targets, preds),
+            "DIRACC": dir_acc_improved_single_step(preds, targets, look_back_window),
+            "abs_target_mean": abs_target_mean(targets),
+            "naive_mae": naive_mae(targets, look_back_window),
             # "abs_error": abs_error(targets, preds),
             # "abs_target_sum": abs_target_sum(targets),
-            # "abs_target_mean": abs_target_mean(targets),
             # "MAPE": mape(targets, preds),
-            "sMAPE": smape(targets, preds),
-            "cross_correlation": correlation(preds, targets),
-            "dir_acc_full": dir_acc_full_horizon(preds, targets, look_back_window),
-            "dir_acc_single": dir_acc_improved_single_step(
-                preds, targets, look_back_window
-            ),
+            # "sMAPE": smape(targets, preds),
+            # "cross_correlation": correlation(preds, targets),
+            # "dir_acc_full": dir_acc_full_horizon(preds, targets, look_back_window),
         }
 
         # metrics["RMSE"] = np.sqrt(metrics["MSE"])
@@ -223,6 +222,12 @@ def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
     return mean_corr
 
 
+def naive_mae(target: np.ndarray, look_back_window: np.ndarray) -> float:
+    last_value = look_back_window[:, -1:, :]
+    diff = mae(target, last_value)
+    return diff
+
+
 def mae(target: np.ndarray, forecast: np.ndarray) -> float:
     return np.mean(np.abs(target - forecast))
 
@@ -261,6 +266,20 @@ def abs_target_mean(target) -> float:
         abs\_target\_mean = mean(|Y|)
     """
     return np.mean(np.abs(target))
+
+
+def mase(target: np.ndarray, forecast: np.ndarray, naive_error: np.ndarray) -> float:
+    r"""
+    .. math::
+
+        mase = mean(|Y - \hat{Y}|) / seasonal\_error
+
+    See [HA21]_ for more details.
+    """
+    diff = np.mean(np.abs(target - forecast), axis=1)
+    mase = diff / naive_error
+    # if seasonal_error is 0, set mase to 0
+    return np.mean(mase)
 
 
 def mape(target: np.ndarray, forecast: np.ndarray) -> float:

@@ -9,7 +9,7 @@ model:
   activation: "none"
   n_hid_layers: 0
 
-  autoregressive: True
+  autoregressive: False
 
 pl_model: 
   _target_: src.models.linear.Linear
