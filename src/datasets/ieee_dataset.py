@@ -111,9 +111,7 @@ class IEEEDataset(Dataset):
         ]
 
         look_back_window = torch.from_numpy(look_back_window).float()
-        prediction_window = torch.from_numpy(
-            prediction_window[:, : self.target_channel_dim]
-        ).float()
+        prediction_window = torch.from_numpy(prediction_window[:, :]).float()
 
         return look_back_window, prediction_window
 

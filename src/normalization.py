@@ -3,12 +3,8 @@ import numpy as np
 
 
 def global_z_norm(
-    x: torch.Tensor, local_norm_channels: int, mean: np.ndarray, std: np.ndarray
+    x: torch.Tensor, local_norm_channels: int, mean: torch.Tensor, std: torch.Tensor
 ) -> torch.Tensor:
-    device = x.device
-    mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
-    std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
-
     _, _, C = x.shape
     C = min(
         C, local_norm_channels
@@ -24,12 +20,8 @@ def global_z_norm(
 
 
 def global_z_denorm(
-    x: torch.Tensor, local_norm_channels: int, mean: np.ndarray, std: np.ndarray
+    x: torch.Tensor, local_norm_channels: int, mean: torch.Tensor, std: torch.Tensor
 ) -> torch.Tensor:
-    device = x.device
-    mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
-    std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
-
     _, _, C = x.shape
     C = min(
         C, local_norm_channels

@@ -48,7 +48,6 @@ class BaseDataModule(L.LightningDataModule):
         self.use_static_features = use_static_features
         self.use_only_exo = use_only_exo
         self.use_perfect_info = use_perfect_info
-        self.beta = beta
 
         self.dynamic_exogenous_variables = dynamic_exogenous_variables
         self.static_exogenous_variables = static_exogenous_variables
@@ -70,8 +69,10 @@ class BaseDataModule(L.LightningDataModule):
 
     def postprocess_batch(self, look_back_window, prediction_window):
         B, _, C = look_back_window.shape
+        device = look_back_window.device
         mean, std = self.train_dataset.mean, self.train_dataset.std
-
+        mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
+        std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
         if self.normalization == "global":
             input = global_z_norm(look_back_window, self.local_norm_channels, mean, std)
             output = global_z_norm(
@@ -89,24 +90,35 @@ class BaseDataModule(L.LightningDataModule):
             output = prediction_window
 
         if self.use_only_exo:
+            assert self.use_dynamic_features
             input = input[
                 :, :, self.target_channel_dim :
             ]  # rely only on exogenous variables
         elif self.use_perfect_info:
-            perf_info_channel = torch.concat(
-                (
-                    torch.zeros(
-                        B,
-                        self.look_back_window - self.prediction_window,
-                        self.target_channel_dim,
-                    ),
-                    self.beta * output,
-                ),
+            # perf_info_channel = torch.concat(
+            #     (
+            #         torch.zeros(
+            #             B,
+            #             self.look_back_window - self.prediction_window,
+            #             self.target_channel_dim,
+            #         ),
+            #         output,
+            #     ),
+            #     dim=1,
+            # )
+            ex_concat = torch.concat(
+                [
+                    input[:, :, self.target_channel_dim :],
+                    output[:, :, self.target_channel_dim :],
+                ],
                 dim=1,
             )
+            perf_info_channel = ex_concat[:, -self.look_back_window :, :]
             input = torch.concat((input, perf_info_channel), dim=-1)
 
-        return (look_back_window, prediction_window, input, output, mean, std)
+        output = output[:, :, : self.target_channel_dim]
+
+        return look_back_window, input, output
 
     def train_dataloader(self):
         return DataLoader(
@@ -210,7 +222,7 @@ class BaseDataModule(L.LightningDataModule):
 
         lbws = []
         pws = []
-        for _, _, look_back_window_norm, prediction_window_norm, _, _ in dataloader:
+        for _, look_back_window_norm, prediction_window_norm in dataloader:
             look_back_window_norm = look_back_window_norm.detach().cpu().numpy()
             prediction_window_norm = prediction_window_norm.detach().cpu().numpy()
             lbws.append(look_back_window_norm)

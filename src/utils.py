@@ -141,6 +141,7 @@ def compute_input_channel_dims(
     use_dynamic_features: bool,
     use_static_features: bool,
     use_only_exogenous_features: bool,
+    use_perfect_info: bool,
 ) -> int:
     dims = target_channel_dim
 
@@ -149,6 +150,8 @@ def compute_input_channel_dims(
             "Attention you are using only exogenous variables for training, but don't include exogenous variables"
         )
         dims = 0
+    elif use_perfect_info:
+        dims += 1
     else:
         dims = dims
 

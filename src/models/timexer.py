@@ -432,13 +432,13 @@ class TimeXer(BaseLightningModule):
         self,
         model: nn.Module,
         learning_rate: float = 0.02,
-        loss: str = "MSE",
+        loss_fn: str = "MSE",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
-        self.criterion = get_loss_fn(loss)
+        self.criterion = get_loss_fn(loss_fn)
 
     def model_forward(self, x):
         # timexer assumes that endogenous variables is the last channel!

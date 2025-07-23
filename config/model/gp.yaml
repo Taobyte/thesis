@@ -20,12 +20,12 @@ model:
   out_dim: 16
   dropout: 0.0
 
-  use_norm: ${use_norm_baseline}
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
   learning_rate: ${params.gp.learning_rate}
   use_feature_extractor: False
+  use_norm: ${use_norm_baseline}
   jitter: 1e-4
 
 trainer:

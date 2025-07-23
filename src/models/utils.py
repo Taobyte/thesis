@@ -143,20 +143,15 @@ class BaseLightningModule(L.LightningModule):
         # self.compute_shap_values()
         pass
 
-    def get_batch_size(self, batch):
-        look_back_window, prediction_window, input, output, mean, std = batch
-
-        return input.size(0)
-
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
-        _, _, look_back_window_norm, prediction_window_norm, _, _ = batch
+        _, look_back_window_norm, prediction_window_norm = batch
         loss = self.model_specific_train_step(
             look_back_window_norm, prediction_window_norm
         )
         return loss
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
-        _, _, look_back_window_norm, prediction_window_norm, _, _ = batch
+        _, look_back_window_norm, prediction_window_norm = batch
         loss = self.model_specific_val_step(
             look_back_window_norm, prediction_window_norm
         )
@@ -206,11 +201,8 @@ class BaseLightningModule(L.LightningModule):
     def evaluate(self, batch, batch_idx):
         (
             look_back_window,
-            prediction_window,
             look_back_window_norm,
-            _,
-            mean,
-            std,
+            prediction_window_norm,
         ) = batch
         self.batch_size.append(look_back_window.shape[0])
         # Prediction
@@ -220,12 +212,25 @@ class BaseLightningModule(L.LightningModule):
             preds = self.model_forward(look_back_window_norm)
 
         preds = preds[:, :, : self.target_channel_dim]
-        assert preds.shape == prediction_window.shape
+        assert preds.shape == prediction_window_norm.shape
 
         if self.normalization == "global":
+            device = look_back_window_norm.device
+            train_dataset = self.trainer.datamodule.train_dataset
+            mean, std = train_dataset.mean, train_dataset.std
+            mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
+            std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
             preds = global_z_denorm(preds, self.local_norm_channels, mean, std)
+            prediction_window = global_z_denorm(
+                prediction_window_norm, self.local_norm_channels, mean, std
+            )
         elif self.normalization == "difference":
             preds = undo_differencing(look_back_window, preds)
+            prediction_window = undo_differencing(
+                look_back_window, prediction_window_norm
+            )
+        else:
+            prediction_window = prediction_window_norm
 
         # Metric Calculation
         metrics, current_metrics = self.evaluator(

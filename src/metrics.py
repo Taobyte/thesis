@@ -223,7 +223,7 @@ def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
 
 
 def naive_mae(target: np.ndarray, look_back_window: np.ndarray) -> float:
-    last_value = look_back_window[:, -1:, :]
+    last_value = look_back_window[:, -1:, : target.shape[-1]]
     diff = mae(target, last_value)
     return diff
 

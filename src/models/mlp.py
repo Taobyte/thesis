@@ -108,12 +108,16 @@ class MLP(BaseLightningModule):
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
+        preds = preds[:, :, : prediction_window.shape[-1]]
+        assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
         preds = self.model(look_back_window)
+        preds = preds[:, :, : prediction_window.shape[-1]]
+        assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss

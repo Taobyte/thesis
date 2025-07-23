@@ -25,4 +25,4 @@ datamodule:
   dynamic_exogenous_variables: 1 # dynamic activity information is locally normalized
   # static_exogenous_variables: 12 # Continuous: AGE, HEIGHT, WEIGHT Binary: GENDER Categorical: SKIN, SPORT
   static_exogenous_variables: 9 # we have 9 different activity types the participants perform
-  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}, ${use_only_exo}}
+  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}, ${use_only_exo}, ${use_perfect_info}}

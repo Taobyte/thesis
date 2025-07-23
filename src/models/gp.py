@@ -199,6 +199,7 @@ class Model(gpytorch.Module):
 
         self.num_tasks = num_tasks
         self.train_dataset_length = train_dataset_length
+        self.use_feature_extractor = use_feature_extractor
 
         self.feature_extractor = (
             TimeSeriesFeatureExtractor(
@@ -230,7 +231,8 @@ class Model(gpytorch.Module):
 
     def forward(self, x):
         features = self.feature_extractor(x)
-        features = self.scale_to_bounds(features)
+        if self.use_feature_extractor:
+            features = self.scale_to_bounds(features)
         res = self.gp_layer(features)
         return res
 
@@ -242,6 +244,7 @@ class GaussianProcess(BaseLightningModule):
         use_feature_extractor: bool = False,
         learning_rate: int = 0.001,
         jitter: float = 1e-6,
+        use_norm: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -256,6 +259,7 @@ class GaussianProcess(BaseLightningModule):
         self.mae_loss = torch.nn.L1Loss()
 
         self.use_feature_extractor = use_feature_extractor
+        self.use_norm = use_norm
 
     def model_forward(self, look_back_window: torch.Tensor):
         if self.use_norm:
