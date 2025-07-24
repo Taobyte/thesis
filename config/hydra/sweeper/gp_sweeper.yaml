@@ -2,11 +2,10 @@ defaults:
  -  shared_sweeper
 
 params:
-  model.trainer.max_epochs: 5 # choice(5, 10, 20, 30)
-  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
+  model.trainer.max_epochs: 20 # choice(5, 10, 20, 30)
+  model.n_points: choice(300, 500, 1000, 1500, 2000)
 
+  model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
   model.model.num_latents: int(interval(1, 10))
   model.model.kernel: choice("rbf", "matern", "rq") # "periodic"
   model.model.use_linear_trend: choice(0, 1) # 0 = False , 1 = True
-  model.model.periodic_type: "" # remove, memory intensive and not sure how relevant. choice("multiplicative", "additive", "")
-  model.n_points: choice(500, 1000, 1500, 2000)

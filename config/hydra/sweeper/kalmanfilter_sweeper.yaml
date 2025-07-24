@@ -3,10 +3,6 @@ defaults:
 
 params:
   model.model.hidden_dim: int(interval(8, 512))
-  model.pl_model.exo_weight: interval(0,1)
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
-  model.pl_model.weight_decay: tag(log, interval(1e-6, 1e-2))
-  model.pl_model.loss: "MSE"
-  # model.pl_model.loss:  choice("MSE", "MAE", "SMAPE") 
-  # model.data.batch_size: choice(32, 64, 128, 256)
+  model.pl_model.weight_decay: tag(log, interval(1e-8, 0.2))
 

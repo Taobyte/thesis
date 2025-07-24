@@ -6,9 +6,9 @@ params:
   model.pl_model.verbose: False
 
   model.model.n_estimators: int(interval(50, 1000))
-  model.model.learning_rate: interval(1e-4, 0.3) # tag(log, interval(1e-4, 2.0))
-  model.model.max_depth: int(interval(2,12)) 
-  model.model.reg_alpha: interval(1e-5, 100.0) # tag(log, interval(1e-5, 10.0))
-  model.model.reg_lambda: interval(1e-5, 100.0) # tag(log, interval(1e-5, 10.0))
+  model.model.learning_rate: tag(log, interval(1e-4, 0.3))
+  model.model.max_depth: int(interval(2, 12))
+  model.model.reg_alpha: tag(log, interval(1e-5, 100.0))
+  model.model.reg_lambda: tag(log, interval(1e-5, 100.0))
   model.model.subsample: interval(0.5, 1.0)
-  model.model.colsample_bytree: interval(0.5, 1.0) 
+  model.model.colsample_bytree: interval(0.5, 1.0)

@@ -33,9 +33,9 @@ def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
     elif config.model.name in ["exactgp", "xgboost"]:
         lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
+        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
         model_kwargs["lbw_train_dataset"] = lbw_train_dataset
         model_kwargs["pw_train_dataset"] = pw_train_dataset
-        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
         model_kwargs["lbw_val_dataset"] = lbw_val_dataset
         model_kwargs["pw_val_dataset"] = pw_val_dataset
 

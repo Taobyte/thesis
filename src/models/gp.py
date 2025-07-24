@@ -3,6 +3,7 @@ import torch.nn as nn
 import gpytorch
 import gpytorch.settings
 
+from torch import Tensor
 from einops import rearrange
 from gpytorch.models import ApproximateGP
 from gpytorch.variational import (
@@ -10,8 +11,9 @@ from gpytorch.variational import (
 )
 from gpytorch.mlls import VariationalELBO
 from gpytorch.likelihoods import MultitaskGaussianLikelihood
+from gpytorch.distributions import MultivariateNormal
 
-from typing import Tuple
+from typing import Tuple, Any
 
 from src.models.utils import BaseLightningModule
 
@@ -45,7 +47,7 @@ class TimeSeriesFeatureExtractor(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x):  # x: (B, T, C)
+    def forward(self, x: Tensor):  # x: (B, T, C)
         x = x.permute(0, 2, 1)  # -> (B, C, T)
         x = self.net(x)  # -> (B, hidden_dim, 1)
         x = x.squeeze(-1)  # -> (B, hidden_dim)
@@ -60,10 +62,10 @@ class TimeSeriesFeatureExtractor(nn.Module):
 class GPModel(ApproximateGP):
     def __init__(
         self,
-        inducing_points,
+        inducing_points: Tensor,
         train_dataset_length: int,
-        num_latents=3,
-        num_tasks=3,
+        num_latents: int = 3,
+        num_tasks: int = 3,
         kernel: str = "rbf",
         use_linear_trend: bool = False,
         periodic_type: str = "",
@@ -171,7 +173,7 @@ class GPModel(ApproximateGP):
                 kernel, batch_shape=torch.Size([num_latents])
             )
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> MultivariateNormal:
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
 
@@ -183,8 +185,8 @@ class Model(gpytorch.Module):
         self,
         inducing_points: torch.Tensor,
         train_dataset_length: int,
-        num_latents=3,
-        num_tasks=3,
+        num_latents: int = 3,
+        num_tasks: int = 3,
         kernel: str = "rbf",
         use_linear_trend: bool = False,
         periodic_type: str = "",
@@ -193,7 +195,7 @@ class Model(gpytorch.Module):
         out_dim: int = 16,
         dropout: float = 0.2,
         use_feature_extractor: bool = False,
-        grid_bounds=(-10.0, 10.0),
+        grid_bounds: Tuple[float, float] = (-10.0, 10.0),
     ):
         super(Model, self).__init__()
 
@@ -229,7 +231,7 @@ class Model(gpytorch.Module):
             out_dim=out_dim,
         )
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         features = self.feature_extractor(x)
         if self.use_feature_extractor:
             features = self.scale_to_bounds(features)
@@ -240,12 +242,12 @@ class Model(gpytorch.Module):
 class GaussianProcess(BaseLightningModule):
     def __init__(
         self,
-        model,
+        model: Model,
         use_feature_extractor: bool = False,
-        learning_rate: int = 0.001,
+        learning_rate: float = 0.001,
         jitter: float = 1e-6,
         use_norm: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
@@ -261,7 +263,7 @@ class GaussianProcess(BaseLightningModule):
         self.use_feature_extractor = use_feature_extractor
         self.use_norm = use_norm
 
-    def model_forward(self, look_back_window: torch.Tensor):
+    def model_forward(self, look_back_window: torch.Tensor) -> Tuple[Tensor, Tensor]:
         if self.use_norm:
             means = look_back_window.mean(1, keepdim=True).detach()
             look_back_window = look_back_window - means
@@ -294,8 +296,8 @@ class GaussianProcess(BaseLightningModule):
         return mean, std
 
     def _shared_step(
-        self, look_back_window, prediction_window
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tuple[Tensor, Tensor]:
         if not self.use_feature_extractor:
             _, _, C = prediction_window.shape
             look_back_window = rearrange(
@@ -308,12 +310,16 @@ class GaussianProcess(BaseLightningModule):
         mae_loss = self.mae_loss(preds.mean, prediction_window)
         return loss, mae_loss
 
-    def model_specific_train_step(self, look_back_window, prediction_window):
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         loss, _ = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window):
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         loss, mae_loss = self._shared_step(look_back_window, prediction_window)
         if self.tune:
             loss = mae_loss

@@ -9,6 +9,5 @@ use_norm_baseline: False
 
 use_only_exogenous_features: False 
 use_perfect_info: False
-beta: 0.5
 
 loss_fn: "MSE"

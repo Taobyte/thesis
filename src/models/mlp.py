@@ -1,6 +1,8 @@
 import torch
 
+from torch import Tensor
 from einops import rearrange
+from typing import Any
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
@@ -11,7 +13,6 @@ class Model(torch.nn.Module):
         self,
         look_back_window: int = 5,
         prediction_window: int = 3,
-        base_channel_dim: int = 1,
         input_channels: int = 1,
         hid_dim: int = 10,
         n_hid_layers: int = 2,
@@ -54,7 +55,7 @@ class Model(torch.nn.Module):
         self.use_norm = use_norm
         self.autoregressive = autoregressive
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         if self.use_norm:
             means = x.mean(1, keepdim=True).detach()
             x = x - means
@@ -63,8 +64,8 @@ class Model(torch.nn.Module):
 
         x = rearrange(x, "B T C -> B (T C)")
         if self.autoregressive:
-            preds = []
-            for h in range(self.prediction_window):
+            preds: list[Tensor] = []
+            for _ in range(self.prediction_window):
                 next_pred = self.network(x)
                 preds.append(next_pred)
                 x_unflattened = rearrange(x, "B (T C) -> B T C", C=self.input_channels)
@@ -96,17 +97,19 @@ class MLP(BaseLightningModule):
         model: torch.nn.Module,
         learning_rate: float = 0.001,
         loss: str = "MSE",
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
         self.criterion = get_loss_fn(loss)
 
-    def model_forward(self, look_back_window):
+    def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
-    def model_specific_train_step(self, look_back_window, prediction_window):
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
@@ -114,7 +117,9 @@ class MLP(BaseLightningModule):
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window):
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
