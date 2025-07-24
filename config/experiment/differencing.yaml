@@ -8,7 +8,6 @@ use_static_features: False
 
 use_only_exogenous_features: False 
 use_perfect_info: False
-beta: 0.5
 
 # Non-Stationary Experiments
 use_norm_dl: True

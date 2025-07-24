@@ -15,7 +15,7 @@ model:
   smoothness_weight: 0.01
   reconstruction_weight: 0.0
 
-  use_norm: True
+  use_norm: ${use_norm_baseline}
 
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter

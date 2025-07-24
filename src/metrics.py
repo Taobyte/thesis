@@ -13,12 +13,20 @@
 import torch
 import numpy as np
 
+from numpy.typing import NDArray
+from typing import Optional
+
 
 class Evaluator:
     def __init__(self):
         super().__init__()
 
-    def get_sequence_metrics(self, targets, preds, look_back_window):
+    def get_sequence_metrics(
+        self,
+        targets: NDArray[np.float32],
+        preds: NDArray[np.float32],
+        look_back_window: NDArray[np.float32],
+    ) -> dict[str, float]:
         metrics = {
             "MSE": mse(targets, preds),
             "MAE": mae(targets, preds),
@@ -41,8 +49,8 @@ class Evaluator:
 
     def get_metrics(
         self,
-        targets: torch.Tensor,
-        forecasts: torch.Tensor,
+        targets: NDArray[np.float32],
+        forecasts: NDArray[np.float32],
         look_back_window: torch.Tensor = None,
     ):
         """
@@ -58,7 +66,7 @@ class Evaluator:
         Dict[String, float]
             the metric values of the batch
         """
-        seq_metrics = {}
+        seq_metrics: dict[str, float] = {}
 
         # Calculate metrics for each sequence in the batch
         for i in range(targets.shape[0]):
@@ -77,7 +85,7 @@ class Evaluator:
         self,
         targets,
         forecasts,
-        look_back_window: torch.Tensor = None,
+        look_back_window: Optional[torch.Tensor] = None,
     ):
         """
 
@@ -106,9 +114,9 @@ class Evaluator:
 
 
 def dir_acc_improved_single_step(
-    preds: np.ndarray,
-    targets: np.ndarray,
-    look_back_window: np.ndarray,
+    preds: NDArray[np.float32],
+    targets: NDArray[np.float32],
+    look_back_window: NDArray[np.float32],
     epsilon: float = 1e-6,
 ) -> float:
     """
@@ -145,9 +153,9 @@ def dir_acc_improved_single_step(
 
 
 def dir_acc_full_horizon(
-    preds: np.ndarray,
-    targets: np.ndarray,
-    look_back_window: np.ndarray,
+    preds: NDArray[np.float32],
+    targets: NDArray[np.float32],
+    look_back_window: NDArray[np.float32],
     epsilon: float = 1e-6,
 ) -> float:
     """
@@ -163,7 +171,7 @@ def dir_acc_full_horizon(
     Returns:
         Accuracy score between 0 and 1 where 1 = perfect direction prediction
     """
-    B, T, C = targets.shape
+    _, _, C = targets.shape
 
     # Initialize previous values for directional calculation
     # For the first step (t=0) of the prediction, the 'previous' value is the last look-back value.
@@ -192,14 +200,14 @@ def dir_acc_full_horizon(
     return np.mean(ground_truth_direction == prediction_direction)
 
 
-def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
+def correlation(preds: NDArray[np.float32], targets: NDArray[np.float32]) -> float:
     """
     Computes the mean Pearson correlation between predictions and targets
     across batch and channels.
 
     Args:
-        preds (np.ndarray): Predicted values, shape (B, T, C)
-        targets (np.ndarray): Ground truth values, shape (B, T, C)
+        preds (NDArray[np.float32]): Predicted values, shape (B, T, C)
+        targets (NDArray[np.float32]): Ground truth values, shape (B, T, C)
 
     Returns:
         float: Mean Pearson correlation over (B, C)
@@ -222,17 +230,19 @@ def correlation(preds: np.ndarray, targets: np.ndarray) -> float:
     return mean_corr
 
 
-def naive_mae(target: np.ndarray, look_back_window: np.ndarray) -> float:
+def naive_mae(
+    target: NDArray[np.float32], look_back_window: NDArray[np.float32]
+) -> float:
     last_value = look_back_window[:, -1:, : target.shape[-1]]
     diff = mae(target, last_value)
     return diff
 
 
-def mae(target: np.ndarray, forecast: np.ndarray) -> float:
+def mae(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
     return np.mean(np.abs(target - forecast))
 
 
-def mse(target: np.ndarray, forecast: np.ndarray) -> float:
+def mse(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
     r"""
     .. math::
 
@@ -241,7 +251,7 @@ def mse(target: np.ndarray, forecast: np.ndarray) -> float:
     return np.mean(np.square(target - forecast))
 
 
-def abs_error(target: np.ndarray, forecast: np.ndarray) -> float:
+def abs_error(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
     r"""
     .. math::
 
@@ -268,7 +278,11 @@ def abs_target_mean(target) -> float:
     return np.mean(np.abs(target))
 
 
-def mase(target: np.ndarray, forecast: np.ndarray, naive_error: np.ndarray) -> float:
+def mase(
+    target: NDArray[np.float32],
+    forecast: NDArray[np.float32],
+    naive_error: NDArray[np.float32],
+) -> float:
     r"""
     .. math::
 
@@ -282,7 +296,7 @@ def mase(target: np.ndarray, forecast: np.ndarray, naive_error: np.ndarray) -> f
     return np.mean(mase)
 
 
-def mape(target: np.ndarray, forecast: np.ndarray) -> float:
+def mape(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
     r"""
     .. math::
 
@@ -293,7 +307,7 @@ def mape(target: np.ndarray, forecast: np.ndarray) -> float:
     return np.mean(np.abs(target - forecast) / np.abs(target))
 
 
-def smape(target: np.ndarray, forecast: np.ndarray) -> float:
+def smape(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
     r"""
     .. math::
 

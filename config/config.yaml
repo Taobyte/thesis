@@ -30,7 +30,6 @@ use_dynamic_features: ${experiment.use_dynamic_features}
 use_static_features: ${experiment.use_static_features}
 use_only_exo: ${experiment.use_only_exogenous_features}
 use_perfect_info: ${experiment.use_perfect_info}
-beta: ${experiment.beta}
 loss_fn: ${experiment.loss_fn} # can be "MSE", "SMAPE" or "MAE"
 
 # Non-Stationary Experiments

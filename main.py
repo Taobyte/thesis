@@ -49,7 +49,6 @@ def main(config: DictConfig) -> Optional[float]:
             normalization=config.normalization,
             use_only_exo=config.use_only_exo,
             use_perfect_info=config.use_perfect_info,
-            beta=config.beta,
         )
         model_kwargs = get_model_kwargs(config, datamodule)
         model = instantiate(config.model.model, **model_kwargs)

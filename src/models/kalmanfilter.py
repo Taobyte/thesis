@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd.functional as AF
 
-from src.losses import get_loss_fn
-from src.models.utils import BaseLightningModule
-
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple
+
+from src.losses import get_loss_fn
+from src.models.utils import BaseLightningModule
 
 
 class TransitionModule(nn.Module):
@@ -548,7 +548,7 @@ class Model(BaseKalmanFilter):
         pred_observations = result["recon_observations"]
 
         # Compute base losses
-        losses = {}
+        losses: dict[str, torch.Tensor] = {}
 
         # Primary loss
         if true_states is not None:
@@ -588,7 +588,7 @@ class Model(BaseKalmanFilter):
 
         current_state = prediction_dict["filtered_states"][:, -1, :]
         prediction = lookback_seq[:, -1, :].unsqueeze(1)
-        preds = []
+        preds: list[torch.Tensor] = []
         for _ in range(self.prediction_window):
             if self.control_dim > 0:
                 last_pred_control = prediction[:, 0, self.target_channel_dim :]
@@ -629,7 +629,7 @@ class KalmanFilter(BaseLightningModule):
 
         self.exo_weight = exo_weight
 
-    def model_forward(self, look_back_window):
+    def model_forward(self, look_back_window: torch.Tensor):
         assert len(look_back_window.shape) == 3
 
         # look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
@@ -637,7 +637,9 @@ class KalmanFilter(BaseLightningModule):
 
         return preds[:, :, : self.model.target_channel_dim]
 
-    def model_specific_train_step(self, look_back_window, prediction_window):
+    def model_specific_train_step(
+        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
+    ):
         preds = self.model(look_back_window)
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
@@ -648,7 +650,9 @@ class KalmanFilter(BaseLightningModule):
 
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window):
+    def model_specific_val_step(
+        self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
+    ):
         preds = self.model_forward(look_back_window)
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape

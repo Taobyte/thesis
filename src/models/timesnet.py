@@ -16,6 +16,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
 
+from torch import Tensor
+from typing import Any, Tuple
+
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
 
@@ -27,6 +30,7 @@ def adjust_learning_rate(
     learning_rate: float,
     train_epochs: int = 10,
 ):
+    lr_adjust: dict[int, float] = {}
     # lr = learning_rate * (0.2 ** (epoch // 2))
     if lradj == "type1":
         lr_adjust = {epoch: learning_rate * (0.5 ** ((epoch - 1) // 1))}
@@ -252,19 +256,16 @@ class TimesBlock(nn.Module):
             Inception_Block_V1(d_ff, d_model, num_kernels=num_kernels),
         )
 
-    def forward(self, x):
-        # pdb.set_trace()
+    def forward(self, x: Tensor):
         B, T, N = x.size()
         period_list, period_weight = FFT_for_Period(x, self.k)
 
-        # pdb.set_trace()
-        res = []
+        res: list[Tensor] = []
         for i in range(
             min(self.k, len(period_list))
         ):  # we need to loop over the length used in FFT_for_Period
             period = period_list[i]
 
-            # pdb.set_trace()
             # padding
             if (self.look_back_window + self.prediction_window) % period != 0:
                 length = (
@@ -407,7 +408,7 @@ class TimesNet(BaseLightningModule):
         lradj: str = "type1",
         beta_1: float = 0.9,
         beta_2: float = 0.999,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.lradj = lradj
@@ -421,12 +422,14 @@ class TimesNet(BaseLightningModule):
         B, T, _ = x.shape
         return torch.zeros((B, T, 5), device=x.device).float()
 
-    def model_forward(self, look_back_window):
+    def model_forward(self, look_back_window: Tensor):
         time = self._generate_time_tensor(look_back_window)
         preds = self.model(look_back_window, time)
         return preds
 
-    def _shared_step(self, look_back_window, prediction_window) -> float:
+    def _shared_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tuple[Tensor, Tensor]:
         preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]  # remove activity channels
 
@@ -436,12 +439,16 @@ class TimesNet(BaseLightningModule):
         mae_loss = mae_criterion(preds, prediction_window)
         return loss, mae_loss
 
-    def model_specific_train_step(self, look_back_window, prediction_window) -> float:
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
         loss, _ = self._shared_step(look_back_window, prediction_window)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window) -> float:
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
         val_loss, mae_loss = self._shared_step(look_back_window, prediction_window)
         if self.tune:
             val_loss = mae_loss

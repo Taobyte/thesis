@@ -5,6 +5,8 @@ import xgboost as xgb
 
 from xgboost import XGBRegressor
 from einops import rearrange
+from numpy.typing import NDArray
+from typing import Any, Tuple
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
@@ -15,10 +17,10 @@ from src.normalization import local_z_norm_numpy
 class XGBoostModel(torch.nn.Module):
     def __init__(
         self,
-        lbw_train_dataset: np.ndarray,
-        pw_train_dataset: np.ndarray,
-        lbw_val_dataset: np.ndarray,
-        pw_val_dataset: np.ndarray,
+        lbw_train_dataset: NDArray[np.float32],
+        pw_train_dataset: NDArray[np.float32],
+        lbw_val_dataset: NDArray[np.float32],
+        pw_val_dataset: NDArray[np.float32],
         learning_rate: float = 0.001,
         loss: str = "MSE",
         n_estimators: int = 300,
@@ -74,11 +76,11 @@ class XGBoostModel(torch.nn.Module):
 class XGBoost(BaseLightningModule):
     def __init__(
         self,
+        model: XGBoostModel,
         loss: str = "MSE",
-        model: torch.nn.Module = None,
         verbose: bool = False,
         use_norm: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
@@ -178,10 +180,14 @@ class XGBoost(BaseLightningModule):
         self.log_feature_importance()
         # self.log_tree_plots()
 
-    def training_step(self, batch, batch_idx):
-        return None
+    def training_step(
+        self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int
+    ):
+        return torch.Tensor()
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int
+    ):
         self.log(
             "val_loss", self.final_val_loss, on_epoch=True, on_step=True, logger=True
         )
