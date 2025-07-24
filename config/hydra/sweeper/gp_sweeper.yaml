@@ -4,7 +4,7 @@ defaults:
 params:
   n_trials: 30
   model.trainer.max_epochs: 20 # choice(5, 10, 20, 30)
-  model.n_points: choice(300, 500, 1000, 1500, 2000)
+  model.n_points: choice(200, 300, 400, 500)
 
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
   model.model.num_latents: int(interval(1, 10))
