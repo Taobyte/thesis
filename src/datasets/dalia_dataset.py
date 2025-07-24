@@ -1,11 +1,15 @@
 import numpy as np
-import pandas as pd
 import torch
+# import pandas as pd
 
+
+from torch import Tensor
 from torch.utils.data import Dataset
+from numpy.typing import NDArray
 from pathlib import Path
 from typing import Tuple
 from sklearn.preprocessing import OneHotEncoder
+from typing import Any
 
 from src.datasets.utils import BaseDataModule
 
@@ -17,10 +21,10 @@ def dalia_load_data(
     use_dynamic_features: bool,
     use_static_features: bool,
     window_statistic: str = "mean",
-) -> Tuple[list[np.ndarray], np.ndarray, np.ndarray]:
-    static_feature_df = pd.read_csv(path + "/static_participant_features.csv")
+) -> Tuple[list[NDArray[np.float32]], NDArray[np.float32], NDArray[np.float32]]:
+    # static_feature_df = pd.read_csv(path + "/static_participant_features.csv")
 
-    loaded_series = []
+    loaded_series: list[NDArray[np.float32]] = []
     for i in participants:
         label = "S" + str(i)
         data_path = Path(path) / (label + ".npz")
@@ -55,12 +59,12 @@ def dalia_load_data(
                 )
                 window_size = 8
                 stride = 2
-                argmax_activities = []
+                argmax_activities: list[int] = []
                 activity_label_1hz = activity[::4].astype(np.int64)  # activity is 4Hz
                 for i in range(0, len(activity_label_1hz) - window_size + 1, stride):
                     window = activity_label_1hz[i : i + window_size, :]
                     counts = np.bincount(window[:, 0], minlength=9)
-                    argmax_activities.append(np.argmax(counts))
+                    argmax_activities.append(int(np.argmax(counts)))
 
                 processed_activity = np.array(argmax_activities)[:, np.newaxis]
                 assert len(processed_activity) == len(series)
@@ -79,10 +83,10 @@ def dalia_load_data(
     return loaded_series, mean, std
 
 
-class DaLiADataset(Dataset):
+class DaLiADataset(Dataset[tuple[Tensor, Tensor]]):
     def __init__(
         self,
-        path: Path,
+        path: str,
         participants: list[int],
         use_dynamic_features: bool = False,
         use_static_features: bool = False,
@@ -115,7 +119,7 @@ class DaLiADataset(Dataset):
     def __len__(self) -> int:
         return self.total_length
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         index = idx - self.cumulative_lengths[file_idx]
         window = self.data[file_idx][index : (index + self.window_length)]
@@ -129,11 +133,11 @@ class DaLiADataModule(BaseDataModule):
     def __init__(
         self,
         use_heart_rate: bool = False,
-        train_participants: list = [2, 3, 4, 5, 6, 7, 8, 12, 15],
-        val_participants: list = [9, 10, 11],
-        test_participants: list = [1, 13, 14],
+        train_participants: list[int] = [2, 3, 4, 5, 6, 7, 8, 12, 15],
+        val_participants: list[int] = [9, 10, 11],
+        test_participants: list[int] = [1, 13, 14],
         window_statistic: str = "mean",
-        **kwargs,
+        **kwargs: dict[str, Any],
     ):
         super().__init__(**kwargs)
 
@@ -145,7 +149,7 @@ class DaLiADataModule(BaseDataModule):
 
         self.window_statistic = window_statistic
 
-    def setup(self, stage: str = None):
+    def setup(self, stage: str = "fit"):
         if stage == "fit":
             self.train_dataset = DaLiADataset(
                 self.data_dir,

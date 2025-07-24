@@ -10,6 +10,8 @@ __pycache__/
 *.pyc
 *.pyo
 
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

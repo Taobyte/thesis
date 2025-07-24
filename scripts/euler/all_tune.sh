@@ -1,11 +1,7 @@
 MODEL=${1}
 NORMALIZATION=${2}
 LBWS=(5 10 20 30 60)
-DYNAMIC=(True False)
-for b in "${DYNAMIC[@]}"
+for lbw in "${LBWS[@]}"
 do
-	for lbw in "${LBWS[@]}"
-	do
-		sbatch scripts/euler/tune.sh "$MODEL" "$NORMALIZATION" "$b" "$lbw" 3
-	done
+	sbatch scripts/euler/tune.sh "$MODEL" "$NORMALIZATION" "$lbw" 3
 done

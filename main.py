@@ -10,14 +10,16 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import get_original_cwd
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, Callback
 from typing import Optional
 
 from src.utils import (
     setup_wandb_logger,
+    get_optuna_name,
     compute_square_window,
     compute_input_channel_dims,
-    get_optuna_name,
+    get_min,
+    resolve_str,
 )
 from src.models.utils import get_model_kwargs
 
@@ -28,8 +30,8 @@ OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
 OmegaConf.register_new_resolver(
     "compute_input_channel_dims", compute_input_channel_dims
 )
-OmegaConf.register_new_resolver("min", lambda x, y: min(int(x), int(y)))
-OmegaConf.register_new_resolver("str", lambda x: str(x))
+OmegaConf.register_new_resolver("min", get_min)
+OmegaConf.register_new_resolver("str", resolve_str)
 
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
@@ -61,7 +63,7 @@ def main(config: DictConfig) -> Optional[float]:
             probabilistic_models=config.probabilistic_models,
         )
 
-        callbacks = []
+        callbacks: list[Callback] = []
 
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",
@@ -95,9 +97,11 @@ def main(config: DictConfig) -> Optional[float]:
 
         return datamodule, pl_model, trainer, callbacks
 
-    def delete_checkpoint(trainer, checkpoint_callback):
+    def delete_checkpoint(trainer: L.Trainer, checkpoint_callback: ModelCheckpoint):
         if trainer.is_global_zero:
-            best_checkpoint_path = checkpoint_callback.best_model_path
+            best_checkpoint_path: str = (
+                checkpoint_callback.best_model_path
+            )  # ignore:type
             try:
                 os.remove(best_checkpoint_path)
                 print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
@@ -108,7 +112,7 @@ def main(config: DictConfig) -> Optional[float]:
         dataset_name = config.dataset.name
 
         # loop over all folds and return average val loss performance
-        val_losses = []
+        val_losses: list[float] = []
         for i in range(config.n_folds):
             if dataset_name in config.fold_datasets:
                 base_path = get_original_cwd()

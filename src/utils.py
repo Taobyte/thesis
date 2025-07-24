@@ -14,7 +14,7 @@ def create_group_run_name(
     look_back_window: int,
     prediction_window: int,
     fold_nr: int = 0,
-    fold_datasets: list[str] = None,
+    fold_datasets: list[str] = ["dalia", "wildppg", "ieee"],
     normalization: str = "global",
     experiment_name: str = "endo_only",
 ) -> Tuple[str, str, list[str]]:
@@ -47,18 +47,16 @@ def create_group_run_name(
     return group_name, run_name, tags
 
 
-# TODO: Add in Experiment name!
 def get_optuna_name(
     dataset_name: str,
     model_name: str,
     use_heart_rate: bool,
     look_back_window: int,
     prediction_window: int,
-    use_dynamic_features: bool,
-    use_static_features: bool,
     fold_nr: int = 0,
-    fold_datasets: list[str] = None,
-    normalization: str = "local",
+    fold_datasets: list[str] = ["dalia", "wildppg", "ieee"],
+    normalization: str = "global",
+    experiment_name: str = "endo_exo",
 ):
     group_name, _, tags = create_group_run_name(
         dataset_name,
@@ -66,11 +64,10 @@ def get_optuna_name(
         use_heart_rate,
         look_back_window,
         prediction_window,
-        use_dynamic_features,
-        use_static_features,
         fold_nr,
         fold_datasets,
         normalization,
+        experiment_name,
     )
     # tags[1] stores the models name
     return f"optuna_{tags[1]}_{group_name}"
@@ -122,9 +119,17 @@ def setup_wandb_logger(
 # -------------------------------------------------------------------------------------------------------
 
 
+def get_min(x: str, y: str) -> int:
+    return min(int(x), int(y))
+
+
+def resolve_str(x: int) -> str:
+    return str(x)
+
+
 # this function is needed, because AdaMSHyper does not support short look_back_window lengths
 # the custom resolver function is used in the model definition config/model/adamshyper.yaml
-def compute_square_window(seq_len, max_window=4):
+def compute_square_window(seq_len: int, max_window: int = 4) -> list[int]:
     """
     Finds the largest equal factors [k,k] such that k*k <= seq_len.
     Defaults to [4,4] if to valid window exists.

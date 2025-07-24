@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import wandb
 
+from torch import Tensor
+
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
 
@@ -24,10 +26,12 @@ class Linear(BaseLightningModule):
         self.use_scheduler = use_scheduler
         self.weight_decay = weight_decay
 
-    def model_forward(self, look_back_window):
+    def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
-    def model_specific_train_step(self, look_back_window, prediction_window):
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
@@ -35,7 +39,9 @@ class Linear(BaseLightningModule):
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window):
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         if self.tune:

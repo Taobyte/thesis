@@ -16,3 +16,10 @@ license = {text = "MIT"}
 [tool.setuptools]
 packages = ["src"]
 package-dir = {"" = "."}  
+
+
+[tool.pyright]
+include = ["src"]
+reportMissingImports = true 
+typeCheckingMode = "strict"
+

@@ -3,14 +3,24 @@ import random
 import torch
 import lightning as L
 
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
+from numpy.typing import NDArray
 from einops import rearrange
-from torch.utils.data import DataLoader
-from typing import Tuple
+from typing import Tuple, Optional
 
 from src.normalization import global_z_norm
 
 
 class BaseDataModule(L.LightningDataModule):
+    look_back_channel_dim: int
+    target_channel_dim: int
+    use_static_features: bool
+    use_dynamic_features: bool
+    static_exogenous_variables: int
+    dynamic_exogenous_variables: int
+    local_norm_channels: int
+
     def __init__(
         self,
         data_dir: str,
@@ -29,7 +39,6 @@ class BaseDataModule(L.LightningDataModule):
         normalization: str = "global",
         use_only_exo: bool = False,
         use_perfect_info: bool = False,
-        beta: float = 0.5,
     ):
         super().__init__()
 
@@ -63,11 +72,13 @@ class BaseDataModule(L.LightningDataModule):
 
         self.normalization = normalization
 
-        self.train_dataset = None
+        self.train_dataset: Optional[Dataset[NDArray[np.float32]]] = None
         self.val_dataset = None
         self.test_dataset = None
 
-    def postprocess_batch(self, look_back_window, prediction_window):
+    def postprocess_batch(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         B, _, C = look_back_window.shape
         device = look_back_window.device
         mean, std = self.train_dataset.mean, self.train_dataset.std
@@ -120,7 +131,7 @@ class BaseDataModule(L.LightningDataModule):
 
         return look_back_window, input, output
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -129,7 +140,7 @@ class BaseDataModule(L.LightningDataModule):
             collate_fn=self.collate_fn_with_postprocessing,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
             self.val_dataset,
             batch_size=min(self.batch_size, len(self.val_dataset)),
@@ -138,7 +149,7 @@ class BaseDataModule(L.LightningDataModule):
             collate_fn=self.collate_fn_with_postprocessing,
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
             self.test_dataset,
             batch_size=min(self.batch_size, len(self.test_dataset)),
@@ -147,7 +158,9 @@ class BaseDataModule(L.LightningDataModule):
             collate_fn=self.collate_fn_with_postprocessing,
         )
 
-    def collate_fn_with_postprocessing(self, batch):
+    def collate_fn_with_postprocessing(
+        self, batch: Tuple[NDArray[np.float32], NDArray[np.float32]]
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         look_back, prediction = zip(*batch)
         look_back = torch.stack(look_back)
         prediction = torch.stack(prediction)
@@ -208,7 +221,9 @@ class BaseDataModule(L.LightningDataModule):
 
         return len(self.train_dataset)
 
-    def _get_dataset(self, mode: str = "train") -> Tuple[np.ndarray, np.ndarray]:
+    def _get_dataset(
+        self, mode: str = "train"
+    ) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         """
         return z-normalized dataset
         """
@@ -241,11 +256,11 @@ class BaseDataModule(L.LightningDataModule):
 
         return lbws_dataset, pws_dataset
 
-    def get_train_dataset(self) -> np.ndarray:
+    def get_train_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("train")
 
-    def get_val_dataset(self) -> np.ndarray:
+    def get_val_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("val")
 
-    def get_test_dataset(self) -> np.ndarray:
+    def get_test_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("test")
