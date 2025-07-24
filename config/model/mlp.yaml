@@ -7,8 +7,10 @@ model:
   input_channels: ${dataset.datamodule.look_back_channel_dim}
   hid_dim: 32
   n_hid_layers: 2
+  dropout: 0.0
   activation: "relu" # can be tanh, relu or none
   autoregressive: False
+
   use_norm: ${use_norm_baseline}
 
 pl_model: 
