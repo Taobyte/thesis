@@ -3,7 +3,7 @@
 #SBATCH --gpus=1
 #SBATCH --gres=gpumem:24g
 #SBATCH --mem-per-cpu=24G
-#SBATCH --time=04:00:00
+#SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --job-name=tune_job
 #SBATCH --output=/cluster/project/holz/ckeusch/tune_logs/%x_%j.out

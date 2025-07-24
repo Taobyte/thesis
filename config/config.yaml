@@ -6,7 +6,7 @@ defaults:
   - path: local
   - folds: fold_0
   - experiment: endo_only
-  # - override hydra/sweeper: pattn_sweeperp
+  - override hydra/sweeper: linear_sweeper
 
 seed: 123
 overfit: False
