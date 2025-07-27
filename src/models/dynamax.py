@@ -2,11 +2,9 @@ import numpy as np
 import torch
 import jax.numpy as jnp
 import jax.random as jr
-import optax
 
-from functools import partial
 from jax import vmap
-from dynamax.hidden_markov_model import GaussianHMM
+from dynamax.hidden_markov_model import GaussianHMM, LinearAutoregressiveHMM
 from torch import Tensor
 from typing import Any, Tuple
 
@@ -27,8 +25,11 @@ class DynamaxLightningModule(BaseLightningModule):
         self,
         model: torch.nn.Module,
         target_channel_dim: int = 1,
+        look_back_window: int = 5,
         n_states: int = 3,
         n_iter: int = 100,
+        model_type: str = "GaussianHMM",
+        transition_matrix_stickiness: float = 10.0,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -36,12 +37,24 @@ class DynamaxLightningModule(BaseLightningModule):
 
         self.n_states = n_states
         self.n_iter = n_iter
+        self.model_type = model_type
 
-        self.model = GaussianHMM(
-            n_states,
-            emission_dim=target_channel_dim,
-            transition_matrix_stickiness=10.0,
-        )
+        if model_type == "GaussianHMM":
+            self.model = GaussianHMM(
+                n_states,
+                emission_dim=target_channel_dim,
+                transition_matrix_stickiness=transition_matrix_stickiness,
+            )
+        elif model_type == "LinearAutoregressiveHMM":
+            self.model = LinearAutoregressiveHMM(
+                n_states,
+                emission_dim=target_channel_dim,
+                num_lags=look_back_window,
+                transition_matrix_stickiness=transition_matrix_stickiness,
+            )
+        else:
+            raise NotImplementedError()
+
         self.automatic_optimization = False
 
     def on_train_epoch_start(self):
@@ -51,55 +64,81 @@ class DynamaxLightningModule(BaseLightningModule):
         emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
 
         key = jr.PRNGKey(self.seed)
-        init_params, props = self.model.initialize(key)
+        if self.model_type == "GaussianHMM":
+            init_params, props = self.model.initialize(key)
 
-        em_params, log_probs = self.model.fit_em(
-            init_params, props, emissions, num_iters=self.n_iter
-        )
+            em_params, log_probs = self.model.fit_em(
+                init_params, props, emissions, num_iters=self.n_iter
+            )
+        elif self.model_type == "LinearAutoregressiveHMM":
+            assert isinstance(self.model, LinearAutoregressiveHMM)
+            inputs = vmap(self.model.compute_inputs)(emissions)
+            params, props = self.model.initialize(
+                key=key, method="kmeans", emissions=emissions
+            )
+            em_params, _ = self.model.fit_em(params, props, emissions, inputs=inputs)
 
         self.em_params = em_params
 
     def model_forward(self, look_back_window: torch.Tensor) -> Tensor:
         batch_size, _, _ = look_back_window.shape
         look_back_window_jax = jnp.array(look_back_window.detach().cpu().numpy())
-
         params = self.em_params
-
-        preds = []
         key = jr.PRNGKey(self.seed)
 
-        for b in range(batch_size):
-            seq = look_back_window_jax[b]
+        if self.model_type == "GaussianHMM":
+            preds = []
 
-            posterior = self.model.smoother(params, seq)
+            for b in range(batch_size):
+                seq = look_back_window_jax[b]
 
-            final_state_probs = posterior.smoothed_probs[-1]  # (n_states,)
+                posterior = self.model.smoother(params, seq)
 
-            key, subkey = jr.split(key)
-            final_state = jr.choice(subkey, self.n_states, p=final_state_probs)
-
-            current_state = final_state
-            batch_preds = []
-
-            for h in range(self.prediction_window):
-                key, subkey = jr.split(key)
-                transition_probs = params.transitions.transition_matrix[current_state]
-                next_state = jr.choice(subkey, self.n_states, p=transition_probs)
+                final_state_probs = posterior.smoothed_probs[-1]  # (n_states,)
 
                 key, subkey = jr.split(key)
-                emission_mean = params.emissions.means[next_state]
-                emission_cov = params.emissions.covs[next_state]
+                final_state = jr.choice(subkey, self.n_states, p=final_state_probs)
 
-                # Sample from multivariate normal
-                emission = jr.multivariate_normal(subkey, emission_mean, emission_cov)
-                batch_preds.append(emission)
+                current_state = final_state
+                batch_preds = []
 
-                current_state = next_state
+                for h in range(self.prediction_window):
+                    key, subkey = jr.split(key)
+                    transition_probs = params.transitions.transition_matrix[
+                        current_state
+                    ]
+                    next_state = jr.choice(subkey, self.n_states, p=transition_probs)
 
-            preds.append(jnp.stack(batch_preds, axis=0))  # (H, emission_dim)
+                    key, subkey = jr.split(key)
+                    emission_mean = params.emissions.means[next_state]
+                    emission_cov = params.emissions.covs[next_state]
 
-        preds = jnp.stack(preds, axis=0)  # (B, H, emission_dim)
-        return torch.tensor(np.array(preds))
+                    # Sample from multivariate normal
+                    emission = jr.multivariate_normal(
+                        subkey, emission_mean, emission_cov
+                    )
+                    batch_preds.append(emission)
+
+                    current_state = next_state
+
+                preds.append(jnp.stack(batch_preds, axis=0))  # (H, emission_dim)
+
+            preds = jnp.stack(preds, axis=0)  # (B, H, emission_dim)
+        elif self.model_type == "LinearAutoregressiveHMM":
+            assert isinstance(self.model, LinearAutoregressiveHMM)
+            preds = []
+            for i in range(batch_size):
+                sampled_states, sampled_emissions = self.model.sample(
+                    params,
+                    key,
+                    self.prediction_window,
+                    prev_emissions=look_back_window_jax[i],
+                )
+
+                preds.append(sampled_emissions)
+
+            preds = jnp.stack(preds)
+        return torch.tensor(preds)
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int

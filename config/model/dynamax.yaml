@@ -5,7 +5,8 @@ model:
 
 pl_model: 
   _target_: src.models.dynamax.DynamaxLightningModule
-  n_states: 64
+  model_type: "LinearAutoregressiveHMM" # LinearAutoregressiveHMM or GaussianHMM
+  n_states: 6
   n_iter: 100
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
@@ -15,4 +16,4 @@ trainer:
   patience: 5
 
 data: 
-  batch_size: 256
+  batch_size: 1

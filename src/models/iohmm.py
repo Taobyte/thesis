@@ -1,7 +1,9 @@
+import pandas as pd
 import numpy as np
 import torch
 
-from hmmlearn import hmm
+from IOHMM import UnSupervisedIOHMM
+from IOHMM import OLS, DiscreteMNL, CrossEntropyMNL
 from torch import Tensor
 from typing import Any, Tuple
 
@@ -23,20 +25,37 @@ class HMMLightningModule(BaseLightningModule):
         model: torch.nn.Module,
         n_states: int = 3,
         n_iter: int = 100,
+        em_tol: float = 1e-6,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
-        self.remodel = hmm.GaussianHMM(
-            n_components=n_states, covariance_type="full", n_iter=n_iter, verbose=True
+        self.model = UnSupervisedIOHMM(
+            num_states=n_states, max_EM_iter=n_iter, EM_tol=em_tol
         )
+        self.model.set_models(
+            model_emissions=[OLS()],
+            model_transition=CrossEntropyMNL(solver="lbfgs"),
+            model_initial=CrossEntropyMNL(solver="lbfgs"),
+        )
+
         self.automatic_optimization = False
 
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
         train_dataset = datamodule.train_dataset.data
-        X = np.concatenate(train_dataset, axis=0)
-        lengths = [len(s) for s in train_dataset]
-        self.remodel.fit(X, lengths)
+
+        dfs = []
+        for s in train_dataset:
+            df = pd.DataFrame(s, columns=["emission"])
+            dfs.append(df)
+
+        self.model.set_inputs(
+            covariates_initial=[], covariates_transition=[], covariates_emissions=[[]]
+        )
+        self.model.set_outputs([["emission"]])
+        self.model.set_data(dfs)
+
+        self.model.train()
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         batch_size, _, _ = look_back_window.shape

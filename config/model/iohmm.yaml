@@ -1,0 +1,18 @@
+name: "iohmm"
+
+model:
+  _target_: src.models.hmm.HMM # dummy model we use hmmlearn
+
+pl_model: 
+  _target_: src.models.hmm.HMMLightningModule
+  n_states: 64
+  n_iter: 100
+  em_tol: 1e-6
+
+trainer:
+  max_epochs: 1
+  use_early_stopping: False
+  patience: 5
+
+data: 
+  batch_size: 256
