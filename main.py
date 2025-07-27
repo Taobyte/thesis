@@ -39,10 +39,6 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    multi_gpu_dict = {"devices": 1, "num_nodes": 1}
-    if config.use_multi_gpu:
-        multi_gpu_dict = config.multi
-
     def setup(config: DictConfig):
         datamodule = instantiate(
             config.dataset.datamodule,
@@ -60,6 +56,7 @@ def main(config: DictConfig) -> Optional[float]:
             normalization=config.normalization,
             tune=config.tune,
             probabilistic_models=config.probabilistic_models,
+            experiment_name=config.experiment.experiment_name,
         )
 
         callbacks: list[Callback] = []
@@ -91,7 +88,6 @@ def main(config: DictConfig) -> Optional[float]:
             limit_test_batches=10 if config.overfit else None,
             default_root_dir=config.path.checkpoint_path,
             num_sanity_val_steps=0,
-            **multi_gpu_dict,
         )
 
         return datamodule, pl_model, trainer, callbacks
@@ -161,18 +157,7 @@ def main(config: DictConfig) -> Optional[float]:
 
         print("Start Evaluation.")
         if config.model.name not in config.special_models:
-            if config.use_multi_gpu:
-                print("Testing on single GPU to avoid DistributedSampler replication.")
-                test_trainer = L.Trainer(
-                    logger=wandb_logger,
-                    accelerator="gpu",
-                    devices=1,
-                    num_nodes=1,
-                    default_root_dir=config.path.checkpoint_path,
-                    callbacks=callbacks,
-                )
-            else:
-                test_trainer = trainer
+            test_trainer = trainer
             if test_trainer.is_global_zero:
                 test_trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
 

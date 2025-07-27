@@ -4,46 +4,46 @@
   "5":
     "3":
       n_estimators: 684
-      learning_rate: 0.0262
+      learning_rate: 0.026
       max_depth: 8
-      reg_alpha: 0.0755
-      reg_lambda: 0.0029
-      subsample: 0.7050
-      colsample_bytree: 0.9264
+      reg_alpha: 0.076
+      reg_lambda: 0.003
+      subsample: 0.705
+      colsample_bytree: 0.926
   "10":
     "3":
       n_estimators: 325
-      learning_rate: 0.0302
+      learning_rate: 0.030
       max_depth: 8
-      reg_alpha: 0.3328
-      reg_lambda: 0.0034
-      subsample: 0.7183
-      colsample_bytree: 0.9387
+      reg_alpha: 0.333
+      reg_lambda: 0.003
+      subsample: 0.718
+      colsample_bytree: 0.939
   "20":
     "3":
-      n_estimators: 633
-      learning_rate: 0.01777308560716173
+      n_estimators: 896
+      learning_rate: 0.008
       max_depth: 7
-      reg_alpha: 6.394915085855849
-      reg_lambda: 8.13381074244437
-      subsample: 0.666725029376192
-      colsample_bytree: 0.847476227351301
+      reg_alpha: 0.000
+      reg_lambda: 0.001
+      subsample: 0.782
+      colsample_bytree: 0.980
   "30":
     "3":
-      n_estimators: 353
-      learning_rate: 0.047972556844951025
-      max_depth: 9
-      reg_alpha: 7.247322768434375
-      reg_lambda: 9.462662514184688
-      subsample: 0.7176003334417557
-      colsample_bytree: 0.9970916769991848
+      n_estimators: 401
+      learning_rate: 0.0289
+      max_depth: 8
+      reg_alpha: 0.059
+      reg_lambda: 0.000
+      subsample: 0.828
+      colsample_bytree: 0.958
   "60":
     "3":
-      n_estimators: 931
-      learning_rate: 0.008090843365793323
-      max_depth: 7
-      reg_alpha: 0.5543421173099102
-      reg_lambda: 6.277499191713574
-      subsample: 0.8418127297234378
-      colsample_bytree: 0.9446303961007114
+      n_estimators: 638
+      learning_rate: 0.081
+      max_depth: 6
+      reg_alpha: 0.396
+      reg_lambda: 0.018
+      subsample: 0.745
+      colsample_bytree: 0.941
   

@@ -31,7 +31,7 @@ def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str
             config.model.n_points, config.model.strategy
         )
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
-    elif config.model.name in ["exactgp", "xgboost"]:
+    elif config.model.name in config.numpy_models:
         lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
         lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
         model_kwargs["lbw_train_dataset"] = lbw_train_dataset
@@ -52,6 +52,7 @@ class BaseLightningModule(L.LightningModule):
         normalization: str = "local",
         tune: bool = False,
         probabilistic_models: list[str] = [],
+        experiment_name: str = "endo_only",
     ):
         super().__init__()
 
@@ -62,6 +63,7 @@ class BaseLightningModule(L.LightningModule):
         self.use_plots = use_plots
         self.normalization = normalization
         self.probabilistic_forecast_models = probabilistic_models
+        self.experiment_name = experiment_name
 
         self.evaluator = Evaluator()
 
@@ -116,6 +118,8 @@ class BaseLightningModule(L.LightningModule):
 
     def on_fit_start(self):
         datamodule: BaseDataModule = self.trainer.datamodule  # type: ignore
+        self.look_back_window = datamodule.look_back_window
+        self.prediction_window = datamodule.prediction_window
         self.look_back_channel_dim: int = datamodule.look_back_channel_dim
         self.target_channel_dim: int = datamodule.target_channel_dim
         self.use_static_features: bool = datamodule.use_static_features

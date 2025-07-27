@@ -1,25 +1,16 @@
 name: "hmm"
 
 model:
-  _target_: src.models.hmm.HMMWithPredictionLayer
-  base_dim: 128
-  target_channel_dim: ${dataset.datamodule.target_channel_dim}
-  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
-  look_back_window: ${look_back_window}
-  prediction_window: ${prediction_window}
-  temperature: 1.0
-  min_var: 1e-6
-  use_exo: ${use_dynamic_features}
+  _target_: src.models.hmm.HMM # dummy model we use hmmlearn
 
 pl_model: 
   _target_: src.models.hmm.HMMLightningModule
-  learning_rate: 0.01
-  deterministic: True
-  pred_loss_weight: 0.0
+  n_states: 64
+  n_iter: 100
 
 trainer:
-  max_epochs: 1000
-  use_early_stopping: True
+  max_epochs: 1
+  use_early_stopping: False
   patience: 5
 
 data: 

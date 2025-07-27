@@ -1,44 +1,18 @@
-# NOT TUNED
 dalia:
-  "True":
-    "5":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 32
-    "10":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 64
-    "20":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 128
-    "30":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 128
-    "60":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 256
-  "False":
-    "5":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 32
-    "10":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 64
-    "20":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 128
-    "30":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 128
-    "60":
-      "3":
-        learning_rate: 0.0005
-        hidden_dim: 256
+  "5":
+    learning_rate: 0.0001
+    weight_decay: 0.0007
+    state_dim: 394
+  "10":
+    learning_rate: 0.0002
+    weight_decay: 0.0011
+    state_dim: 120
+  "20":
+      learning_rate: 0.0005
+      hidden_dim: 128
+  "30":
+      learning_rate: 0.0005
+      hidden_dim: 128
+  "60":
+      learning_rate: 0.0005
+      hidden_dim: 256

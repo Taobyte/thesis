@@ -4,6 +4,7 @@ import pandas as pd
 import wandb
 
 from torch import Tensor
+from typing import Any
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
@@ -17,7 +18,7 @@ class Linear(BaseLightningModule):
         loss: str = "MSE",
         use_scheduler: bool = False,
         weight_decay: float = 1e-4,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
@@ -25,6 +26,8 @@ class Linear(BaseLightningModule):
         self.learning_rate = learning_rate
         self.use_scheduler = use_scheduler
         self.weight_decay = weight_decay
+
+        self.mae_criterion = torch.nn.L1Loss()
 
     def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
@@ -45,8 +48,7 @@ class Linear(BaseLightningModule):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         if self.tune:
-            mae_criterion = torch.nn.L1Loss()
-            loss = mae_criterion(preds, prediction_window)
+            loss = self.mae_criterion(preds, prediction_window)
         else:
             loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)

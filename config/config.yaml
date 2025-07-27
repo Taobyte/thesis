@@ -19,7 +19,8 @@ n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets have folds defined in config/experiments
 normalization: "global" # can be either "global", "difference" or  "none"
 
-special_models: ["xgboost", "naive"] # these models are not trained with pytorch
+numpy_models: ["xgboost", "hlinear", "hxgboost"]
+special_models: ["xgboost", "hlinear", "hxgboost", "hmm"] # these models are not trained with Lightning 
 probabilistic_models: ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"]
 
 look_back_window: 5
@@ -49,14 +50,6 @@ wandb:
 # tuner flag
 tune: False
 n_trials: 50
-  
-# multi gpu settings
-use_multi_gpu: False
-multi:
-  accelerator: "gpu"
-  devices: 4
-  num_nodes: 1
-  strategy: "ddp"
 
 hydra:
   run:

@@ -103,6 +103,7 @@ class MLP(BaseLightningModule):
         self.model = model
         self.learning_rate = learning_rate
         self.criterion = get_loss_fn(loss)
+        self.mae_loss = torch.nn.L1Loss()
 
     def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
@@ -123,7 +124,10 @@ class MLP(BaseLightningModule):
         preds = self.model(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
+        if self.tune:
+            loss = self.mae_loss(preds, prediction_window)
+        else:
+            loss = self.criterion(preds, prediction_window)
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
