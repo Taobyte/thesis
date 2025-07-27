@@ -57,6 +57,7 @@ def main(config: DictConfig) -> Optional[float]:
             tune=config.tune,
             probabilistic_models=config.probabilistic_models,
             experiment_name=config.experiment.experiment_name,
+            seed=config.seed,
         )
 
         callbacks: list[Callback] = []

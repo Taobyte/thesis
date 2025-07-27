@@ -48,6 +48,7 @@ class HMMLightningModule(BaseLightningModule):
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         batch_size, _, _ = look_back_window.shape
+        device = look_back_window.device
         look_back_window = look_back_window.detach().cpu().numpy()  # (B, T, 1)
         # TODO: can maybe be done more efficiently
         preds = []
@@ -63,7 +64,7 @@ class HMMLightningModule(BaseLightningModule):
             preds.append(samples)
 
         preds = np.stack(preds, axis=0)
-        return Tensor(preds)
+        return Tensor(preds, device=device)
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int

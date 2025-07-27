@@ -20,7 +20,7 @@ fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets ha
 normalization: "global" # can be either "global", "difference" or  "none"
 
 numpy_models: ["xgboost", "hlinear", "hxgboost"]
-special_models: ["xgboost", "hlinear", "hxgboost", "hmm"] # these models are not trained with Lightning 
+special_models: ["xgboost", "hlinear", "hxgboost", "hmm", "dynamax"] # these models are not trained with Lightning 
 probabilistic_models: ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"]
 
 look_back_window: 5

@@ -53,6 +53,7 @@ class BaseLightningModule(L.LightningModule):
         tune: bool = False,
         probabilistic_models: list[str] = [],
         experiment_name: str = "endo_only",
+        seed: int = 0,
     ):
         super().__init__()
 
@@ -64,6 +65,7 @@ class BaseLightningModule(L.LightningModule):
         self.normalization = normalization
         self.probabilistic_forecast_models = probabilistic_models
         self.experiment_name = experiment_name
+        self.seed = seed
 
         self.evaluator = Evaluator()
 

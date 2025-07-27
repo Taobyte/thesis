@@ -1,12 +1,13 @@
 name: "dynamax"
 
 model:
-  _target_: src.models.hmm.dynamax.HMM # dummy model we use hmmlearn
+  _target_: src.models.dynamax.Dummy # dummy model we use hmmlearn
 
 pl_model: 
-  _target_: src.models.hmm.dynamax.HMMLightningModule
+  _target_: src.models.dynamax.DynamaxLightningModule
   n_states: 64
   n_iter: 100
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
 trainer:
   max_epochs: 1
