@@ -1,7 +1,12 @@
 import numpy as np
 import torch
+import jax.numpy as jnp
+import jax.random as jr
+import optax
 
-from hmmlearn import hmm
+from functools import partial
+from jax import vmap
+from dynamax.hidden_markov_model import GaussianHMM
 from torch import Tensor
 from typing import Any, Tuple
 
@@ -27,8 +32,18 @@ class HMMLightningModule(BaseLightningModule):
     ):
         super().__init__(**kwargs)
         assert self.experiment_name == "endo_only"
-
         self.criterion = torch.nn.MSELoss()
+
+        hmm = GaussianHMM(
+            num_states, num_emissions, num_classes, transition_matrix_stickiness=10.0
+        )
+
+        key = jr.PRNGKey(0)
+        init_params, props = hmm.initialize(key)
+
+        em_params, log_probs = hmm.fit_em(
+            init_params, props, batch_emissions, num_iters=500
+        )
 
         self.remodel = hmm.GaussianHMM(
             n_components=n_states, covariance_type="full", n_iter=n_iter, verbose=True
@@ -48,7 +63,7 @@ class HMMLightningModule(BaseLightningModule):
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         batch_size, _, _ = look_back_window.shape
-        look_back_window = look_back_window.detach().cpu().numpy()  # (B, T, 1)
+        look_back_window = look_back_window.detach().numpy()  # (B, T, 1)
         # TODO: can maybe be done more efficiently
         preds = []
         for i in range(batch_size):
