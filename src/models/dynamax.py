@@ -1,4 +1,5 @@
 import torch
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import optax
@@ -134,6 +135,7 @@ class DynamaxLightningModule(BaseLightningModule):
 
     def model_forward(self, look_back_window: torch.Tensor) -> Tensor:
         batch_size, _, _ = look_back_window.shape
+        device = look_back_window.device
         look_back_window_jax = jnp.array(look_back_window.detach().cpu().numpy())
         params = self.em_params
 
@@ -179,7 +181,7 @@ class DynamaxLightningModule(BaseLightningModule):
             keys = jr.split(self.key, batch_size)
             preds = self.batched_sample_fn(keys, look_back_window_jax)
 
-        return torch.tensor(preds)
+        return torch.tensor(jax.device_get(preds), device=device)
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int
@@ -195,7 +197,7 @@ class DynamaxLightningModule(BaseLightningModule):
         look_back_window_jax = jnp.array(look_back_window_norm.detach().cpu().numpy())
         keys = jr.split(self.key, batch_size)
         preds = self.batched_sample_fn(keys, look_back_window_jax)
-        preds = Tensor(preds, device=device)
+        preds = torch.tensor(jax.device_get(preds), device=device)
         preds = preds[:, :, :C]
         val_loss = self.val_criterion(preds, prediction_window_norm)
         self.log("val_loss", val_loss, on_epoch=True, on_step=True, logger=True)
