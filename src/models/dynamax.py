@@ -191,10 +191,11 @@ class DynamaxLightningModule(BaseLightningModule):
     ):
         _, look_back_window_norm, prediction_window_norm = batch
         batch_size, _, C = prediction_window_norm.shape
-        look_back_window_jax = jnp.array(look_back_window_norm)
+        device = prediction_window_norm.device
+        look_back_window_jax = jnp.array(look_back_window_norm.detach().cpu().numpy())
         keys = jr.split(self.key, batch_size)
         preds = self.batched_sample_fn(keys, look_back_window_jax)
-        preds = Tensor(preds)
+        preds = Tensor(preds, device=device)
         preds = preds[:, :, :C]
         val_loss = self.val_criterion(preds, prediction_window_norm)
         self.log("val_loss", val_loss, on_epoch=True, on_step=True, logger=True)
