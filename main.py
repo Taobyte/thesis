@@ -5,6 +5,7 @@ import os
 import hydra
 import numpy as np
 import lightning as L
+import gc
 
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
@@ -143,6 +144,9 @@ def main(config: DictConfig) -> Optional[float]:
             print(f"Finished fold {i}, val_loss = {last_val_loss:.4f}")
 
             delete_checkpoint(trainer, checkpoint_callback)
+
+            del datamodule, pl_model, trainer, callbacks
+            gc.collect()
 
         avg_val_loss = float(np.mean(val_losses))
         print(f"Average validation loss across folds: {avg_val_loss:.4f}")
