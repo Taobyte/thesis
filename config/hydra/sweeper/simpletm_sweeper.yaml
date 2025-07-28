@@ -3,16 +3,12 @@ defaults:
 
 params:
   model.trainer.use_early_stopping: True
-
   model.pl_model.learning_rate: tag(log, interval(1e-4, 5e-2))
 
   model.model.d_model: choice(32, 64, 128, 256, 512)
-  model.model.dropout: interval(0.0, 0.3)
-  model.model.geomattn_dropout: interval(0.1, 0.6)
+  model.model.dropout: interval(0.0, 0.5)
+  model.model.geomattn_dropout: interval(0.0, 0.6)
   model.model.d_ff: choice(32, 64, 128, 256, 512)
   
-  # model.data.batch_size: choice(32, 64, 128, 256)
 
-  # model.model.kernel_size: choice(3, 5, 7)
-  # model.model.m: choice(2, 3, 4)
 

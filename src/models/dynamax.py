@@ -73,7 +73,12 @@ class DynamaxLightningModule(BaseLightningModule):
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
         train_dataset = datamodule.get_numpy_normalized("train")
-        min_length = min([len(s) for s in train_dataset])
+        lengths = [len(s) for s in train_dataset]
+        min_length = min(lengths)
+        max_length = max(lengths)
+        print(
+            f"max length: {max_length} | min length: {min_length} | diff = {max_length - min_length}"
+        )
         emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
         # emissions = [jnp.array(s) for s in train_dataset]
 

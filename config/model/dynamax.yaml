@@ -6,20 +6,21 @@ model:
 pl_model: 
   _target_: src.models.dynamax.DynamaxLightningModule
   model_type: "LinearAutoregressiveHMM" # LinearAutoregressiveHMM or GaussianHMM
-  n_states: 10
-  n_iter: 100
-  deterministic: True
   look_back_window: ${look_back_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
-  transition_matrix_stickiness: 10.0
   optimizer: "em" # "em" or "sgd"
-  
   # SGD parameters
   learning_rate: 0.001
   momentum: 0.95
-  n_batch: 2
+  n_batch: 2  
 
+  # tunable params
+  n_states: 2
+  n_iter: 100
+  deterministic: True
+  transition_matrix_stickiness: 10.0
+  
 trainer:
   max_epochs: 1
   use_early_stopping: False

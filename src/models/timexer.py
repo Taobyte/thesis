@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from math import sqrt
+from typing import Any
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
@@ -433,7 +434,7 @@ class TimeXer(BaseLightningModule):
         model: nn.Module,
         learning_rate: float = 0.02,
         loss_fn: str = "MSE",
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model

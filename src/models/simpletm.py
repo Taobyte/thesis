@@ -6,10 +6,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pywt
 
+from math import sqrt
+from torch import Tensor
+from typing import Tuple, Any, Union, Dict
+
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
-from math import sqrt
-from typing import Tuple
 
 
 class EncoderLayer(nn.Module):
@@ -390,7 +392,7 @@ class Model(nn.Module):
         projector = nn.Linear(d_model, self.pred_len, bias=True)
         self.projector = projector
 
-    def forward(self, x_enc, x_mark_enc):
+    def forward(self, x_enc: Tensor, x_mark_enc: Tensor) -> Tuple[Tensor, Tensor]:
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -433,22 +435,24 @@ class SimpleTM(BaseLightningModule):
         learning_rate: float = 0.02,
         lradj: str = "TST",
         data: str = "custom",
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.criterion = get_loss_fn(loss_fn)
         self.save_hyperparameters(ignore=["model", "criterion"])
 
-    def model_forward(self, x):
+    def model_forward(self, look_back_window: Tensor) -> Tensor:
         # B, T, C = x.shape
         # time = torch.zeros((B, T, 5), dtype=float)
-        preds, attn = self.model(
-            x, None
+        preds, _ = self.model(
+            look_back_window, None
         )  # None works for the time embedding (see DataEmbedding_inverted)
         return preds
 
-    def _shared_step(self, look_back_window, prediction_window):
+    def _shared_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tuple[Tensor, Tensor]:
         preds = self.model_forward(look_back_window)
 
         preds = preds[:, :, : prediction_window.shape[-1]]
@@ -459,21 +463,30 @@ class SimpleTM(BaseLightningModule):
         loss = self.criterion(preds, prediction_window)
         return loss, mae_loss
 
-    def model_specific_train_step(self, look_back_window, prediction_window):
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
         loss, _ = self._shared_step(look_back_window, prediction_window)
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_step=True, on_epoch=True, logger=True)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, look_back_window, prediction_window):
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
         loss, mae_loss = self._shared_step(look_back_window, prediction_window)
         if self.tune:
             loss = mae_loss
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def configure_optimizers(self):
+    def configure_optimizers(
+        self,
+    ) -> Union[
+        torch.optim.Optimizer,
+        Dict[str, Union[torch.optim.Adam, torch.optim.lr_scheduler.OneCycleLR]],
+    ]:
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
         if self.hparams.lradj == "type1":

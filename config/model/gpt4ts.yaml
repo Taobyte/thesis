@@ -7,19 +7,18 @@ model:
   ln: 0 
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   c_out: ${dataset.datamodule.look_back_channel_dim}
+  patch_size: 1 
+  stride: 1 
+  embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
+  freq: 'm'
   
   # tunable parameters
-  patch_size: ${params.gpt4ts.patch_size} # default 16
-  stride: ${params.gpt4ts.stride}
   d_ff: ${params.gpt4ts.d_ff}
   d_model: ${params.gpt4ts.d_model} # max dimension is 768
   gpt_layers: ${params.gpt4ts.gpt_layers}
+  dropout: ${params.gpt4ts.dropout}
   
-  embed: 'timeF' # time features encoding, options:[timeF, fixed, learned]
-  freq: 'm'
-
   use_norm: ${use_norm_dl}
-
 
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
@@ -28,11 +27,10 @@ pl_model:
   lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
   # lradj: "none"
 
-
 trainer: 
-  max_epochs: 50
+  max_epochs: 1000
   use_early_stopping: False
   patience: 5
 
 data:
-  batch_size: 64
+  batch_size: 32

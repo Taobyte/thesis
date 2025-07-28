@@ -22,12 +22,19 @@ class HMMLightningModule(BaseLightningModule):
         self,
         model: torch.nn.Module,
         n_states: int = 3,
+        covariance_type: str = "full",
+        min_covar: float = 0.001,
         n_iter: int = 100,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.remodel = hmm.GaussianHMM(
-            n_components=n_states, covariance_type="full", n_iter=n_iter, verbose=True
+            n_components=n_states,
+            covariance_type=covariance_type,
+            n_iter=n_iter,
+            verbose=True,
+            random_state=self.seed,
+            min_covar=min_covar,
         )
         self.automatic_optimization = False
 

@@ -3,27 +3,29 @@ name: "timexer"
 model:
     _target_: src.models.timexer.Model
     use_exo_endo: ${use_dynamic_features} # should we use exogenous variables?
-    seq_len: ${look_back_window} 
     pred_len: ${prediction_window}
-    patch_len: ${params.timexer.patch_len} # ${min:${look_back_window}, 16} 
-    d_model: ${params.timexer.d_model}
-    d_ff: ${params.timexer.d_ff}
-    e_layers: ${params.timexer.e_layers} # number of encoding layers
+    seq_len: ${look_back_window} 
+    target_channel_dim: ${dataset.datamodule.target_channel_dim}
+    look_back_window: ${look_back_window}
+    enc_in: ${dataset.datamodule.look_back_channel_dim}
     embed: "timeF"
     freq: "h"
-    dropout: ${params.timexer.dropout}
-    enc_in: ${dataset.datamodule.look_back_channel_dim}
     factor: 1 # attention factor: afaik not used in the code!
     n_heads: 8
     activation: "gelu"
-    target_channel_dim: ${dataset.datamodule.target_channel_dim}
-    look_back_window: ${look_back_window}
+
+    # tunable params
+    patch_len: ${params.timexer.patch_len} # code checks & sets: ${min:${look_back_window}, patch_len} 
+    d_model: ${params.timexer.d_model}
+    d_ff: ${params.timexer.d_ff}
+    e_layers: ${params.timexer.e_layers} # number of encoding layers
+    dropout: ${params.timexer.dropout}
 
     use_norm: ${use_norm_dl}
 
 pl_model:
     _target_: src.models.timexer.TimeXer
-    learning_rate: 0.0001
+    learning_rate: ${params.timexer.learning_rate}
     loss_fn: ${loss_fn}
 
 trainer:

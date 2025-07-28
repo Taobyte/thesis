@@ -10,8 +10,6 @@ params:
 
   model.model.d_model: choice(32, 64, 128, 256, 512)
   model.model.d_ff: choice(32, 64, 128)
-  model.model.dropout: interval(0.0, 0.3)
+  model.model.dropout: interval(0.0, 0.5)
   
-  # model.model.top_k: choice(3, 5, 7, 9) does not matter for HR forecasting
   
-  # model.data.batch_size: choice(32, 64, 128, 256)

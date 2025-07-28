@@ -8,7 +8,7 @@ model:
   alpha: 1 
   kernel_size: 3  
   wv: "db1"
-  factor: 1 # TODO: find out what this is doing
+  factor: 1 # does nothing in the code! 
   requires_grad: True # set to true to enable trainable wavelets
   output_attention: False # has to be false, otherwise no attn is returned
   m: 3 # Number of levels for the stationary wavelet transform 
@@ -35,4 +35,4 @@ trainer:
   pct_start: 0.2
 
 data:
-  batch_size: 256
+  batch_size: 32

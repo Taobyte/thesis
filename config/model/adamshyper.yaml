@@ -5,7 +5,6 @@ model:
   _target_: src.models.adamshyper.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
-
   k: 1
   CSCM: 'Bottleneck_Construct'
   window_size: ${compute_square_window:${look_back_window}}  # window_size: [4,4] does not work if look_back_window < 4
@@ -22,7 +21,6 @@ model:
 pl_model: 
   _target_: src.models.adamshyper.AdaMSHyper
   learning_rate: ${params.adamshyper.learning_rate}
-  # itr: 1 
   loss: ${loss_fn}
   lradj: 'type1' # adjust learning rate
   use_amp: False
@@ -33,6 +31,6 @@ trainer:
   patience: 5
 
 data:
-  batch_size: 256
+  batch_size: 32
   num_workers: ${num_workers}
 
