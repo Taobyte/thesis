@@ -8,12 +8,15 @@ import plotly.colors as pcolors
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from torch import Tensor
 from lightning.pytorch.loggers import WandbLogger
 from plotly.subplots import make_subplots
 
 from src.constants import (
     dataset_to_name,
 )
+
+from src.normalization import global_z_denorm, global_z_norm
 
 metric_names = ["MSE", "abs_target_mean", "cross_correlation"]
 name_to_title = {
@@ -456,14 +459,14 @@ def plot_prediction_wandb(
     plt.close(fig)
 
 
-"""
 def plot_max_min_median_predictions(lightning_module) -> None:
     normalization = lightning_module.normalization
     local_norm_channels = lightning_module.local_norm_channels
+    target_channel_dim = lightning_module.target_channel_dim
 
     test_dataset = lightning_module.trainer.datamodule.test_dataset
 
-    metrics_to_plot = ["MSE", "MAE", "cross_correlation"]
+    metrics_to_plot = ["MAE"]
 
     # plot best, worst and median
     for metric_name in metrics_to_plot:
@@ -483,14 +486,13 @@ def plot_max_min_median_predictions(lightning_module) -> None:
             look_back_window = look_back_window.unsqueeze(0).to(lightning_module.device)
 
             # normalize the lookback window
-            if normalization == "local":
-                look_back_window_norm, mean, std = local_z_norm(
-                    look_back_window, local_norm_channels
-                )
-            elif normalization == "global":
+            if normalization == "global":
                 datamodule = lightning_module.trainer.datamodule
                 mean = datamodule.train_dataset.mean
                 std = datamodule.train_dataset.std
+                device = look_back_window.device
+                mean = Tensor(mean).reshape(1, 1, -1).to(device).float()
+                std = Tensor(std).reshape(1, 1, -1).to(device).float()
                 look_back_window_norm = global_z_norm(
                     look_back_window, local_norm_channels, mean, std
                 )
@@ -508,17 +510,17 @@ def plot_max_min_median_predictions(lightning_module) -> None:
                     pred_std *= std
             else:
                 pred_mean = lightning_module.model_forward(look_back_window_norm)[
-                    :, :, : target.shape[-1]
+                    :, :, :target_channel_dim
                 ]
                 pred_std = None
 
             # denormalize the prediction
-            if normalization == "local":
-                pred_denorm = local_z_denorm(pred_mean, local_norm_channels, mean, std)
-            elif normalization == "global":
+            if normalization == "global":
                 pred_denorm = global_z_denorm(pred_mean, local_norm_channels, mean, std)
             elif normalization == "none":
                 pred_denorm = pred_mean
+
+            target = target[:, :, :target_channel_dim]
 
             assert pred_denorm.shape == target.shape, (
                 f"target shape = {target.shape} | pred_denorm shape = {pred_denorm.shape}"
@@ -542,7 +544,7 @@ def plot_max_min_median_predictions(lightning_module) -> None:
                 dataset=lightning_module.trainer.datamodule.name,
                 pred_denorm_std=pred_std,
             )
-"""
+
 
 if __name__ == "__main__":
     from hydra import initialize, compose

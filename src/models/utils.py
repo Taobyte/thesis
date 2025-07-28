@@ -22,6 +22,7 @@ from collections import defaultdict
 from src.metrics import Evaluator
 from src.normalization import global_z_denorm, undo_differencing
 from src.datasets.utils import BaseDataModule
+from src.plotting import plot_max_min_median_predictions
 
 
 def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str, Any]:
@@ -176,6 +177,9 @@ class BaseLightningModule(L.LightningModule):
         avg_metrics["MASE"] = avg_metrics["MAE"] / avg_metrics["naive_mae"]
         self.log_dict(avg_metrics, logger=True, sync_dist=True)
 
+        if self.use_plots:
+            plot_max_min_median_predictions(self)
+
     def evaluate(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tuple[dict[str, float], dict[str, list[float]]]:
@@ -206,6 +210,7 @@ class BaseLightningModule(L.LightningModule):
             prediction_window = global_z_denorm(
                 prediction_window_norm, self.local_norm_channels, mean, std
             )
+
         elif self.normalization == "difference":
             preds = undo_differencing(look_back_window, preds)
             prediction_window = undo_differencing(

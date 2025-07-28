@@ -1,7 +1,7 @@
-import numpy as np
 import torch
 import jax.numpy as jnp
 import jax.random as jr
+import optax
 
 from jax import vmap
 from dynamax.hidden_markov_model import GaussianHMM, LinearAutoregressiveHMM
@@ -25,21 +25,32 @@ class DynamaxLightningModule(BaseLightningModule):
         self,
         model: torch.nn.Module,
         target_channel_dim: int = 1,
+        look_back_channel_dim: int = 2,
         look_back_window: int = 5,
         n_states: int = 3,
         n_iter: int = 100,
         model_type: str = "GaussianHMM",
         transition_matrix_stickiness: float = 10.0,
+        optimizer: str = "em",
+        learning_rate: float = 0.001,
+        momentum: float = 0.95,
+        n_batch: int = 2,
+        deterministic: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
-        assert self.experiment_name == "endo_only"
 
         self.n_states = n_states
         self.n_iter = n_iter
         self.model_type = model_type
+        self.deterministic = deterministic
+        self.optimizer = optimizer
+        self.learning_rate = learning_rate
+        self.momentum = momentum
+        self.n_batch = n_batch
 
         if model_type == "GaussianHMM":
+            assert self.experiment_name == "endo_only"
             self.model = GaussianHMM(
                 n_states,
                 emission_dim=target_channel_dim,
@@ -48,7 +59,7 @@ class DynamaxLightningModule(BaseLightningModule):
         elif model_type == "LinearAutoregressiveHMM":
             self.model = LinearAutoregressiveHMM(
                 n_states,
-                emission_dim=target_channel_dim,
+                emission_dim=look_back_channel_dim,
                 num_lags=look_back_window,
                 transition_matrix_stickiness=transition_matrix_stickiness,
             )
@@ -59,32 +70,58 @@ class DynamaxLightningModule(BaseLightningModule):
 
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
-        train_dataset = datamodule.train_dataset.data
+        train_dataset = datamodule.get_train_dataset_normalized()
         min_length = min([len(s) for s in train_dataset])
         emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
+        # emissions = [jnp.array(s) for s in train_dataset]
+
+        assert self.n_batch <= len(train_dataset)
 
         key = jr.PRNGKey(self.seed)
         if self.model_type == "GaussianHMM":
             init_params, props = self.model.initialize(key)
 
-            em_params, log_probs = self.model.fit_em(
+            em_params, _ = self.model.fit_em(
                 init_params, props, emissions, num_iters=self.n_iter
             )
         elif self.model_type == "LinearAutoregressiveHMM":
             assert isinstance(self.model, LinearAutoregressiveHMM)
-            inputs = vmap(self.model.compute_inputs)(emissions)
+            inputs = vmap(self.model.compute_inputs, in_axes=0)(emissions)
+            emissions = emissions[:, self.look_back_window :, :]
+            inputs = inputs[:, self.look_back_window :, :]
+
             params, props = self.model.initialize(
                 key=key, method="kmeans", emissions=emissions
             )
-            em_params, _ = self.model.fit_em(params, props, emissions, inputs=inputs)
+
+            if self.optimizer == "em":
+                em_params, loglikelihood = self.model.fit_em(
+                    params, props, emissions, inputs=inputs, num_iters=self.n_iter
+                )
+                print(f"Log-Likelihood: {loglikelihood}")
+            elif self.optimizer == "sgd":
+                sgd_key = jr.PRNGKey(0)
+                em_params, sgd_losses = self.model.fit_sgd(
+                    params,
+                    props,
+                    emissions,
+                    optimizer=optax.sgd(
+                        learning_rate=self.learning_rate, momentum=self.momentum
+                    ),
+                    # batch_size=self.n_batch,
+                    num_epochs=self.n_iter,
+                    key=sgd_key,
+                    inputs=inputs,
+                )
+                print(f"SGD losses: {sgd_losses}")
 
         self.em_params = em_params
+        self.key = jr.PRNGKey(self.seed)
 
     def model_forward(self, look_back_window: torch.Tensor) -> Tensor:
         batch_size, _, _ = look_back_window.shape
         look_back_window_jax = jnp.array(look_back_window.detach().cpu().numpy())
         params = self.em_params
-        key = jr.PRNGKey(self.seed)
 
         if self.model_type == "GaussianHMM":
             preds = []
@@ -96,7 +133,7 @@ class DynamaxLightningModule(BaseLightningModule):
 
                 final_state_probs = posterior.smoothed_probs[-1]  # (n_states,)
 
-                key, subkey = jr.split(key)
+                key, subkey = jr.split(self.key)
                 final_state = jr.choice(subkey, self.n_states, p=final_state_probs)
 
                 current_state = final_state
@@ -121,23 +158,27 @@ class DynamaxLightningModule(BaseLightningModule):
 
                     current_state = next_state
 
-                preds.append(jnp.stack(batch_preds, axis=0))  # (H, emission_dim)
+                preds.append(jnp.stack(batch_preds, axis=0))
 
-            preds = jnp.stack(preds, axis=0)  # (B, H, emission_dim)
+            preds = jnp.stack(preds, axis=0)
         elif self.model_type == "LinearAutoregressiveHMM":
             assert isinstance(self.model, LinearAutoregressiveHMM)
-            preds = []
-            for i in range(batch_size):
-                sampled_states, sampled_emissions = self.model.sample(
+            keys = jr.split(self.key, batch_size)
+
+            def sample_fn(subkey, prev_em):
+                _, emissions = self.model.sample(
                     params,
-                    key,
-                    self.prediction_window,
-                    prev_emissions=look_back_window_jax[i],
+                    key=subkey,
+                    num_timesteps=self.prediction_window,
+                    prev_emissions=prev_em,
+                    deterministic=self.deterministic,
                 )
+                return emissions
 
-                preds.append(sampled_emissions)
+            batched_sample_fn = vmap(sample_fn, in_axes=(0, 0))
 
-            preds = jnp.stack(preds)
+            preds = batched_sample_fn(keys, look_back_window_jax)
+
         return torch.tensor(preds)
 
     def training_step(

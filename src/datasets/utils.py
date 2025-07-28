@@ -264,3 +264,20 @@ class BaseDataModule(L.LightningDataModule):
 
     def get_test_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("test")
+
+    def get_train_dataset_normalized(self) -> list[NDArray[np.float32]]:
+        assert self.train_dataset.data
+        data = self.train_dataset.data
+        normalized_data: list[NDArray[np.float32]] = []
+        for s in data:
+            if self.normalization == "global":
+                mean = self.train_dataset.mean
+                std = self.train_dataset.std
+                normalized = (s - mean) / (std + 1e-6)
+            elif self.normalization == "difference":
+                normalized = np.diff(s, axis=0)
+            else:
+                normalized = s
+            normalized_data.append(normalized)
+
+        return normalized_data
