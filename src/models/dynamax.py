@@ -204,3 +204,22 @@ class DynamaxLightningModule(BaseLightningModule):
 
     def configure_optimizers(self):
         return None
+
+    def cleanup_jax_memory(self):
+        """Clean up JAX memory and reset state"""
+        # Clear JAX compilation cache
+        jax.clear_caches()
+
+        # Force garbage collection of JAX arrays
+        import gc
+
+        gc.collect()
+
+        # Reset PRNG key
+        self.key = jr.PRNGKey(self.seed)
+
+        # Clear any cached functions
+        if hasattr(self, "batched_sample_fn"):
+            delattr(self, "batched_sample_fn")
+        if hasattr(self, "em_params"):
+            delattr(self, "em_params")
