@@ -81,10 +81,10 @@ class BaseDataModule(L.LightningDataModule):
     ) -> Tuple[Tensor, Tensor, Tensor]:
         B, _, C = look_back_window.shape
         device = look_back_window.device
-        mean, std = self.train_dataset.mean, self.train_dataset.std
-        mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
-        std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
         if self.normalization == "global":
+            mean, std = self.train_dataset.mean, self.train_dataset.std
+            mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
+            std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
             input = global_z_norm(look_back_window, self.local_norm_channels, mean, std)
             output = global_z_norm(
                 prediction_window, self.local_norm_channels, mean, std
@@ -92,7 +92,7 @@ class BaseDataModule(L.LightningDataModule):
         elif self.normalization == "difference":
             pad = torch.zeros(B, 1, C)
             input = torch.cat([pad, torch.diff(look_back_window, dim=1)], dim=1)
-            last_value = look_back_window[:, -1:, : self.target_channel_dim]
+            last_value = look_back_window[:, -1:, :]
             output = torch.diff(
                 torch.cat([last_value, prediction_window], dim=1), dim=1
             )
@@ -102,21 +102,8 @@ class BaseDataModule(L.LightningDataModule):
 
         if self.use_only_exo:
             assert self.use_dynamic_features
-            input = input[
-                :, :, self.target_channel_dim :
-            ]  # rely only on exogenous variables
+            input = input[:, :, self.target_channel_dim :]
         elif self.use_perfect_info:
-            # perf_info_channel = torch.concat(
-            #     (
-            #         torch.zeros(
-            #             B,
-            #             self.look_back_window - self.prediction_window,
-            #             self.target_channel_dim,
-            #         ),
-            #         output,
-            #     ),
-            #     dim=1,
-            # )
             ex_concat = torch.concat(
                 [
                     input[:, :, self.target_channel_dim :],
@@ -265,9 +252,12 @@ class BaseDataModule(L.LightningDataModule):
     def get_test_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("test")
 
-    def get_train_dataset_normalized(self) -> list[NDArray[np.float32]]:
-        assert self.train_dataset.data
-        data = self.train_dataset.data
+    def get_numpy_normalized(self, type: str = "train") -> list[NDArray[np.float32]]:
+        assert type in ["train", "val"]
+        if type == "train":
+            data = self.train_dataset.data
+        elif type == "val":
+            data = self.val_dataset.data
         normalized_data: list[NDArray[np.float32]] = []
         for s in data:
             if self.normalization == "global":

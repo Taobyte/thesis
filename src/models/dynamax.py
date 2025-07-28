@@ -67,10 +67,11 @@ class DynamaxLightningModule(BaseLightningModule):
             raise NotImplementedError()
 
         self.automatic_optimization = False
+        self.val_criterion = torch.nn.L1Loss()
 
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
-        train_dataset = datamodule.get_train_dataset_normalized()
+        train_dataset = datamodule.get_numpy_normalized("train")
         min_length = min([len(s) for s in train_dataset])
         emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
         # emissions = [jnp.array(s) for s in train_dataset]
@@ -99,6 +100,7 @@ class DynamaxLightningModule(BaseLightningModule):
                     params, props, emissions, inputs=inputs, num_iters=self.n_iter
                 )
                 print(f"Log-Likelihood: {loglikelihood}")
+
             elif self.optimizer == "sgd":
                 sgd_key = jr.PRNGKey(0)
                 em_params, sgd_losses = self.model.fit_sgd(
@@ -114,6 +116,18 @@ class DynamaxLightningModule(BaseLightningModule):
                     inputs=inputs,
                 )
                 print(f"SGD losses: {sgd_losses}")
+
+            def sample_fn(subkey, prev_em):
+                _, emissions = self.model.sample(
+                    params,
+                    key=subkey,
+                    num_timesteps=self.prediction_window,
+                    prev_emissions=prev_em,
+                    deterministic=self.deterministic,
+                )
+                return emissions
+
+            self.batched_sample_fn = vmap(sample_fn, in_axes=(0, 0))
 
         self.em_params = em_params
         self.key = jr.PRNGKey(self.seed)
@@ -150,7 +164,6 @@ class DynamaxLightningModule(BaseLightningModule):
                     emission_mean = params.emissions.means[next_state]
                     emission_cov = params.emissions.covs[next_state]
 
-                    # Sample from multivariate normal
                     emission = jr.multivariate_normal(
                         subkey, emission_mean, emission_cov
                     )
@@ -164,20 +177,7 @@ class DynamaxLightningModule(BaseLightningModule):
         elif self.model_type == "LinearAutoregressiveHMM":
             assert isinstance(self.model, LinearAutoregressiveHMM)
             keys = jr.split(self.key, batch_size)
-
-            def sample_fn(subkey, prev_em):
-                _, emissions = self.model.sample(
-                    params,
-                    key=subkey,
-                    num_timesteps=self.prediction_window,
-                    prev_emissions=prev_em,
-                    deterministic=self.deterministic,
-                )
-                return emissions
-
-            batched_sample_fn = vmap(sample_fn, in_axes=(0, 0))
-
-            preds = batched_sample_fn(keys, look_back_window_jax)
+            preds = self.batched_sample_fn(keys, look_back_window_jax)
 
         return torch.tensor(preds)
 
@@ -189,7 +189,15 @@ class DynamaxLightningModule(BaseLightningModule):
     def validation_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int
     ):
-        self.log("val_loss", 0, on_epoch=True, on_step=True, logger=True)
+        _, look_back_window_norm, prediction_window_norm = batch
+        batch_size, _, C = prediction_window_norm.shape
+        look_back_window_jax = jnp.array(look_back_window_norm)
+        keys = jr.split(self.key, batch_size)
+        preds = self.batched_sample_fn(keys, look_back_window_jax)
+        preds = Tensor(preds)
+        preds = preds[:, :, :C]
+        val_loss = self.val_criterion(preds, prediction_window_norm)
+        self.log("val_loss", val_loss, on_epoch=True, on_step=True, logger=True)
 
     def configure_optimizers(self):
         return None

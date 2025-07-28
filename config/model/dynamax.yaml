@@ -6,7 +6,7 @@ model:
 pl_model: 
   _target_: src.models.dynamax.DynamaxLightningModule
   model_type: "LinearAutoregressiveHMM" # LinearAutoregressiveHMM or GaussianHMM
-  n_states: 6
+  n_states: 10
   n_iter: 100
   deterministic: True
   look_back_window: ${look_back_window}
