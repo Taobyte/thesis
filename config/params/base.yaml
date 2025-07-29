@@ -2,7 +2,7 @@
 # we can add in specific parameters with:  ${params.${dataset.name}.${str:${use_dynamic_features}}.${str:${look_back_window}}.${str:${prediction_window}}.learning_rate} 
 linear:
   learning_rate: 0.001
-  weight_decay: 6.627291754394113e-06
+  weight_decay: 0.0
 
 hmm:
   learning_rate: 0.001
@@ -10,8 +10,8 @@ hmm:
 
 dynamax:
   n_states: 2
-  n_iter: 150
-  transition_matrix_stickiness: 20.0
+  n_iter: 100
+  transition_matrix_stickiness: 0.0
   deterministic: True
 
 kalmanfilter:
@@ -78,7 +78,7 @@ gpt4ts:
   dropout: 0.1
 
 pattn:
-  learning_rate: 0.002428582457141732
+  learning_rate: 0.002
   tmax: 10
   patch_size: 4 
   d_model: 128

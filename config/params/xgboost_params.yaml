@@ -2,7 +2,6 @@
 
 "dalia":
   "5":
-    "3":
       n_estimators: 684
       learning_rate: 0.026
       max_depth: 8
@@ -11,7 +10,6 @@
       subsample: 0.705
       colsample_bytree: 0.926
   "10":
-    "3":
       n_estimators: 325
       learning_rate: 0.030
       max_depth: 8
@@ -20,7 +18,6 @@
       subsample: 0.718
       colsample_bytree: 0.939
   "20":
-    "3":
       n_estimators: 896
       learning_rate: 0.008
       max_depth: 7
@@ -29,7 +26,6 @@
       subsample: 0.782
       colsample_bytree: 0.980
   "30":
-    "3":
       n_estimators: 401
       learning_rate: 0.0289
       max_depth: 8
@@ -38,7 +34,6 @@
       subsample: 0.828
       colsample_bytree: 0.958
   "60":
-    "3":
       n_estimators: 638
       learning_rate: 0.081
       max_depth: 6

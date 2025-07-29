@@ -1,18 +1,23 @@
 import numpy as np
 import torch
 
+from torch import Tensor
 from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder
+from typing import Any, Tuple
+from numpy.typing import NDArray
 
 from src.datasets.utils import BaseDataModule
 
 
-def ucihar_load_data(datadir: str, participants: list[int], use_static_features: bool):
+def ucihar_load_data(
+    datadir: str, participants: list[int], use_static_features: bool
+) -> Tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
     data = np.load(datadir + "ucihar_preprocessed.npz")
 
     encoder = OneHotEncoder(categories=[list(range(1, 7))], sparse_output=False)
 
-    if participants:
+    if len(participants) > 0:
         X_train_val = data["X_train"]
         train_val_participants = data["train_val_subjects"]
         filter_vector = np.isin(train_val_participants, np.array(participants))
@@ -38,7 +43,7 @@ def ucihar_load_data(datadir: str, participants: list[int], use_static_features:
     return series, mean, std
 
 
-class UCIHARDataset(Dataset):
+class UCIHARDataset(Dataset[Tuple[Tensor, Tensor]]):
     def __init__(
         self,
         datadir: str,
@@ -63,7 +68,7 @@ class UCIHARDataset(Dataset):
     def __len__(self) -> int:
         return len(self.X) * (128 - self.window + 1)
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         row_idx = idx // (128 - self.window + 1)
         window_pos = idx % (128 - self.window + 1)
         window = self.X[row_idx, window_pos : window_pos + self.window]
@@ -78,9 +83,24 @@ class UCIHARDataset(Dataset):
 class UCIHARDataModule(BaseDataModule):
     def __init__(
         self,
-        train_participants: list = [1, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 19, 21, 22],
-        val_participants: list = [23, 25, 26, 27, 28, 29, 30],
-        **kwargs,
+        train_participants: list[int] = [
+            1,
+            3,
+            5,
+            6,
+            7,
+            8,
+            11,
+            14,
+            15,
+            16,
+            17,
+            19,
+            21,
+            22,
+        ],
+        val_participants: list[int] = [23, 25, 26, 27, 28, 29, 30],
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
@@ -108,6 +128,6 @@ class UCIHARDataModule(BaseDataModule):
                 self.data_dir,
                 self.look_back_window,
                 self.prediction_window,
-                None,
+                [],
                 self.use_static_features,
             )

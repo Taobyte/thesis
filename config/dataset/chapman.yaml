@@ -18,4 +18,4 @@ datamodule:
   target_channel_dim: 4
   dynamic_exogenous_variables: 0 # we have no dynamic acceleration data for activity 
   static_exogenous_variables: 4 # 4 different disease classes 
-  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
+  look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}, ${use_only_exo}, ${use_perfect_info}}

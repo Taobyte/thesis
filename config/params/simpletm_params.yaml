@@ -1,77 +1,34 @@
 
 
 dalia:
-  "True":
-    "5":
-      "3":
-        learning_rate: 0.0038826539697481037
-        d_model: 256
-        dropout: 0.014237860899953811
-        geomattn_dropout: 0.25380888118473355
-        d_ff: 32
-    "10":
-      "3":
-        learning_rate: 0.027099443540538875
-        d_model: 32
-        dropout: 0.08569554112811438
-        geomattn_dropout: 0.23815838688395372
-        d_ff: 128
-    "20":
-      "3":
-        learning_rate: 0.02018377295224105
-        d_model: 256
-        dropout: 0.04575581513473484
-        geomattn_dropout: 0.3533464904391996
-        d_ff: 128
-    "30":
-      "3":
-        learning_rate: 0.016235736400987095
-        d_model: 128
-        dropout: 0.09132821930534765
-        geomattn_dropout: 0.337938426069501
-        d_ff: 64
-    "60":
-      "3":
-        learning_rate: 0.01139155793585926
-        d_model: 128
-        dropout: 0.10752622873760628
-        geomattn_dropout: 0.5327988842232751
-        d_ff: 64
-  
-  "False":
-    "5":
-      "3":
-        learning_rate: 0.0050227619528053465
-        d_model: 256
-        dropout: 0.00015348216419962257
-        geomattn_dropout: 0.47225404421859124
-        d_ff: 512
-    "10":
-      "3":
-        learning_rate: 0.012038067369917842
-        d_model: 256
-        dropout: 0.01660905599474097
-        geomattn_dropout: 0.20714901375956213
-        d_ff: 64
-    "20":
-      "3":
-        learning_rate: 0.0006436104105788039
-        d_model: 256
-        dropout: 0.02981675691526177
-        geomattn_dropout: 0.5971570557665697
-        d_ff: 256
-    "30":
-      "3":
-        learning_rate: 0.013506092149539347
-        d_model: 256
-        dropout: 0.07901064814572598
-        geomattn_dropout: 0.23064615922313042
-        d_ff: 128
-    "60":
-      "3":
-        learning_rate: 0.0026992982722337613
-        d_model: 64
-        dropout: 0.0774389623631811
-        geomattn_dropout: 0.2759833800822123
-        d_ff: 64
-
+  "5":
+    learning_rate: 0.01
+    d_model: 256
+    d_ff: 32
+    dropout: 0.053
+    geomattn_dropout: 0.155
+  "10":
+    learning_rate: 0.005
+    d_model: 64
+    d_ff: 512
+    dropout: 0.042
+    geomattn_dropout: 0.174
+  "20":
+    learning_rate: 0.003
+    d_model: 64
+    d_ff: 512
+    dropout: 0.036
+    geomattn_dropout: 0.235
+  "30":
+    learning_rate: 0.007
+    d_model: 256
+    d_ff: 64
+    dropout: 0.004
+    geomattn_dropout: 0.416
+  "60":
+    learning_rate: 0.002
+    d_model: 256
+    d_ff: 256
+    dropout: 0.087
+    geomattn_dropout: 0.409
+ 

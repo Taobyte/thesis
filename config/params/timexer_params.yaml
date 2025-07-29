@@ -1,0 +1,24 @@
+dalia:
+  "5":
+  "10":
+  "20":
+    learning_rate: 0.00003
+    patch_len: 5
+    d_model: 256
+    d_ff: 128
+    e_layers: 3
+    dropout: 0.0004
+  "30":
+    learning_rate: 0.0003
+    patch_len: 6
+    d_model: 64
+    d_ff: 256
+    e_layers: 2
+    dropout: 0.007
+  "60":
+    learning_rate: 0.00007
+    patch_len: 12
+    d_model: 64
+    d_ff: 128
+    e_layers: 5
+    dropout: 0.001

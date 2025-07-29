@@ -272,13 +272,12 @@ class Model(nn.Module):
         self.pred_len = pred_len
         self.use_norm = use_norm
 
-        if patch_len <= look_back_window:
-            self.patch_len = patch_len
-        else:
-            self.patch_len = look_back_window
+        if patch_len > look_back_window:
+            patch_len = look_back_window
             print(
                 f"ATTENTION! patch_len {patch_len} is too large for look back window {look_back_window}"
             )
+        self.patch_len = patch_len
         self.patch_num = int(seq_len // patch_len)
 
         self.n_vars = 1 if use_exo_endo else enc_in

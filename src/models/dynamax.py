@@ -1,13 +1,22 @@
+# This model builds on the Dynamax library for probabilistic state space models:
+# https://github.com/probml/dynamax
+
 import torch
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import optax
 
+from jax import lax
+from jax.tree_util import tree_map
+from jaxtyping import Int, Float, Array
 from jax import vmap
 from dynamax.hidden_markov_model import GaussianHMM, LinearAutoregressiveHMM
+from dynamax.hidden_markov_model.models.abstractions import (
+    HMMParameterSet,
+)
 from torch import Tensor
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 from src.models.utils import BaseLightningModule
 
@@ -19,6 +28,72 @@ class Dummy(torch.nn.Module):
 
     def forward(self, look_back_window: Tensor) -> Tensor:
         return Tensor([0])
+
+
+class LARModel(LinearAutoregressiveHMM):
+    def __init__(self, **kwargs: Any):
+        super().__init__(**kwargs)
+
+    def viterbi_sample(
+        self,
+        params: HMMParameterSet,
+        key: Array,
+        num_timesteps: int,
+        prev_emissions: Optional[Float[Array, "num_lags emission_dim"]] = None,
+    ) -> Tuple[
+        Int[Array, " num_timesteps"], Float[Array, "num_timesteps emission_dim"]
+    ]:
+        r"""Sample states $z_{1:T}$ and emissions $y_{1:T}$ given parameters $\theta$.
+
+        Args:
+            params: model parameters $\theta$
+            key: random number generator
+            num_timesteps: number of timesteps $T$
+            prev_emissions: (optionally) preceding emissions $y_{-L+1:0}$. Defaults to zeros.
+
+        Returns:
+            latent states and emissions
+
+        """
+        assert prev_emissions is not None
+
+        def _step(carry, key):
+            """Sample the next state and emission."""
+            prev_state, prev_emissions = carry
+            key1, key2 = jr.split(key, 2)
+            state = self.transition_distribution(
+                params, prev_state
+            ).mode()  # take argmax states instead of sampling
+            emission = self.emission_distribution(
+                params, state, inputs=jnp.ravel(prev_emissions)
+            ).mean()  # take mean instead of sampling
+            next_prev_emissions = jnp.vstack([emission, prev_emissions[:-1]])
+            return (state, next_prev_emissions), (state, emission)
+
+        # Sample the initial state
+        lagged_emissions = self.compute_inputs(emissions=prev_emissions)
+
+        initial_state = self.most_likely_states(
+            params, emissions=prev_emissions, inputs=lagged_emissions
+        )[-1]
+
+        initial_emission = self.emission_distribution(
+            params, initial_state, inputs=jnp.ravel(prev_emissions)
+        ).mean()
+        initial_prev_emissions = jnp.vstack([initial_emission, prev_emissions[:-1]])
+
+        # Sample the remaining emissions and states
+        key1, key2, key = jr.split(key, 3)
+        next_keys = jr.split(key, num_timesteps - 1)
+        _, (next_states, next_emissions) = lax.scan(
+            _step, (initial_state, initial_prev_emissions), next_keys
+        )
+
+        # Concatenate the initial state and emission with the following ones
+        expand_and_cat = lambda x0, x1T: jnp.concatenate((jnp.expand_dims(x0, 0), x1T))
+        states = tree_map(expand_and_cat, initial_state, next_states)
+        emissions = tree_map(expand_and_cat, initial_emission, next_emissions)
+        return states, emissions
 
 
 class DynamaxLightningModule(BaseLightningModule):
@@ -58,8 +133,8 @@ class DynamaxLightningModule(BaseLightningModule):
                 transition_matrix_stickiness=transition_matrix_stickiness,
             )
         elif model_type == "LinearAutoregressiveHMM":
-            self.model = LinearAutoregressiveHMM(
-                n_states,
+            self.model = LARModel(
+                num_states=n_states,
                 emission_dim=look_back_channel_dim,
                 num_lags=look_back_window,
                 transition_matrix_stickiness=transition_matrix_stickiness,
@@ -73,6 +148,7 @@ class DynamaxLightningModule(BaseLightningModule):
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
         train_dataset = datamodule.get_numpy_normalized("train")
+        train_dataset.pop(2)
         lengths = [len(s) for s in train_dataset]
         min_length = min(lengths)
         max_length = max(lengths)
@@ -81,8 +157,6 @@ class DynamaxLightningModule(BaseLightningModule):
         )
         emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
         # emissions = [jnp.array(s) for s in train_dataset]
-
-        assert self.n_batch <= len(train_dataset)
 
         key = jr.PRNGKey(self.seed)
         if self.model_type == "GaussianHMM":
@@ -108,6 +182,7 @@ class DynamaxLightningModule(BaseLightningModule):
                 print(f"Log-Likelihood: {loglikelihood}")
 
             elif self.optimizer == "sgd":
+                assert self.n_batch <= len(train_dataset)
                 sgd_key = jr.PRNGKey(0)
                 em_params, sgd_losses = self.model.fit_sgd(
                     params,
@@ -124,12 +199,11 @@ class DynamaxLightningModule(BaseLightningModule):
                 print(f"SGD losses: {sgd_losses}")
 
             def sample_fn(subkey, prev_em):
-                _, emissions = self.model.sample(
+                _, emissions = self.model.viterbi_sample(
                     params,
                     key=subkey,
                     num_timesteps=self.prediction_window,
                     prev_emissions=prev_em,
-                    deterministic=self.deterministic,
                 )
                 return emissions
 

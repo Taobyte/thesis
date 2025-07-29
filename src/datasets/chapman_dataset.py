@@ -2,15 +2,20 @@ import pandas as pd
 import numpy as np
 import torch
 
+from torch import Tensor
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from scipy.io import loadmat
+from typing import Any, Tuple
+from numpy.typing import NDArray
 
 from src.datasets.utils import BaseDataModule
 
 
-def chapman_load_data(datadir: str, random_state: int = 42):
+def chapman_load_data(
+    datadir: str, random_state: int = 42
+) -> Tuple[list[NDArray[np.float32]], Tuple[NDArray[np.float32], NDArray[np.float32]]]:
     data = loadmat(datadir + "chapman.mat")["whole_data"]
 
     df = pd.DataFrame(data)
@@ -20,16 +25,20 @@ def chapman_load_data(datadir: str, random_state: int = 42):
         df, classes, random_state=random_state
     )
 
-    return X_train, y_train, X_val, y_val, X_test, y_test
+    combined = np.concatenate(X_train, axis=0)
+    mean = np.mean(combined, axis=0)
+    std = np.std(combined, axis=0)
+
+    return [X_train, y_train, X_val, y_val, X_test, y_test], (mean, std)
 
 
 def stratified_split_onehot(
     data: pd.DataFrame,
     labels: pd.Series,
-    train_size=0.7,
-    val_size=0.15,
-    test_size=0.15,
-    random_state=42,
+    train_size: float = 0.7,
+    val_size: float = 0.15,
+    test_size: float = 0.15,
+    random_state: int = 42,
 ):
     assert abs(train_size + val_size + test_size - 1.0) < 1e-6, "Splits must sum to 1."
 
@@ -55,14 +64,16 @@ def stratified_split_onehot(
     )
 
 
-class ChapmanDataset(Dataset):
+class ChapmanDataset(Dataset[Tuple[Tensor, Tensor]]):
     def __init__(
         self,
         look_back_window: int,
         prediction_window: int,
-        X: np.ndarray,
-        disease: np.ndarray,
+        X: NDArray[np.float32],
+        disease: NDArray[np.int32],
         use_static_features: bool = False,
+        mean: NDArray[np.float32] = None,
+        std: NDArray[np.float32] = None,
     ):
         self.X = X
         self.disease = disease
@@ -72,12 +83,14 @@ class ChapmanDataset(Dataset):
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
 
+        self.mean = mean
+        self.std = std
         assert self.window <= 1000
 
     def __len__(self) -> int:
         return self.n_participants * (1000 - self.window + 1)
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         participant_idx = idx // (1000 - self.window + 1)
         window_pos = idx % (1000 - self.window + 1)
 
@@ -102,38 +115,10 @@ class ChapmanDataset(Dataset):
 
 
 class ChapmanDataModule(BaseDataModule):
-    def __init__(
-        self,
-        data_dir: str,
-        batch_size: int = 32,
-        look_back_window: int = 128,
-        prediction_window: int = 64,
-        freq: int = 100,
-        name: str = "chapman",
-        num_workers: int = 0,
-        use_dynamic_features: bool = False,
-        use_static_features: bool = False,
-        target_channel_dim: int = 4,
-        dynamic_exogenous_variables: int = 0,
-        static_exogenous_variables: int = 4,
-        look_back_channel_dim: int = 4,
-        random_state: int = 42,
-    ):
-        super().__init__(
-            data_dir=data_dir,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            name=name,
-            freq=freq,
-            look_back_window=look_back_window,
-            prediction_window=prediction_window,
-            use_dynamic_features=use_dynamic_features,
-            use_static_features=use_static_features,
-            target_channel_dim=target_channel_dim,
-            dynamic_exogenous_variables=dynamic_exogenous_variables,
-            static_exogenous_variables=static_exogenous_variables,
-            look_back_channel_dim=look_back_channel_dim,
-        )
+    def __init__(self, random_state: int = 42, **kwargs: Any):
+        super().__init__(**kwargs)
+
+        (data, (self.mean, self.std)) = chapman_load_data(self.data_dir, random_state)
 
         (
             self.X_train,
@@ -142,7 +127,7 @@ class ChapmanDataModule(BaseDataModule):
             self.y_val,
             self.X_test,
             self.y_test,
-        ) = chapman_load_data(data_dir)
+        ) = data
 
     def setup(self, stage: str):
         if stage == "fit":
@@ -152,6 +137,8 @@ class ChapmanDataModule(BaseDataModule):
                 self.X_train,
                 self.y_train,
                 use_static_features=self.use_static_features,
+                mean=self.mean,
+                std=self.std,
             )
             self.val_dataset = ChapmanDataset(
                 self.look_back_window,
@@ -159,6 +146,8 @@ class ChapmanDataModule(BaseDataModule):
                 self.X_val,
                 self.y_val,
                 use_static_features=self.use_static_features,
+                mean=self.mean,
+                std=self.std,
             )
         if stage == "test":
             self.test_dataset = ChapmanDataset(
@@ -167,4 +156,6 @@ class ChapmanDataModule(BaseDataModule):
                 self.X_test,
                 self.y_test,
                 use_static_features=self.use_static_features,
+                mean=self.mean,
+                std=self.std,
             )
