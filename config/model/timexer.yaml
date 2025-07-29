@@ -15,17 +15,17 @@ model:
     activation: "gelu"
 
     # tunable params
-    patch_len: ${params.timexer.patch_len} # code checks & sets: ${min:${look_back_window}, patch_len} 
-    d_model: ${params.timexer.d_model}
-    d_ff: ${params.timexer.d_ff}
-    e_layers: ${params.timexer.e_layers} # number of encoding layers
-    dropout: ${params.timexer.dropout}
+    patch_len: 2 # code checks & sets: ${min:${look_back_window}, patch_len} 
+    d_model: 128 
+    d_ff: 256
+    e_layers: 4 
+    dropout: 0.1 
 
     use_norm: ${use_norm_dl}
 
 pl_model:
     _target_: src.models.timexer.TimeXer
-    learning_rate: ${params.timexer.learning_rate}
+    learning_rate: 0.0001
     loss_fn: ${loss_fn}
 
 trainer:

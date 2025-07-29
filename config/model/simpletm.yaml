@@ -14,17 +14,17 @@ model:
   m: 3 # Number of levels for the stationary wavelet transform 
 
   # tunable parameters
-  e_layers: ${params.simpletm.e_layers} # number of encoder layers
-  d_model: ${params.simpletm.d_model}
-  d_ff: ${params.simpletm.d_ff} 
-  dropout: ${params.simpletm.dropout} 
-  geomattn_dropout: ${params.simpletm.geomattn_dropout}
+  e_layers: 1 
+  d_model: 256
+  d_ff: 32 
+  dropout: 0.015 
+  geomattn_dropout: 0.25 
 
   use_norm: ${use_norm_dl} # instance normalization in forward function of the model
   
 pl_model: 
   _target_: src.models.simpletm.SimpleTM
-  learning_rate: ${params.simpletm.learning_rate}
+  learning_rate: 0.004 
   lradj: 'type1'
   loss_fn: ${loss_fn}
 

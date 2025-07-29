@@ -12,15 +12,15 @@ model:
   channels: ${dataset.datamodule.look_back_channel_dim}
 
   # tunable params
-  hyper_num: ${params.adamshyper.hyper_num}
-  inner_size: ${params.adamshyper.inner_size} 
-  d_model: ${params.adamshyper.d_model} 
+  hyper_num: [50, 20, 10] 
+  inner_size: 16
+  d_model: 768 
 
   use_norm: ${use_norm_dl}
 
 pl_model: 
   _target_: src.models.adamshyper.AdaMSHyper
-  learning_rate: ${params.adamshyper.learning_rate}
+  learning_rate: 0.002 
   loss: ${loss_fn}
   lradj: 'type1' # adjust learning rate
   use_amp: False

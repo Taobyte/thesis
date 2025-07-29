@@ -12,10 +12,10 @@ model:
 
 pl_model: 
   _target_: src.models.linear.Linear
-  learning_rate: ${params.linear.learning_rate} 
+  learning_rate: 0.001 
   loss: ${loss_fn}
   use_scheduler: False
-  weight_decay: ${params.linear.weight_decay} 
+  weight_decay: 0.0 
 
 trainer:
   max_epochs: 1000

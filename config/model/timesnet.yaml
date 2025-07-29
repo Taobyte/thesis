@@ -8,18 +8,18 @@ model:
   c_out: ${dataset.datamodule.look_back_channel_dim}
   
   # tunable parameters
-  e_layers: ${params.timesnet.e_layers}
-  num_kernels: ${params.timesnet.num_kernels}
-  top_k: ${params.timesnet.top_k}
-  d_model: ${params.timesnet.d_model}
-  d_ff: ${params.timesnet.d_ff}
-  dropout:  ${params.timesnet.dropout} 
+  e_layers: 2
+  num_kernels: 6 
+  top_k: 5
+  d_model: 32 
+  d_ff: 32
+  dropout: 0.01 
 
   use_norm: ${use_norm_dl}
 
 pl_model: 
   _target_: src.models.timesnet.TimesNet
-  learning_rate: ${params.timesnet.learning_rate} 
+  learning_rate: 0.001 
   loss_fn: ${loss_fn} # Long-term Loss = 'MSE' | Short-term Loss = 'SMAPE'
   lradj: "type1"
   beta_1: 0.9

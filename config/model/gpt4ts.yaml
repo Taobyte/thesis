@@ -13,16 +13,16 @@ model:
   freq: 'm'
   
   # tunable parameters
-  d_ff: ${params.gpt4ts.d_ff}
-  d_model: ${params.gpt4ts.d_model} # max dimension is 768
-  gpt_layers: ${params.gpt4ts.gpt_layers}
-  dropout: ${params.gpt4ts.dropout}
+  d_ff: 128
+  d_model: 128 # max dimension is 768
+  gpt_layers: 6 
+  dropout: 0.1 
   
   use_norm: ${use_norm_dl}
 
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
-  learning_rate: ${params.gpt4ts.learning_rate}
+  learning_rate: 0.0001
   loss: ${loss_fn}
   lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
   # lradj: "none"

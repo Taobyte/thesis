@@ -1,5 +1,5 @@
 name: "gp"
-n_points: ${params.gp.n_points} 
+n_points: 250
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
 
 model:
@@ -8,11 +8,11 @@ model:
   use_feature_extractor: ${model.pl_model.use_feature_extractor}
   
   # GP layer
-  num_latents: ${params.gp.num_latents}
+  num_latents: 10
   num_tasks: ${prediction_window}
-  kernel: ${params.gp.kernel} 
-  periodic_type: ${params.gp.periodic_type}
-  use_linear_trend: ${params.gp.use_linear_trend} 
+  kernel: "matern"
+  periodic_type: "" 
+  use_linear_trend: 1 
 
   #Feature Extractor
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}

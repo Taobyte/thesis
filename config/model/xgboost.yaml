@@ -4,13 +4,13 @@ model:
   _target_: src.models.xgboost.XGBoostModel
   # objective: "reg:squarederror"
   loss: ${loss_fn}
-  learning_rate: ${params.xgboost.learning_rate} 
-  n_estimators: ${params.xgboost.n_estimators}
-  max_depth: ${params.xgboost.max_depth} 
-  reg_alpha: ${params.xgboost.reg_alpha}
-  reg_lambda: ${params.xgboost.reg_lambda}
-  subsample: ${params.xgboost.subsample}
-  colsample_bytree: ${params.xgboost.colsample_bytree}
+  learning_rate: 0.01
+  n_estimators: 600 
+  max_depth: 5 
+  reg_alpha: 0.0 
+  reg_lambda: 0.0 
+  subsample: 0.7 
+  colsample_bytree: 0.8 
   use_early_stopping: ${model.trainer.use_early_stopping}
   patience: ${model.trainer.patience}
 
