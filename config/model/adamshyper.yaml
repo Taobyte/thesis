@@ -5,16 +5,20 @@ model:
   _target_: src.models.adamshyper.Model
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
-  k: 1
   CSCM: 'Bottleneck_Construct'
-  window_size: ${compute_square_window:${look_back_window}}  # window_size: [4,4] does not work if look_back_window < 4
-  individual: False # False: Use Channel Dependence True: use channel independence
   channels: ${dataset.datamodule.look_back_channel_dim}
+  individual: False # False: Use Channel Dependence True: use channel independence
+  inner_size: 5 # afaik doesn't do anyhting
+  window_size: ${compute_square_window:${look_back_window}}  # window_size: [4,4] does not work if look_back_window < 4
 
   # tunable params
-  hyper_num: [50, 20, 10] 
-  inner_size: 16
-  d_model: 768 
+  d_model: 512
+  hn1: 50 # number of hyperedges at scale 1
+  hn2: 20 # number of hyperedges at scale 2
+  hn3: 10 # number of hyperedges at scale 3
+  k: 3 # this is the eta parameter in the paper is used in the TOPK function to only take the top k in abs value edges per node and remove the other edges
+  beta: 0.5
+  gamma: 4.2
 
   use_norm: ${use_norm_dl}
 

@@ -951,16 +951,21 @@ class Model(nn.Module):
         pred_len: int = 96,
         channels: int = 1,
         individual: bool = False,
-        window_size: list = [4, 4],
         CSCM: str = "Bottleneck_Construct",
         d_model: int = 512,
-        hyper_num: list = [50, 20, 10],
-        k: int = 3,
+        hn1: int = 50,
+        hn2: int = 20,
+        hn3: int = 10,
+        window_size: list[int] = [4, 4],
+        k: int = 3,  # eta parameter from the paper
+        beta: float = 0.5,
+        gamma: float = 4.2,
         inner_size: int = 5,
         use_norm: bool = True,
     ):
         super(Model, self).__init__()
-        window_size = list(window_size)
+        hyper_num = [hn1, hn2, hn3]  # number of hyperedges at scales 1, 2, 3
+        window_size = list(window_size)  # aggregation window at scale 1, 2
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.channels = channels
@@ -985,15 +990,8 @@ class Model(nn.Module):
         self.inter_tran = nn.Linear(80, self.pred_len)
         self.concat_tra = nn.Linear(320, self.pred_len)
 
-        self.dim = d_model
-        self.hyper_num = 50
-        self.embedhy = nn.Embedding(self.hyper_num, self.dim)
-        self.embednod = nn.Embedding(self.Ms_length, self.dim)
-
-        self.idx = torch.arange(self.hyper_num)
-        self.nodidx = torch.arange(self.Ms_length)
         self.alpha = 3
-        self.k = 10
+        self.k = k
 
         self.window_size = window_size
         self.multiadphyper = multi_adaptive_hypergraoh(
@@ -1003,6 +1001,7 @@ class Model(nn.Module):
             k=k,
             seq_len=seq_len,
             window_size=window_size,
+            beta=beta,
         )
         self.hyper_num1 = hyper_num
         self.hyconv = nn.ModuleList()
@@ -1103,12 +1102,15 @@ class HypergraphConv(MessagePassing):
         negative_slope=0.2,
         dropout=0.1,
         bias=False,
+        gamma: float = 4.2,
     ):
         super(HypergraphConv, self).__init__(aggr="add", node_dim=0)
         self.soft = nn.Softmax(dim=0)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.use_attention = use_attention
+
+        self.gamma = gamma  # gamma parameter from the paper used in the hyperedge loss
 
         if self.use_attention:
             self.heads = heads
@@ -1185,7 +1187,7 @@ class HypergraphConv(MessagePassing):
                 alpha = inner_product / (norm_q_i * norm_q_j)
                 distan = torch.norm(edge_sums[k] - edge_sums[m], dim=1, keepdim=True)
                 loss_item = alpha * distan + (1 - alpha) * (
-                    torch.clamp(torch.tensor(4.2) - distan, min=0.0)
+                    torch.clamp(torch.tensor(self.gamma) - distan, min=0.0)
                 )
                 loss_hyper += torch.abs(torch.mean(loss_item))
 
@@ -1223,6 +1225,7 @@ class multi_adaptive_hypergraoh(nn.Module):
         d_model: int,
         hyper_num: int,
         k: int,
+        beta: float = 0.5,
     ):
         super(multi_adaptive_hypergraoh, self).__init__()
         self.seq_len = seq_len
@@ -1231,6 +1234,7 @@ class multi_adaptive_hypergraoh(nn.Module):
         self.dim = d_model
         self.hyper_num = hyper_num
         self.alpha = 3
+        self.beta = beta
         self.k = k
         self.embedhy = nn.ModuleList()
         self.embednod = nn.ModuleList()
@@ -1274,7 +1278,9 @@ class multi_adaptive_hypergraoh(nn.Module):
             mask.scatter_(1, t1, s1.fill_(1))
             adj = adj * mask
             adj = torch.where(
-                adj > 0.5, torch.tensor(1).to(x.device), torch.tensor(0).to(x.device)
+                adj > self.beta,
+                torch.tensor(1).to(x.device),
+                torch.tensor(0).to(x.device),
             )
             adj = adj[:, (adj != 0).any(dim=0)]
             matrix_array = adj.clone().detach().to(dtype=torch.int)
