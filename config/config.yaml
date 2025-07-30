@@ -2,7 +2,7 @@ defaults:
   - _self_
   - model: linear
   - dataset: dalia
-  - path: local
+  - path: cluster
   - folds: fold_0
   - experiment: endo_only
   - lbw: "5"
