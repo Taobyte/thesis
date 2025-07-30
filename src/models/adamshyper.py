@@ -1007,7 +1007,7 @@ class Model(nn.Module):
         self.hyconv = nn.ModuleList()
         self.hyperedge_atten = SelfAttentionLayer(channels)
         for i in range(len(self.hyper_num1)):
-            self.hyconv.append(HypergraphConv(channels, channels))
+            self.hyconv.append(HypergraphConv(channels, channels, gamma=gamma))
 
         self.slicetran = nn.Linear(100, pred_len)
         self.weight = nn.Parameter(torch.randn(self.pred_len, 76))
