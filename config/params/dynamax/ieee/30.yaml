@@ -1,0 +1,7 @@
+# @package _global_
+
+model:
+  pl_model:
+    n_states: 90
+    n_iter: 10
+    transition_matrix_stickiness: 5.897

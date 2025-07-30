@@ -1,0 +1,10 @@
+# @package _global_
+
+model:
+  n_points: 300
+  model:
+    num_latents: 9
+    kernel: "matern"
+    use_linear: 1
+  pl_model:
+    learning_rate: 0.0019

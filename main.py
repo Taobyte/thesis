@@ -39,7 +39,7 @@ def main(config: DictConfig) -> Optional[float]:
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
-    print(OmegaConf.to_yaml(config))
+    # print(OmegaConf.to_yaml(config))
 
     def setup(config: DictConfig):
         datamodule = instantiate(

@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - model: linear
-  - dataset: dalia
+  - dataset: wildppg
   - path: local
   - folds: fold_0
   - experiment: endo_only

@@ -1,0 +1,10 @@
+# @package _global_
+
+model:
+  model:
+    d_model: 512
+    d_ff: 512
+    dropout: 0.031
+    geomattn_dropout: 0.104
+  pl_model:
+    learning_rate: 0.005
