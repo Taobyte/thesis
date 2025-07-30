@@ -5,6 +5,6 @@ params:
   model.trainer.use_early_stopping: False
   model.pl_model.optimizer: "em"
   model.pl_model.deterministic: True
-  model.pl_model.n_states: int(interval(2,20))
-  model.pl_model.n_iter: choice(25, 50, 100, 150, 200) 
-  model.pl_model.transition_matrix_stickiness: choice(0.0, 1.0, 5.0, 10.0, 20.0)
+  model.pl_model.n_states: int(interval(2, 100))
+  model.pl_model.n_iter: int(interval(10, 300)) 
+  model.pl_model.transition_matrix_stickiness: interval(0, 50)
