@@ -1231,7 +1231,7 @@ class LLMTime(BaseLightningModule):
             "LLMA2": {"model": "llama-7b", **llma2_hypers},
         }
 
-        self.hypers = list(grid_iter(model_hypers["LLMA2"]))
+        self.hypers = list(grid_iter(model_hypers["LLMA2"]))[0]
 
         self.automatic_optimization = False
 
@@ -1240,7 +1240,7 @@ class LLMTime(BaseLightningModule):
         look_back_window = look_back_window.detach().cpu().numpy()
         look_back_window = look_back_window[:, :, 0]  # (B, L)
         look_back_windows = [look_back_window[i] for i in range(len(look_back_window))]
-        preds_dict = get_llmtime_predictions_data(look_back_windows, **hypers)
+        preds_dict = get_llmtime_predictions_data(look_back_windows, **self.hypers)
         preds = torch.tensor(preds_dict["median"], device=device)  # (B, T)
         return preds
 
