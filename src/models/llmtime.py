@@ -1203,6 +1203,14 @@ def get_llmtime_predictions_data(
     return out_dict
 
 
+class DummyModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
 class LLMTime(BaseLightningModule):
     def __init__(self, prediction_window: int = 3):
         super().__init__()
