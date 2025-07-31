@@ -5,7 +5,7 @@ defaults:
   - path: local
   - folds: fold_0
   - experiment: endo_only
-  - lbw: "5"
+  - lbw: "5" # hydra does not like integers! a:5, b:10, c:20, d:30, e:60
   - optional params: ${model}/${dataset}/${lbw}
   # - optional override hydra/sweeper: ${model}_sweeper
 
