@@ -1,0 +1,10 @@
+# @package _global_
+
+model:
+  model:
+   hid_dim: 256
+   n_hid_layers: 1
+   dropout: 0.386
+  
+  pl_model:
+    learning_rate: 0.0015

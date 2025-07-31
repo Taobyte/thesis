@@ -44,6 +44,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type",
         choices=[
+            "viz",
             "granger",
             "pearson",
             "infos",
@@ -67,6 +68,7 @@ if __name__ == "__main__":
                 f"dataset={args.dataset}",
                 "folds=all",
                 "use_dynamic_features=True",
+                "use_heart_rate=False",
             ],
         )
 
@@ -75,8 +77,34 @@ if __name__ == "__main__":
     datamodule.setup("fit")
     # datamodule.setup("test")
     dataset = datamodule.train_dataset.data
+    if args.type == "viz":
+        fig = make_subplots(rows=2 * len(dataset), cols=1)
 
-    if args.type == "infos":
+        for i, series in tqdm(enumerate(dataset)):
+            ppg = series[:, 0]
+            activity = series[:, 1]
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(series))),
+                    y=ppg,
+                    showlegend=False,  # Legend redundant here
+                ),
+                row=2 * i + 1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(series))),
+                    y=activity,
+                    showlegend=False,  # Legend redundant here
+                ),
+                row=2 * i + 2,
+                col=1,
+            )
+            break
+        fig.show()
+
+    elif args.type == "infos":
 
         def get_channel_stats(dataset):
             mins = [np.min(s) for s in dataset]

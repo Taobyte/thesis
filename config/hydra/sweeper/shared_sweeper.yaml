@@ -23,4 +23,5 @@ wandb_kwargs:
   project: ${wandb.project}
   name: ${hydra.sweeper.study_name}
   reinit: True 
+  dir: ${path.basedir}
 

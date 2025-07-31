@@ -1,0 +1,6 @@
+# @package _global_
+
+model:
+  pl_model:
+      learning_rate: 0.0045
+      weight_decay: 0.0
