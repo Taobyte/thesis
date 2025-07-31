@@ -3,13 +3,13 @@ name: "hxgboost"
 model:
   _target_: src.models.hxgboost.HXGBoostModel
   loss: ${loss_fn}
-  learning_rate: ${params.xgboost.learning_rate} 
-  n_estimators: ${params.xgboost.n_estimators}
-  max_depth: ${params.xgboost.max_depth} 
-  reg_alpha: ${params.xgboost.reg_alpha}
-  reg_lambda: ${params.xgboost.reg_lambda}
-  subsample: ${params.xgboost.subsample}
-  colsample_bytree: ${params.xgboost.colsample_bytree}
+  learning_rate: 0.05               
+  n_estimators: 500                 
+  max_depth: 6                      
+  reg_alpha: 0.1                    
+  reg_lambda: 1.0                   
+  subsample: 0.8                    
+  colsample_bytree: 0.8            
   use_early_stopping: ${model.trainer.use_early_stopping}
   patience: ${model.trainer.patience}
 

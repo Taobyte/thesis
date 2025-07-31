@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import wandb
 import xgboost as xgb
 
 from xgboost import XGBRegressor
