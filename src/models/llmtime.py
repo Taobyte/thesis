@@ -1040,7 +1040,6 @@ def generate_predictions(
     input_strs,
     steps,
     settings: SerializerSettings,
-    scalers: None,
     num_samples=1,
     temp=0.7,
     parallel=True,
@@ -1088,30 +1087,26 @@ def generate_predictions(
     else:
         completions_list = [complete(input_str) for input_str in tqdm(input_strs)]
 
-    def completion_to_pred(completion, inv_transform):
+    def completion_to_pred(completion):
         pred = handle_prediction(
             deserialize_str(completion, settings, ignore_last=False, steps=steps),
             expected_length=steps,
             strict=strict_handling,
         )
         if pred is not None:
-            return inv_transform(pred)
+            return pred
         else:
             return None
 
     preds = [
-        [
-            completion_to_pred(completion, scaler.inv_transform)
-            for completion in completions
-        ]
-        for completions, scaler in zip(completions_list, scalers)
+        [completion_to_pred(completion) for completion in completions]
+        for completions in completions_list
     ]
     return preds, completions_list, input_strs
 
 
 def get_llmtime_predictions_data(
     train,
-    test,
     model,
     settings,
     num_samples=10,
@@ -1120,6 +1115,7 @@ def get_llmtime_predictions_data(
     beta=0.3,
     basic=False,
     parallel=True,
+    prediction_window: int = 3,
     **kwargs,
 ):
     """
@@ -1128,7 +1124,6 @@ def get_llmtime_predictions_data(
 
     Args:
         train (array-like or list of array-like): Training time series data (history).
-        test (array-like or list of array-like): Test time series data (true future).
         model (str): Name of the LLM model to use. Must have a corresponding entry in completion_fns.
         settings (SerializerSettings or dict): Serialization settings.
         num_samples (int, optional): Number of samples to return. Defaults to 10.
@@ -1147,42 +1142,20 @@ def get_llmtime_predictions_data(
         f"Invalid model {model}, must be one of {list(completion_fns.keys())}"
     )
     completion_fn = completion_fns[model]
-    nll_fn = nll_fns[model] if model in nll_fns else None
 
     if isinstance(settings, dict):
         settings = SerializerSettings(**settings)
-    if not isinstance(train, list):
-        # Assume single train/test case
-        train = [train]
-        test = [test]
+    assert isinstance(train, list), "Attention we need a list of 1d numpy arrays"
 
     for i in range(len(train)):
         if not isinstance(train[i], pd.Series):
             train[i] = pd.Series(train[i], index=pd.RangeIndex(len(train[i])))
-            test[i] = pd.Series(
-                test[i],
-                index=pd.RangeIndex(len(train[i]), len(test[i]) + len(train[i])),
-            )
 
-    test_len = len(test[0])
-    assert all(len(t) == test_len for t in test), (
-        f"All test series must have same length, got {[len(t) for t in test]}"
-    )
-
-    # Create a unique scaler for each series
-    scalers = [
-        get_scaler(train[i].values, alpha=alpha, beta=beta, basic=basic)
-        for i in range(len(train))
-    ]
+    test_len = prediction_window
 
     # transform input_arrs
     input_arrs = [train[i].values for i in range(len(train))]
-    transformed_input_arrs = np.array(
-        [
-            scaler.transform(input_array)
-            for input_array, scaler in zip(input_arrs, scalers)
-        ]
-    )
+    transformed_input_arrs = input_arrs
     # serialize input_arrs
     input_strs = [
         serialize_arr(scaled_input_arr, settings)
@@ -1196,7 +1169,7 @@ def get_llmtime_predictions_data(
         ]
     )
 
-    steps = test_len
+    steps = prediction_window
     samples = None
     medians = None
     completions_list = None
@@ -1206,14 +1179,14 @@ def get_llmtime_predictions_data(
             input_strs,
             steps,
             settings,
-            scalers,
             num_samples=num_samples,
             temp=temp,
             parallel=parallel,
             **kwargs,
         )
         samples = [
-            pd.DataFrame(preds[i], columns=test[i].index) for i in range(len(preds))
+            pd.DataFrame(preds[i], columns=[str(i) for i in range(prediction_window)])
+            for i in range(len(preds))
         ]
         medians = [sample.median(axis=0) for sample in samples]
         samples = samples if len(samples) > 1 else samples[0]
@@ -1227,29 +1200,41 @@ def get_llmtime_predictions_data(
         "completions_list": completions_list,
         "input_strs": input_strs,
     }
-    # Compute NLL/D on the true test series conditioned on the (truncated) input series
-    if nll_fn is not None:
-        BPDs = [
-            nll_fn(
-                input_arr=input_arrs[i],
-                target_arr=test[i].values,
-                settings=settings,
-                transform=scalers[i].transform,
-                count_seps=True,
-                temp=temp,
-            )
-            for i in range(len(train))
-        ]
-        out_dict["NLL/D"] = np.mean(BPDs)
     return out_dict
 
 
 class LLMTime(BaseLightningModule):
-    def __init__(self):
+    def __init__(self, prediction_window: int = 3):
         super().__init__()
 
+        assert self.experiment_name == "endo_only"
+
+        llma2_hypers = dict(
+            temp=0.7,
+            alpha=0.95,
+            beta=0.3,
+            basic=False,
+            settings=SerializerSettings(
+                base=10, prec=3, signed=True, half_bin_correction=True
+            ),
+        )
+
+        model_hypers = {
+            "LLMA2": {"model": "llama-7b", **llma2_hypers},
+        }
+
+        self.hypers = list(grid_iter(model_hypers["LLMA2"]))
+
+        self.automatic_optimization = False
+
     def forward(self, look_back_window: Tensor):
-        return look_back_window
+        device = look_back_window.device
+        look_back_window = look_back_window.detach().cpu().numpy()
+        look_back_window = look_back_window[:, :, 0]  # (B, L)
+        look_back_windows = [look_back_window[i] for i in range(len(look_back_window))]
+        preds_dict = get_llmtime_predictions_data(look_back_windows, **hypers)
+        preds = torch.tensor(preds_dict["median"], device=device)  # (B, T)
+        return preds
 
     def train_step(self, batch, batch_idx):
         pass
@@ -1281,11 +1266,11 @@ if __name__ == "__main__":
     }
 
     model_names = list(model_predict_fns.keys())
+    hypers = list(grid_iter(model_hypers["LLMA2"]))
 
     train = np.zeros((1000,))
     test = np.ones((100,))
 
-    hypers = list(grid_iter(model_hypers["LLMA2"]))
     import pdb
 
     preds = get_llmtime_predictions_data(train, test, **hypers[0])

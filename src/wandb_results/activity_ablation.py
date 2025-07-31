@@ -21,7 +21,6 @@ def dynamic_feature_ablation(
     look_back_window: list[int],
     prediction_window: list[int],
     use_heart_rate: bool,
-    use_static_features: bool,
     start_time: str = "2025-6-24",
     normalization: str = "global",
     save_html: bool = False,
@@ -29,6 +28,11 @@ def dynamic_feature_ablation(
     use_std: bool = False,
     table: bool = True,
 ):
+    assert len(models) > 0
+    assert len(datasets) > 0
+    assert len(look_back_window) > 0
+    assert len(prediction_window) > 0
+
     n_models = len(models)
     current_time = int(time.time())
 
@@ -39,11 +43,10 @@ def dynamic_feature_ablation(
             look_back_window,
             prediction_window,
             use_heart_rate,
-            True,
-            use_static_features,
             normalization,
             start_time,
             window_statistic=window_statistic,
+            experiment_name="endo_exo",
         )
 
         no_dynamic_runs = get_runs(
@@ -52,11 +55,10 @@ def dynamic_feature_ablation(
             look_back_window,
             prediction_window,
             use_heart_rate,
-            False,
-            use_static_features,
             normalization,
             start_time,
             window_statistic=window_statistic,
+            experiment_name="endo_only",
         )
         dynamic_mean_dict, dynamic_std_dict = get_metrics(dynamic_runs)
         no_dynamic_mean_dict, no_dynamic_std_dict = get_metrics(no_dynamic_runs)
@@ -68,7 +70,7 @@ def dynamic_feature_ablation(
             for p, pw in enumerate(prediction_window):
                 fig = make_subplots(
                     rows=n_models,
-                    cols=4,
+                    cols=len(test_metrics),
                     column_titles=[metric_to_name[metric] for metric in test_metrics],
                     row_titles=[model_to_name[model] for model in models],
                     shared_xaxes=False,
@@ -105,7 +107,7 @@ def dynamic_feature_ablation(
             fig.update_layout(
                 title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw} | Window Statistic {window_statistic}",
                 height=n_models * 400,
-                width=1200,
+                width=len(test_metrics) * 300,
                 template="plotly_white",
             )
 

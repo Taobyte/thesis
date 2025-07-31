@@ -144,7 +144,6 @@ def main():
             look_back_window=args.look_back_window,
             prediction_window=args.prediction_window,
             use_heart_rate=args.use_heart_rate,
-            use_static_features=args.use_static_features,
             start_time="2025-7-14",
             normalization=args.normalization,
             save_html=args.save_html,
