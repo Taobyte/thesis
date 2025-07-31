@@ -26,6 +26,8 @@ from transformers import (
     LlamaTokenizer,
 )
 
+from src.models.utils import BaseLightningModule
+
 cluster = True
 STEP_MULTIPLIER = 1.2
 
@@ -1242,7 +1244,7 @@ def get_llmtime_predictions_data(
     return out_dict
 
 
-class LLMTime(L.LightningModule):
+class LLMTime(BaseLightningModule):
     def __init__(self):
         super().__init__()
 
@@ -1280,21 +1282,12 @@ if __name__ == "__main__":
 
     model_names = list(model_predict_fns.keys())
 
-    datadir = "C:/Users/cleme/ETH/Master/Thesis/data/Capture24/capture24/capture24_preprocessed"
+    train = np.zeros((1000,))
+    test = np.ones((100,))
 
-    out = {}
+    hypers = list(grid_iter(model_hypers["LLMA2"]))
+    import pdb
 
-    for model in model_names:  # GPT-4 takes a about a minute to run
-        hypers = list(grid_iter(model_hypers[model]))
-        num_samples = 10
-        pred_dict = get_autotuned_predictions_data(
-            train,
-            test,
-            hypers,
-            num_samples,
-            model_predict_fns[model],
-            verbose=False,
-            parallel=False,
-        )
-        out[model] = pred_dict
-        # plot_preds(train, test, pred_dict, model, show_samples=True)
+    preds = get_llmtime_predictions_data(train, test, **hypers[0])
+
+    pdb.set_trace()
