@@ -1212,7 +1212,7 @@ class DummyModel(torch.nn.Module):
 
 
 class LLMTime(BaseLightningModule):
-    def __init__(self, prediction_window: int = 3):
+    def __init__(self, model: torch.nn.Module, prediction_window: int = 3):
         super().__init__()
 
         assert self.experiment_name == "endo_only"
@@ -1235,7 +1235,7 @@ class LLMTime(BaseLightningModule):
 
         self.automatic_optimization = False
 
-    def forward(self, look_back_window: Tensor):
+    def model_forward(self, look_back_window: Tensor):
         device = look_back_window.device
         look_back_window = look_back_window.detach().cpu().numpy()
         look_back_window = look_back_window[:, :, 0]  # (B, L)
