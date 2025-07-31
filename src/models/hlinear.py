@@ -38,15 +38,16 @@ class HLinearModel(torch.nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         _, _, c = x.shape
+        device = x.device
         assert c > 1
         endo = x[:, :, : self.target_channel_dim]
         exo = x[:, :, self.target_channel_dim :]
-        endo = endo.squeeze(-1).detach().numpy()  # (B, L)
-        exo = exo.squeeze(-1).detach().numpy()  # (B, L)
+        endo = endo.squeeze(-1).detach().cpu().numpy()  # (B, L)
+        exo = exo.squeeze(-1).detach().cpu().numpy()  # (B, L)
         initial_pred = self.endo_model.predict(endo)
         deltas = self.exo_model.predict(exo)
         pred = initial_pred + deltas
-        pred = torch.from_numpy(pred).unsqueeze(-1)
+        pred = torch.from_numpy(pred).to(device).unsqueeze(-1)
         return pred
 
 

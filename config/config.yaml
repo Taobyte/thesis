@@ -5,7 +5,7 @@ defaults:
   - path: local
   - folds: fold_0
   - experiment: endo_only
-  - lbw: "5" # hydra does not like integers! a:5, b:10, c:20, d:30, e:60
+  - lbw: a # hydra does not like integers! a:5, b:10, c:20, d:30, e:60
   - optional params: ${model}/${dataset}/${lbw}
   # - optional override hydra/sweeper: ${model}_sweeper
 
@@ -20,9 +20,9 @@ n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets have folds defined in config/experiments
 normalization: "global" # can be either "global", "difference" or  "none"
 
-numpy_models: ["xgboost", "hlinear", "hxgboost"] # these models get passed the windowed training & val datasets 
-special_models: ["xgboost", "hlinear", "hxgboost", "hmm", "dynamax"] # these models are not trained with Lightning 
-probabilistic_models: ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"]
+numpy_models: ["linear","xgboost", "hlinear", "hxgboost"] # these models get passed the windowed training & val datasets 
+special_models: ["linear","xgboost", "hlinear", "hxgboost", "hmm", "dynamax"] # these models are not trained with Lightning 
+probabilistic_models: ["gp", "dklgp", "exactgp", "bnn", "dropoutbnn"] # these models output the mean & std as the prediction
 
 look_back_window: 5
 prediction_window: 3

@@ -1,105 +1,103 @@
 import torch
 import numpy as np
-import pandas as pd
-import wandb
 
 from torch import Tensor
+from sklearn.linear_model import LinearRegression
+from numpy.typing import NDArray
 from typing import Any
+from einops import rearrange
 
-from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
+from src.models.utils import BaseLightningModule
+
+
+class Model(torch.nn.Module):
+    def __init__(
+        self,
+        lbw_train_dataset: NDArray[np.float32],
+        pw_train_dataset: NDArray[np.float32],
+        lbw_val_dataset: NDArray[np.float32],
+        pw_val_dataset: NDArray[np.float32],
+        look_back_window: int,
+        prediction_window: int,
+        target_channel_dim: int = 1,
+    ):
+        super().__init__()
+        self.look_back_window = look_back_window
+        self.prediction_window = prediction_window
+        self.target_channel_dim = target_channel_dim
+
+        self.model = LinearRegression()
+
+        self.lbw_train_dataset = lbw_train_dataset
+        self.pw_train_dataset = pw_train_dataset
+        self.lbw_val_dataset = lbw_val_dataset
+        self.pw_val_dataset = pw_val_dataset
+
+    def forward(self, x: Tensor) -> Tensor:
+        _, _, c = x.shape
+        device = x.device
+        x = rearrange(x, "B T C -> B (T C)")
+        x = x.detach().cpu().numpy()
+        pred = self.model.predict(x)
+        pred = rearrange(pred, "B (T C) -> B T C", C=self.target_channel_dim)
+        pred = torch.from_numpy(pred).to(device)
+        return pred
 
 
 class Linear(BaseLightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
-        learning_rate: float = 0.01,
         loss: str = "MSE",
-        use_scheduler: bool = False,
-        weight_decay: float = 1e-4,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
+        self.automatic_optimization = False
         self.criterion = get_loss_fn(loss)
-        self.learning_rate = learning_rate
-        self.use_scheduler = use_scheduler
-        self.weight_decay = weight_decay
-
         self.mae_criterion = torch.nn.L1Loss()
 
     def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
+    # we use this hack!
+    def on_train_epoch_start(self):
+        X_train = self.model.lbw_train_dataset
+        y_train = self.model.pw_train_dataset
+        X_val = self.model.lbw_val_dataset
+        y_val = self.model.pw_val_dataset
+
+        X_train = rearrange(X_train, "B T C -> B (T C)")
+        y_train = rearrange(y_train, "B T C -> B (T C)")
+
+        self.model.model.fit(X_train, y_train)
+
+        # we need this for the optuna tuner
+        preds = self.model(torch.tensor(X_val))
+        preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
+        targets = torch.tensor(y_val, dtype=torch.float32, device=self.device)
+
+        if self.tune:
+            mae_criterion = torch.nn.L1Loss()
+            loss = mae_criterion(preds, targets)
+        else:
+            loss = self.criterion(preds, targets)
+
+        self.final_val_loss = loss
+
     def model_specific_train_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ):
-        preds = self.model(look_back_window)
-        preds = preds[:, :, : prediction_window.shape[-1]]
-        assert preds.shape == prediction_window.shape
-        loss = self.criterion(preds, prediction_window)
-        self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
-        return loss
+        return torch.Tensor([0])
 
     def model_specific_val_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ):
-        preds = self.model(look_back_window)
-        preds = preds[:, :, : prediction_window.shape[-1]]
-        if self.tune:
-            loss = self.mae_criterion(preds, prediction_window)
-        else:
-            loss = self.criterion(preds, prediction_window)
-        self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
+        self.log(
+            "val_loss", self.final_val_loss, on_epoch=True, on_step=True, logger=True
         )
+        return torch.Tensor([0])
 
-        return optimizer
-
-    def on_fit_end(self):
-        layer = self.model.layers[0]
-        weights = layer.weight.detach().cpu().numpy()
-        min_val = weights.min()
-        max_val = weights.max()
-        if max_val == min_val:
-            normalized_weights = np.zeros_like(
-                weights
-            )  # Or all ones, depending on your preference
-        else:
-            normalized_weights = (weights - min_val) / (max_val - min_val)
-
-        # heatmap
-        self.logger.experiment.log(
-            {
-                "weights/linear_layer_weight_heatmap": wandb.Image(
-                    normalized_weights,
-                    caption="Linear Layer Heatmap (Min-Max Normalized)",
-                )
-            },
-        )
-
-        # weights histogram
-        weights_flat = weights.flatten()
-        self.logger.experiment.log(
-            {"weights/linear_layer_weights_histogram": wandb.Histogram(weights_flat)},
-        )
-        # bias values
-        if layer.bias is not None:
-            biases = layer.bias.data.detach().cpu().numpy()
-            df_bias = pd.DataFrame({"Index": np.arange(len(biases)), "Value": biases})
-            self.logger.experiment.log(
-                {"weights/linear_layer_bias_values": wandb.Table(dataframe=df_bias)},
-                commit=False,
-            )
-        # weight values
-        df_weights = pd.DataFrame(weights)
-        self.logger.experiment.log(
-            {"weights/linear_layer_weight_values": wandb.Table(dataframe=df_weights)}
-        )
+    def configure_optimizers(self) -> None:
+        return None

@@ -1,26 +1,19 @@
 name: "linear"
 
 model: 
-  _target_: src.models.mlp.Model
+  _target_: src.models.linear.Model
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
-  input_channels: ${dataset.datamodule.look_back_channel_dim}
-  activation: "none"
-  n_hid_layers: 0
-
-  autoregressive: False
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
 pl_model: 
   _target_: src.models.linear.Linear
-  learning_rate: 0.001 
   loss: ${loss_fn}
-  use_scheduler: False
-  weight_decay: 0.0 
 
 trainer:
-  max_epochs: 1000
-  use_early_stopping: True
+  max_epochs: 1
+  use_early_stopping: False
   patience: 2
 
 data:
-  batch_size: 32
+  batch_size: 256

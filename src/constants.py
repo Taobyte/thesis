@@ -1,5 +1,5 @@
 # Metrics
-test_metrics = ["test_MSE", "test_MAE", "test_cross_correlation", "test_dir_acc_single"]
+test_metrics = ["MSE", "MAE", "DIRACC", "MASE", "ND", "NRMSE"]
 
 # Colors for plotting
 model_colors = [
@@ -22,19 +22,12 @@ model_colors = [
 
 # Human-readable names for metrics
 metric_to_name = {
-    "test_MSE": "Mean Squared Error",
-    "test_MAE": "Mean Absolute Deviation",
-    "test_cross_correlation": "Cross Correlation",
-    "test_dir_acc_single": "Directional Accuracy",
-}
-
-name_to_title = {
-    "MSE": "MSE",
-    "MAE": "MAE",
-    "cross_correlation": "Pearson Correlation",
-    "dir_acc_full": "Dir Acc Full",
-    "dir_acc_single": "Dir Acc Single",
-    "sMAPE": "sMAPE",
+    "MSE": "Mean Squared Error",
+    "MAE": "Mean Absolute Deviation",
+    "DIRACC": "Directional Accuracy",
+    "MASE": "Mean Absolute Percentage Error",
+    "ND": "Normalized Difference",
+    "NRMSE": "Normalized RMSE",
 }
 
 # Human-readable names for models
@@ -53,6 +46,9 @@ model_to_name = {
     "linear": "Linear Regression",
     "hmm": "Hidden Markov Model",
     "xgboost": "XGBoost",
+    "mlp": "MLP",
+    "hlinear": "HLinear",
+    "hxgboost": "HXGBoost",
 }
 
 # Human-readable names for datasets
@@ -61,4 +57,10 @@ dataset_to_name = {
     "wildppg": "WildPPG",
     "ieee": "IEEE",
     "mhc6mwt": "My Heart Counts Six-Minute Walk Test",
+}
+
+# Human-readable names for experiments
+experiment_to_name = {
+    "endo_only": "Endogenous Only",
+    "endo_exo": "Endogenous & Exogenous",
 }

@@ -69,17 +69,11 @@ def main():
         help="get runs for heart rate only has an effect for datasets: dalia, ieee & wildppg",
     )
     parser.add_argument(
-        "--use_dynamic_features",
+        "--experiment",
+        type=str,
         required=False,
-        action="store_true",
-        help="get runs trained with activity information",
-    )
-    parser.add_argument(
-        "--use_static_features",
-        required=False,
-        action="store_true",
-        default=False,
-        help="get runs trained with activity information",
+        default="endo_exo",
+        help="experiment name",
     )
 
     parser.add_argument(
@@ -127,8 +121,7 @@ def main():
             args.look_back_window,
             args.prediction_window,
             args.use_heart_rate,
-            args.use_dynamic_features,
-            args.use_static_features,
+            args.experiment,
         )
     elif args.type == "viz":
         visualize_look_back_window_difference(

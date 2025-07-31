@@ -32,7 +32,6 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
     for run in tqdm(runs):
         name_splitted = run.name.split("_")
         model_name = name_splitted[4]
-        model_run_counts[model_name] += 1
         look_back_window = name_splitted[-2]
         prediction_window = name_splitted[-1]
         summary = run.summary._json_dict
@@ -40,6 +39,7 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
         metrics[model_name][look_back_window][prediction_window].append(
             filtered_summary
         )
+        model_run_counts[model_name] += 1
 
     for k, v in model_run_counts.items():
         print(f"Model {k}: {v}")
@@ -70,11 +70,10 @@ def get_runs(
     look_back_window: list[int],
     prediction_window: list[int],
     use_heart_rate: bool,
-    use_dynamic_features: bool,
-    use_static_features: bool,
     normalization: str = "global",
     start_time: str = "2025-6-12",
     window_statistic: str = None,
+    experiment_name: str = "endo_exo",
 ):
     if normalization is None:
         normalizations = ["global", "local", "none"]
@@ -89,11 +88,10 @@ def get_runs(
                 use_heart_rate,
                 lbw,
                 pw,
-                use_dynamic_features,
-                use_static_features,
                 fold_nr=-1,  # does not matter, we only want group_name
                 fold_datasets=[],  # does not matter
                 normalization=normalization,
+                experiment_name=experiment_name,
             )
 
             group_names.append(group_name)
