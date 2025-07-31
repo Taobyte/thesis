@@ -1212,8 +1212,8 @@ class DummyModel(torch.nn.Module):
 
 
 class LLMTime(BaseLightningModule):
-    def __init__(self, model: torch.nn.Module, prediction_window: int = 3):
-        super().__init__()
+    def __init__(self, model: torch.nn.Module, prediction_window: int = 3, **kwargs):
+        super().__init__(**kwargs)
 
         assert self.experiment_name == "endo_only"
 
