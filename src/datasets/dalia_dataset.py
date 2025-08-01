@@ -21,9 +21,7 @@ def dalia_load_data(
     use_dynamic_features: bool,
     use_static_features: bool,
     window_statistic: str = "mean",
-) -> Tuple[list[NDArray[np.float32]], NDArray[np.float32], NDArray[np.float32]]:
-    # static_feature_df = pd.read_csv(path + "/static_participant_features.csv")
-
+) -> Tuple[list[NDArray[np.float32]], list[NDArray[np.float32]]]:
     loaded_series: list[NDArray[np.float32]] = []
     for i in participants:
         label = "S" + str(i)
@@ -79,8 +77,10 @@ def dalia_load_data(
     combined = np.concatenate(loaded_series, axis=0)
     mean = np.mean(combined, axis=0)
     std = np.std(combined, axis=0)
+    min = np.min(combined, axis=0)
+    max = np.min(combined, axis=0)
 
-    return loaded_series, mean, std
+    return loaded_series, [mean, std, min, max]
 
 
 class DaLiADataset(Dataset[tuple[Tensor, Tensor]]):
@@ -103,7 +103,7 @@ class DaLiADataset(Dataset[tuple[Tensor, Tensor]]):
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
         self.target_channel_dim = target_channel_dim
-        self.data, self.mean, self.std = dalia_load_data(
+        self.data, [self.mean, self.std, self.min, self.max] = dalia_load_data(
             path,
             participants,
             use_heart_rate,
@@ -137,7 +137,7 @@ class DaLiADataModule(BaseDataModule):
         val_participants: list[int] = [9, 10, 11],
         test_participants: list[int] = [1, 13, 14],
         window_statistic: str = "mean",
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 

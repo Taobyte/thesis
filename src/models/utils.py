@@ -20,7 +20,7 @@ from typing import Dict, Tuple, Union, Any
 from collections import defaultdict
 
 from src.metrics import Evaluator
-from src.normalization import global_z_denorm, undo_differencing
+from src.normalization import global_z_denorm, undo_differencing, min_max_denorm
 from src.datasets.utils import BaseDataModule
 from src.plotting import plot_max_min_median_predictions
 
@@ -209,6 +209,18 @@ class BaseLightningModule(L.LightningModule):
             preds = global_z_denorm(preds, self.local_norm_channels, mean, std)
             prediction_window = global_z_denorm(
                 prediction_window_norm, self.local_norm_channels, mean, std
+            )
+
+        elif self.normalization == "minmax":
+            device = look_back_window_norm.device
+            train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
+            min = train_dataset.min
+            max = train_dataset.max
+            min = Tensor(min).reshape(1, 1, -1).to(device).float()
+            max = Tensor(max).reshape(1, 1, -1).to(device).float()
+            preds = min_max_denorm(preds, self.local_norm_channels, min, max)
+            prediction_window = min_max_denorm(
+                prediction_window_norm, self.local_norm_channels, min, max
             )
 
         elif self.normalization == "difference":

@@ -1,19 +1,17 @@
 # The overall project structure and training loop design in this repository
 # were significantly inspired by the work of Alice Bizeul.
 # See their repository at: https://github.com/alicebizeul/pmae
-import os
 import hydra
 import numpy as np
 import lightning as L
 
-from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import get_original_cwd
-from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks import ModelCheckpoint, Callback
 from typing import Optional
 
 from src.utils import (
+    setup,
+    delete_checkpoint,
     setup_wandb_logger,
     get_optuna_name,
     compute_square_window,
@@ -21,7 +19,6 @@ from src.utils import (
     get_min,
     resolve_str,
 )
-from src.models.utils import get_model_kwargs
 
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
@@ -40,72 +37,6 @@ def main(config: DictConfig) -> Optional[float]:
     wandb_logger, run_name = setup_wandb_logger(config)
 
     # print(OmegaConf.to_yaml(config))
-
-    def setup(config: DictConfig):
-        datamodule = instantiate(
-            config.dataset.datamodule,
-            normalization=config.normalization,
-            use_only_exo=config.use_only_exo,
-            use_perfect_info=config.use_perfect_info,
-        )
-        model_kwargs = get_model_kwargs(config, datamodule)
-        model = instantiate(config.model.model, **model_kwargs)
-        pl_model = instantiate(
-            config.model.pl_model,
-            model=model,
-            name=config.model.name,
-            use_plots=config.use_plots,
-            normalization=config.normalization,
-            tune=config.tune,
-            probabilistic_models=config.probabilistic_models,
-            experiment_name=config.experiment.experiment_name,
-            seed=config.seed,
-        )
-
-        callbacks: list[Callback] = []
-
-        checkpoint_callback = ModelCheckpoint(
-            monitor="val_loss",
-            filename=run_name + "-{epoch}-{step}",
-            save_top_k=1,
-        )
-        callbacks.append(checkpoint_callback)
-
-        if config.model.trainer.use_early_stopping:
-            callbacks.append(
-                EarlyStopping(
-                    monitor="val_loss",
-                    mode="min",
-                    patience=config.model.trainer.patience,
-                    min_delta=0.001,  # stop if no substantial improvement is being made. Important for models with LR schedulers
-                )
-            )
-
-        trainer = L.Trainer(
-            logger=wandb_logger,
-            max_epochs=config.model.trainer.max_epochs,
-            callbacks=callbacks,
-            enable_progress_bar=True,
-            enable_model_summary=False,
-            overfit_batches=1 if config.overfit else 0.0,
-            limit_test_batches=10 if config.overfit else None,
-            default_root_dir=config.path.checkpoint_path,
-            num_sanity_val_steps=0,
-        )
-
-        return datamodule, pl_model, trainer, callbacks
-
-    def delete_checkpoint(trainer: L.Trainer, checkpoint_callback: ModelCheckpoint):
-        if trainer.is_global_zero:
-            best_checkpoint_path: str = (
-                checkpoint_callback.best_model_path
-            )  # ignore:type
-            try:
-                os.remove(best_checkpoint_path)
-                print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
-            except OSError as e:
-                print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
-
     if config.tune:
         dataset_name = config.dataset.name
 
@@ -129,7 +60,9 @@ def main(config: DictConfig) -> Optional[float]:
             else:
                 config["seed"] = i
 
-            datamodule, pl_model, trainer, callbacks = setup(config)
+            datamodule, pl_model, trainer, callbacks = setup(
+                config, wandb_logger, run_name
+            )
             checkpoint_callback = callbacks[0]
 
             print(f"Starting fold {i}")
@@ -156,7 +89,7 @@ def main(config: DictConfig) -> Optional[float]:
         return avg_val_loss
 
     else:
-        datamodule, pl_model, trainer, callbacks = setup(config)
+        datamodule, pl_model, trainer, callbacks = setup(config, wandb_logger, run_name)
         checkpoint_callback = callbacks[0]
 
         print("Start Training.")

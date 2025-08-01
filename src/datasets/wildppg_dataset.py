@@ -70,8 +70,10 @@ def wildppg_load_data(
     combined = np.concatenate(arrays, axis=0)
     mean = np.mean(combined, axis=0)
     std = np.std(combined, axis=0)
+    min = np.min(combined, axis=0)
+    max = np.max(combined, axis=0)
 
-    return arrays, mean, std
+    return arrays, mean, std, min, max
 
 
 class WildPPGDataset(Dataset):
@@ -87,7 +89,7 @@ class WildPPGDataset(Dataset):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window = look_back_window + prediction_window
-        self.data, self.mean, self.std = wildppg_load_data(
+        self.data, self.mean, self.std, self.min, self.max = wildppg_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
 

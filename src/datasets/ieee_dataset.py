@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from torch.utils.data import Dataset
-from typing import Tuple
+from typing import Tuple, Any
 
 from src.datasets.utils import BaseDataModule
 
@@ -38,8 +38,10 @@ def ieee_load_data(
     combined = np.concatenate(loaded_series, axis=0)
     mean = np.mean(combined, axis=0)
     std = np.std(combined, axis=0)
+    min = np.min(combined, axis=0)
+    max = np.max(combined, axis=0)
 
-    return loaded_series, mean, std
+    return loaded_series, mean, std, min, max
 
 
 class IEEEDataset(Dataset):
@@ -61,7 +63,7 @@ class IEEEDataset(Dataset):
         self.use_dynamic_features = use_dynamic_features
         self.target_channel_dim = target_channel_dim
 
-        self.data, self.mean, self.std = ieee_load_data(
+        self.data, self.mean, self.std, self.min, self.max = ieee_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
 
@@ -123,7 +125,7 @@ class IEEEDataModule(BaseDataModule):
         val_participants: list[int] = [8, 9],
         test_participants: list[int] = [10, 11, 12],
         use_heart_rate: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 

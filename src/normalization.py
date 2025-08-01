@@ -33,6 +33,44 @@ def global_z_denorm(
     return combined
 
 
+def min_max_norm(
+    x: torch.Tensor,
+    local_norm_channels: int,
+    min_tensor: torch.Tensor,
+    max: torch.Tensor,
+):
+    _, _, c = x.shape
+    c = min(
+        c, local_norm_channels
+    )  # for look back window, this will be local_norm_channels and for prediction window it will be c
+    x_static = x[:, :, c:]
+    x_norm = (x[:, :, :c] - min_tensor[:, :, :c]) / (
+        max[:, :, :c] - min_tensor[:, :, :c]
+    )
+
+    combined = torch.concat((x_norm, x_static), dim=2)
+
+    return combined
+
+
+def min_max_denorm(
+    x: torch.Tensor,
+    local_norm_channels: int,
+    min_tensor: torch.Tensor,
+    max: torch.Tensor,
+) -> torch.Tensor:
+    _, _, c = x.shape
+    c = min(
+        c, local_norm_channels
+    )  # for look back window, this will be local_norm_channels and for prediction window it will be c
+    x_static = x[:, :, c:]
+    x_denorm = (
+        x[:, :, :c] * (max[:, :, :c] - min_tensor[:, :, :c]) + min_tensor[:, :, :c]
+    )
+    combined = torch.concat((x_denorm, x_static), dim=2)
+    return combined
+
+
 def local_z_norm_numpy(
     batch: NDArray[np.float32],
     mean: Optional[NDArray[np.float32]] = None,

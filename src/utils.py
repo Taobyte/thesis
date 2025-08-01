@@ -1,10 +1,85 @@
+import os
 import yaml
 import numpy as np
+import lightning as L
 
+from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint, Callback
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
+from lightning import LightningDataModule, Trainer, LightningModule
 from typing import Tuple, Union
+
+from src.models.utils import get_model_kwargs
+
+
+def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
+    if trainer.is_global_zero:
+        best_checkpoint_path: str = checkpoint_callback.best_model_path  # ignore:type
+        try:
+            os.remove(best_checkpoint_path)
+            print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
+        except OSError as e:
+            print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
+
+
+def setup(
+    config: DictConfig, wandb_logger: WandbLogger, run_name: str
+) -> Tuple[LightningDataModule, LightningModule, Trainer, list[Callback]]:
+    datamodule = instantiate(
+        config.dataset.datamodule,
+        normalization=config.normalization,
+        use_only_exo=config.use_only_exo,
+        use_perfect_info=config.use_perfect_info,
+    )
+    model_kwargs = get_model_kwargs(config, datamodule)
+    model = instantiate(config.model.model, **model_kwargs)
+    pl_model = instantiate(
+        config.model.pl_model,
+        model=model,
+        name=config.model.name,
+        use_plots=config.use_plots,
+        normalization=config.normalization,
+        tune=config.tune,
+        probabilistic_models=config.probabilistic_models,
+        experiment_name=config.experiment.experiment_name,
+        seed=config.seed,
+    )
+
+    callbacks: list[Callback] = []
+
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        filename=run_name + "-{epoch}-{step}",
+        save_top_k=1,
+    )
+    callbacks.append(checkpoint_callback)
+
+    if config.model.trainer.use_early_stopping:
+        callbacks.append(
+            EarlyStopping(
+                monitor="val_loss",
+                mode="min",
+                patience=config.model.trainer.patience,
+                min_delta=0.001,  # stop if no substantial improvement is being made. Important for models with LR schedulers
+            )
+        )
+
+    trainer = L.Trainer(
+        logger=wandb_logger,
+        max_epochs=config.model.trainer.max_epochs,
+        callbacks=callbacks,
+        enable_progress_bar=True,
+        enable_model_summary=False,
+        overfit_batches=1 if config.overfit else 0.0,
+        limit_test_batches=10 if config.overfit else None,
+        default_root_dir=config.path.checkpoint_path,
+        num_sanity_val_steps=0,
+    )
+
+    return datamodule, pl_model, trainer, callbacks
 
 
 def create_group_run_name(
@@ -23,12 +98,7 @@ def create_group_run_name(
         "dalia": hr_or_ppg,
         "wildppg": hr_or_ppg,
         "ieee": hr_or_ppg,
-        "mhc6mwt": "hr",
-        "chapman": "ecg",
-        "ptbxl": "ecg",
-        "capture24": "acc",
-        "ucihar": "acc",
-        "usc": "acc",
+        "fdalia": "hr",
     }
 
     signal_type = dataset_to_signal_type[dataset_name]

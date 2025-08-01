@@ -1,0 +1,38 @@
+name: "patchtst"
+
+model:
+  d_model: 64
+  enc_in: ${look_back_channel_dim}
+  seq_len: ${look_back_window}
+  pred_len: ${prediction_window}
+
+  # tunable params 
+  e_layers: 3
+  n_heads: 4
+  d_model: 16
+  d_ff: 128
+  dropout: 0.3
+  fc_dropout: 0.3
+  head_dropout: 0.0
+  individual: False
+  patch_len: 4
+  stride: 1
+  padding_patch: "end"
+  revin: 1 
+  affine: 0
+  subtract_last: 0
+  decomposition: 0
+  kernel_size: 3
+
+pl_model:
+  learning_rate: 0.0001
+  loss: "MSE"
+  pct_start: 0.3
+
+trainer:
+  max_epochs: 100
+  use_early_stopping: True 
+  patience: 5
+
+data:
+  batch_size: 32

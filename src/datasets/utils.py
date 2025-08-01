@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 from einops import rearrange
 from typing import Tuple, Optional
 
-from src.normalization import global_z_norm
+from src.normalization import global_z_norm, min_max_norm
 
 
 class BaseDataModule(L.LightningDataModule):
@@ -89,6 +89,12 @@ class BaseDataModule(L.LightningDataModule):
             output = global_z_norm(
                 prediction_window, self.local_norm_channels, mean, std
             )
+        elif self.normalization == "minmax":
+            min, max = self.train_dataset.min, self.train_dataset.max
+            min = torch.tensor(min).reshape(1, 1, -1).to(device).float()
+            max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
+            input = min_max_norm(look_back_window, self.local_norm_channels, min, max)
+            output = min_max_norm(prediction_window, self.local_norm_channels, max, min)
         elif self.normalization == "difference":
             pad = torch.zeros(B, 1, C)
             input = torch.cat([pad, torch.diff(look_back_window, dim=1)], dim=1)
@@ -100,22 +106,7 @@ class BaseDataModule(L.LightningDataModule):
             input = look_back_window
             output = prediction_window
 
-        if self.use_only_exo:
-            assert self.use_dynamic_features
-            input = input[:, :, self.target_channel_dim :]
-        elif self.use_perfect_info:
-            ex_concat = torch.concat(
-                [
-                    input[:, :, self.target_channel_dim :],
-                    output[:, :, self.target_channel_dim :],
-                ],
-                dim=1,
-            )
-            perf_info_channel = ex_concat[:, -self.look_back_window :, :]
-            input = torch.concat((input, perf_info_channel), dim=-1)
-
         output = output[:, :, : self.target_channel_dim]
-
         return look_back_window, input, output
 
     def train_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
@@ -264,6 +255,10 @@ class BaseDataModule(L.LightningDataModule):
                 mean = self.train_dataset.mean
                 std = self.train_dataset.std
                 normalized = (s - mean) / (std + 1e-6)
+            elif self.normalization == "minmax":
+                min = self.train_dataset.min
+                max = self.train_dataset.max
+                normalized = (s - min) / (max - min)
             elif self.normalization == "difference":
                 normalized = np.diff(s, axis=0)
             else:
