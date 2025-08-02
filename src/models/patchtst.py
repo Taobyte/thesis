@@ -910,6 +910,9 @@ class Model(nn.Module):
 
         patch_len = patch_len
         if context_window < patch_len:
+            print(
+                "Patch length is longer than the lookback window! Setting patch_len = context_window "
+            )
             patch_len = context_window
 
         stride = stride
@@ -1074,6 +1077,28 @@ class PatchTST(BaseLightningModule):
 
     def model_forward(self, look_back_window: Tensor) -> Tensor:
         return self.model(look_back_window)
+
+    def _shared_step(self, look_back_window, prediction_window):
+        preds = self.model_forward(look_back_window)
+        preds = preds[:, :, : prediction_window.shape[-1]]
+
+        assert preds.shape == prediction_window.shape
+        mae_criterion = torch.nn.L1Loss()
+        mae_loss = mae_criterion(preds, prediction_window)
+        loss = self.criterion(preds, prediction_window)
+        return loss, mae_loss
+
+    def model_specific_train_step(self, look_back_window, prediction_window):
+        loss, _ = self._shared_step(look_back_window, prediction_window)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
+
+    def model_specific_val_step(self, look_back_window, prediction_window):
+        loss, mae_loss = self._shared_step(look_back_window, prediction_window)
+        if self.tune:
+            loss = mae_loss
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)

@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    d_model: 64
+    d_ff: 512
+    gpt_layers: 8
+    dropout: 0.064
+  
+  pl_model:
+    learning_rate: 0.0041

@@ -3,6 +3,8 @@ import torch
 
 from scipy.io import loadmat
 from torch.utils.data import Dataset
+from torch import Tensor
+from typing import Tuple
 
 from src.datasets.utils import BaseDataModule
 
@@ -76,7 +78,7 @@ def wildppg_load_data(
     return arrays, mean, std, min, max
 
 
-class WildPPGDataset(Dataset):
+class WildPPGDataset(Dataset[Tuple[Tensor, Tensor]]):
     def __init__(
         self,
         datadir: str,
@@ -86,9 +88,10 @@ class WildPPGDataset(Dataset):
         participants: list[str] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
         use_dynamic_features: bool = False,
     ):
+        self.participants = participants
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
-        self.window = look_back_window + prediction_window
+        self.window_length = look_back_window + prediction_window
         self.data, self.mean, self.std, self.min, self.max = wildppg_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
@@ -96,11 +99,13 @@ class WildPPGDataset(Dataset):
         self.base_channel_dim = 1
         self.use_heart_rate = use_heart_rate
         self.use_dynamic_features = use_dynamic_features
-        assert self.window <= 200  # window lengths of WildPPG is at max 200
+        assert self.window_length <= 200  # window lengths of WildPPG is at max 200
         if use_heart_rate:
-            self.lengths = [(len(arr) - self.window + 1) for arr in self.data]
+            self.lengths = [(len(arr) - self.window_length + 1) for arr in self.data]
         else:
-            self.lengths = [len(arr) * (200 - self.window + 1) for arr in self.data]
+            self.lengths = [
+                len(arr) * (200 - self.window_length + 1) for arr in self.data
+            ]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
         self.total_length = self.cumulative_lengths[-1]
 
@@ -111,13 +116,13 @@ class WildPPGDataset(Dataset):
         file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
         if self.use_heart_rate:
             index = idx - self.cumulative_lengths[file_idx]
-            window = self.data[file_idx][index : (index + self.window)]
+            window = self.data[file_idx][index : (index + self.window_length)]
         else:
             participant_pos = idx - self.cumulative_lengths[file_idx]
-            row_index = participant_pos // (200 - self.window + 1)
-            window_pos = participant_pos % (200 - self.window + 1)
+            row_index = participant_pos // (200 - self.window_length + 1)
+            window_pos = participant_pos % (200 - self.window_length + 1)
             window = self.data[file_idx][row_index][
-                window_pos : window_pos + self.window
+                window_pos : window_pos + self.window_length
             ]
 
         look_back_window = torch.from_numpy(window[: self.look_back_window])

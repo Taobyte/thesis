@@ -1,8 +1,8 @@
 name: "patchtst"
 
 model:
-  d_model: 64
-  enc_in: ${look_back_channel_dim}
+  _target_: src.models.patchtst.Model
+  enc_in: ${dataset.datamodule.look_back_channel_dim}
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
 
@@ -25,6 +25,7 @@ model:
   kernel_size: 3
 
 pl_model:
+  _target_: src.models.patchtst.PatchTST
   learning_rate: 0.0001
   loss: "MSE"
   pct_start: 0.3

@@ -56,6 +56,7 @@ class IEEEDataset(Dataset):
         target_channel_dim: int = 1,
     ):
         self.datadir = datadir
+        self.participants = participants
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
         self.window_length = look_back_window + prediction_window

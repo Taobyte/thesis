@@ -4,6 +4,7 @@
 import hydra
 import wandb
 import lightning as L
+import pandas as pd
 
 from omegaconf import DictConfig, OmegaConf
 from typing import Optional
@@ -63,15 +64,16 @@ def main(config: DictConfig) -> Optional[float]:
 
         print("End Evaluation.")
 
-    import pandas as pd
-
     df = pd.DataFrame(results)
     means = df.mean()
     stds = df.std()
-    df_results = pd.DataFrame({"mean": means, "std": stds})
+    print(pd.DataFrame({"means": means, "stds": stds}))
 
     wandb_logger.experiment.log(
-        {"aggregated_forecasting_metrics": wandb.Table(dataframe=df_results)}
+        {
+            "mean_metrics": wandb.Table(dataframe=means.to_frame(name="mean")),
+            "std_metrics": wandb.Table(dataframe=stds.to_frame(name="std")),
+        }
     )
 
 

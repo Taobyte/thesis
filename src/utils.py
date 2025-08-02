@@ -99,6 +99,8 @@ def create_group_run_name(
         "wildppg": hr_or_ppg,
         "ieee": hr_or_ppg,
         "fdalia": "hr",
+        "fieee": "hr",
+        "fwildppg": "hr",
     }
 
     signal_type = dataset_to_signal_type[dataset_name]

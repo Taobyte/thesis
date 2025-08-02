@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        choices=["wildppg", "dalia", "ieee", "mhc6mwt", "usc"],
+        choices=["wildppg", "dalia", "ieee"],
         required=True,
         default="ieee",
         help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' or 'mhc6mwt' ",
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 f"dataset={args.dataset}",
                 "folds=all",
                 "use_dynamic_features=True",
-                "use_heart_rate=False",
+                "use_heart_rate=True",
             ],
         )
 
@@ -337,12 +337,19 @@ if __name__ == "__main__":
 
     elif args.type == "scatter":
         lags = 12
+        if args.dataset in ["wildppg", "dalia"]:
+            max_number = 2
+        else:
+            max_number = len(dataset)
         fig = make_subplots(
-            rows=len(dataset),
+            rows=max_number,
             cols=lags,
             column_titles=[f"Lag {i}" for i in range(lags)],
         )
+
         for i, series in enumerate(dataset):
+            if i >= max_number:
+                break
             heartrate = series[:, 0]
             activity = series[:, 1]
             for lag in range(lags):
@@ -358,7 +365,7 @@ if __name__ == "__main__":
 
         fig.update_layout(
             # title=f"Scatter Plots plotting Activity against Heartrate for {dataset}",
-            height=200 * len(dataset),
+            height=200 * max_number,
             width=200 * lags,
             showlegend=False,
         )

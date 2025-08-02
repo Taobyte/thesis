@@ -5,7 +5,7 @@ model:
 
 pl_model: 
   _target_: src.models.dynamax.DynamaxLightningModule
-  model_type: "LinearAutoregressiveHMM" # LinearAutoregressiveHMM or GaussianHMM
+  model_type: "LinearAutoregressiveHMM" # LinearAutoregressiveHMM, GaussianHMM or LinearGaussianSSM
   look_back_window: ${look_back_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
@@ -16,8 +16,8 @@ pl_model:
   n_batch: 2  
 
   # tunable params
-  n_states: 2
-  n_iter: 100
+  n_states: 2 # in case of LinearGaussianSSM this is the state dimension!
+  n_iter: 3
   deterministic: True
   transition_matrix_stickiness: 10.0
   

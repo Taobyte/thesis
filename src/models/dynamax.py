@@ -12,6 +12,7 @@ from jax.tree_util import tree_map
 from jaxtyping import Int, Float, Array
 from jax import vmap
 from dynamax.hidden_markov_model import GaussianHMM, LinearAutoregressiveHMM
+from dynamax.linear_gaussian_ssm.models import LinearGaussianSSM
 from dynamax.hidden_markov_model.models.abstractions import (
     HMMParameterSet,
 )
@@ -139,6 +140,12 @@ class DynamaxLightningModule(BaseLightningModule):
                 num_lags=look_back_window,
                 transition_matrix_stickiness=transition_matrix_stickiness,
             )
+        elif model_type == "LinearGaussianSSM":
+            self.model = LinearGaussianSSM(
+                n_states,
+                emission_dim=target_channel_dim,
+                input_dim=look_back_channel_dim - target_channel_dim,
+            )
         else:
             raise NotImplementedError()
 
@@ -147,16 +154,10 @@ class DynamaxLightningModule(BaseLightningModule):
 
     def on_train_epoch_start(self):
         datamodule = self.trainer.datamodule
-        train_dataset = datamodule.get_numpy_normalized("train")
-        train_dataset.pop(2)
-        lengths = [len(s) for s in train_dataset]
-        min_length = min(lengths)
-        max_length = max(lengths)
-        print(
-            f"max length: {max_length} | min length: {min_length} | diff = {max_length - min_length}"
-        )
-        emissions = jnp.stack([s[:min_length, :] for s in train_dataset], axis=0)
-        # emissions = [jnp.array(s) for s in train_dataset]
+        assert datamodule.name in ["fieee", "fdalia", "fwildppg"]
+
+        ts = datamodule.train_dataset.get_normalized_timeseries()
+        emissions = jnp.array(ts)
 
         key = jr.PRNGKey(self.seed)
         if self.model_type == "GaussianHMM":
@@ -167,9 +168,10 @@ class DynamaxLightningModule(BaseLightningModule):
             )
         elif self.model_type == "LinearAutoregressiveHMM":
             assert isinstance(self.model, LinearAutoregressiveHMM)
-            inputs = vmap(self.model.compute_inputs, in_axes=0)(emissions)
-            emissions = emissions[:, self.look_back_window :, :]
-            inputs = inputs[:, self.look_back_window :, :]
+
+            inputs = self.model.compute_inputs(emissions)
+            emissions = emissions[self.look_back_window :, :]
+            inputs = inputs[self.look_back_window :, :]
 
             params, props = self.model.initialize(
                 key=key, method="kmeans", emissions=emissions
@@ -200,7 +202,7 @@ class DynamaxLightningModule(BaseLightningModule):
 
             def sample_fn(subkey, prev_em):
                 _, emissions = self.model.viterbi_sample(
-                    params,
+                    self.em_params,
                     key=subkey,
                     num_timesteps=self.prediction_window,
                     prev_emissions=prev_em,
@@ -208,6 +210,30 @@ class DynamaxLightningModule(BaseLightningModule):
                 return emissions
 
             self.batched_sample_fn = vmap(sample_fn, in_axes=(0, 0))
+
+        elif self.model_type == "LinearGaussianSSM":
+            assert isinstance(self.model, LinearGaussianSSM)
+
+            endo = emissions[:, : self.target_channel_dim]  # endo
+            inputs = emissions[:, self.target_channel_dim :]  # exo
+
+            params, props = self.model.initialize(key=key)
+            em_params, loglikelihood = self.model.fit_em(
+                params, props, endo, inputs=inputs, num_iters=self.n_iter
+            )
+            print(f"Log-Likelihood: {loglikelihood}")
+            self.em_params = em_params
+
+            def forecast_fn(endo, exo):
+                _, _, preds, _ = self.model.forecast(
+                    params,
+                    emissions=endo,
+                    num_forecast_timesteps=self.prediction_window,
+                    inputs=exo,
+                )
+                return preds
+
+            self.batched_forecast = vmap(forecast_fn, in_axes=(0, 0))
 
         self.em_params = em_params
         self.key = jr.PRNGKey(self.seed)
@@ -259,6 +285,11 @@ class DynamaxLightningModule(BaseLightningModule):
             assert isinstance(self.model, LinearAutoregressiveHMM)
             keys = jr.split(self.key, batch_size)
             preds = self.batched_sample_fn(keys, look_back_window_jax)
+        elif self.model_type == "LinearGaussianSSM":
+            assert isinstance(self.model, LinearGaussianSSM)
+            endo = look_back_window_jax[:, :, : self.target_channel_dim]
+            exo = look_back_window_jax[:, :, self.target_channel_dim :]
+            preds = self.batched_forecast(endo, exo)
 
         return torch.tensor(jax.device_get(preds), device=device)
 
@@ -275,9 +306,17 @@ class DynamaxLightningModule(BaseLightningModule):
         device = prediction_window_norm.device
         look_back_window_jax = jnp.array(look_back_window_norm.detach().cpu().numpy())
         keys = jr.split(self.key, batch_size)
-        preds = self.batched_sample_fn(keys, look_back_window_jax)
-        preds = torch.tensor(jax.device_get(preds), device=device)
-        preds = preds[:, :, :C]
+        if self.model_type == "LinearAutoregressiveHMM":
+            preds = self.batched_sample_fn(keys, look_back_window_jax)
+            preds = torch.tensor(jax.device_get(preds), device=device)
+            preds = preds[:, :, :C]
+        elif self.model_type == "LinearGaussianSSM":
+            endo = look_back_window_jax[:, :, : self.target_channel_dim]
+            exo = look_back_window_jax[:, :, self.target_channel_dim :]
+            preds = self.batched_forecast(endo, exo)
+            preds = torch.tensor(jax.device_get(preds), device=device)
+            preds = preds[:, :, :C]
+
         val_loss = self.val_criterion(preds, prediction_window_norm)
         self.log("val_loss", val_loss, on_epoch=True, on_step=True, logger=True)
 

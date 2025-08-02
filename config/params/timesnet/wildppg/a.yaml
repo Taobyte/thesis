@@ -1,0 +1,9 @@
+# @package _global_
+
+model:
+  pl_model:
+    learning_rate: 0.002
+  model:
+    d_model: 512
+    d_ff: 128
+    dropout: 0.274

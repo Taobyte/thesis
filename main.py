@@ -33,6 +33,7 @@ OmegaConf.register_new_resolver("str", resolve_str)
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")
 def main(config: DictConfig) -> Optional[float]:
+    assert config.dataset.name in ["ieee", "dalia", "wildppg"]
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
 
