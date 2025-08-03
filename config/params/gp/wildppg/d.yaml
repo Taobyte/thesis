@@ -1,0 +1,10 @@
+# @package _global_
+
+model:
+  n_points: 400
+  model:
+    num_latents: 4
+    kernel: "rbf"
+    use_linear: 1
+  pl_model:
+    learning_rate: 0.0009

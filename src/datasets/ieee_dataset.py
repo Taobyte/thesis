@@ -9,14 +9,14 @@ from src.datasets.utils import BaseDataModule
 
 
 def ieee_load_data(
-    datadir: str,
+    data_dir: str,
     participants: list[int],
     use_heart_rate: bool,
     use_dynamic_features: bool,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     loaded_series = []
     for participant in participants:
-        data = np.load(datadir + f"IEEE_{participant}.npz")
+        data = np.load(data_dir + f"IEEE_{participant}.npz")
         ppg = data["ppg"]  # shape (W, 200, 1)
         acc = data["acc"]  # shape (W, 200, 1)
         bpm = data["bpms"]  # shape (W, 1)
@@ -48,7 +48,7 @@ def ieee_load_data(
 class IEEEDataset(Dataset):
     def __init__(
         self,
-        datadir: str,
+        data_dir: str,
         look_back_window: int,
         prediction_window: int,
         participants: list[int],
@@ -59,7 +59,7 @@ class IEEEDataset(Dataset):
         train_frac: float = 0.7,
         val_frac: float = 0.1,
     ):
-        self.datadir = datadir
+        self.data_dir = data_dir
         self.participants = participants
         self.look_back_window = look_back_window
         self.predicition_window = prediction_window
@@ -69,7 +69,7 @@ class IEEEDataset(Dataset):
         self.target_channel_dim = target_channel_dim
 
         self.data, self.mean, self.std, self.min, self.max = ieee_load_data(
-            datadir, participants, use_heart_rate, use_dynamic_features
+            data_dir, participants, use_heart_rate, use_dynamic_features
         )
 
         if test_local:
@@ -154,7 +154,7 @@ class IEEEDataModule(BaseDataModule):
             look_back_window=self.look_back_window,
             prediction_window=self.prediction_window,
             use_heart_rate=self.use_heart_rate,
-            use_dynamc_features=self.use_dynamic_features,
+            use_dynamic_features=self.use_dynamic_features,
             target_channel_dim=self.target_channel_dim,
         )
         if stage == "fit":
