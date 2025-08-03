@@ -35,6 +35,8 @@ def main(config: DictConfig) -> Optional[float]:
     assert config.dataset.name in ["fdalia", "fwildppg", "fieee"]
     L.seed_everything(config.seed)
     wandb_logger, run_name = setup_wandb_logger(config)
+    test_participants_global = config.dataset.datamodule.test_participants
+    global_specific_results = []
     results = []
     for participant in config.dataset.participants:
         print(f"Participant {participant}.")
@@ -59,6 +61,8 @@ def main(config: DictConfig) -> Optional[float]:
             test_results = trainer.test(pl_model, datamodule=datamodule, ckpt_path=None)
 
         results.append(test_results[0])
+        if participant in test_participants_global:
+            global_specific_results.append(test_results[0])
 
         delete_checkpoint(test_trainer, checkpoint_callback)
 
@@ -73,6 +77,21 @@ def main(config: DictConfig) -> Optional[float]:
         {
             "mean_metrics": wandb.Table(dataframe=means.to_frame(name="mean")),
             "std_metrics": wandb.Table(dataframe=stds.to_frame(name="std")),
+        }
+    )
+
+    global_df = pd.DataFrame(global_specific_results)
+    global_means = global_df.mean()
+    global_stds = global_df.std()
+
+    wandb_logger.experiment.log(
+        {
+            "global_mean_metrics": wandb.Table(
+                dataframe=global_means.to_frame(name="mean")
+            ),
+            "global_std_metrics": wandb.Table(
+                dataframe=global_stds.to_frame(name="std")
+            ),
         }
     )
 

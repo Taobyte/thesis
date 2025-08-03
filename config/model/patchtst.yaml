@@ -5,24 +5,24 @@ model:
   enc_in: ${dataset.datamodule.look_back_channel_dim}
   seq_len: ${look_back_window}
   pred_len: ${prediction_window}
+  subtract_last: 0
+  decomposition: 0 # we don't use timeseries decomposition for heartrate forecasting
+  kernel_size: 3 # kernel size is used in timeseries decomposition layers
+  individual: False 
+  revin: ${use_norm_dl} # normalization strategy 
+  affine: 0 # parameter for RevIN layer
+  padding_patch: "end"
+  head_dropout: 0.0 # not set in PatchTST paper
 
   # tunable params 
   e_layers: 3
-  n_heads: 4
   d_model: 16
   d_ff: 128
   dropout: 0.3
-  fc_dropout: 0.3
-  head_dropout: 0.0
-  individual: False
+  fc_dropout: ${.dropout}
+  n_heads: 4
   patch_len: 4
   stride: 1
-  padding_patch: "end"
-  revin: 1 
-  affine: 0
-  subtract_last: 0
-  decomposition: 0
-  kernel_size: 3
 
 pl_model:
   _target_: src.models.patchtst.PatchTST

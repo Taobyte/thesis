@@ -1009,7 +1009,6 @@ class Model(nn.Module):
         for i in range(len(self.hyper_num1)):
             self.hyconv.append(HypergraphConv(channels, channels, gamma=gamma))
 
-        self.slicetran = nn.Linear(100, pred_len)
         self.weight = nn.Parameter(torch.randn(self.pred_len, 76))
 
         self.argg = nn.ModuleList()
@@ -1264,10 +1263,12 @@ class multi_adaptive_hypergraoh(nn.Module):
         hyperedge_all = []
 
         for i in range(len(self.hyper_num)):
+            # sequence of integers of size hyper_num[i] and node_num[i]
             hypidxc = torch.arange(self.hyper_num[i]).to(x.device)
             nodeidx = torch.arange(node_num[i]).to(x.device)
-            hyperen = self.embedhy[i](hypidxc)
 
+            # hyperedge and node embeddings
+            hyperen = self.embedhy[i](hypidxc)
             nodeec = self.embednod[i](nodeidx)
 
             a = torch.mm(nodeec, hyperen.transpose(1, 0))
@@ -1288,6 +1289,9 @@ class multi_adaptive_hypergraoh(nn.Module):
                 list(torch.nonzero(matrix_array[:, col]).flatten().tolist())
                 for col in range(matrix_array.shape[1])
             ]
+            import pdb
+
+            # pdb.set_trace()
 
             node_list = torch.cat(
                 [torch.tensor(sublist) for sublist in result_list if len(sublist) > 0]

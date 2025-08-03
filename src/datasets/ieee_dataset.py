@@ -3,6 +3,7 @@ import torch
 
 from torch.utils.data import Dataset
 from typing import Tuple, Any
+from numpy.typing import NDArray
 
 from src.datasets.utils import BaseDataModule
 
@@ -54,6 +55,9 @@ class IEEEDataset(Dataset):
         use_heart_rate: bool = False,
         use_dynamic_features: bool = False,
         target_channel_dim: int = 1,
+        test_local: bool = False,
+        train_frac: float = 0.7,
+        val_frac: float = 0.1,
     ):
         self.datadir = datadir
         self.participants = participants
@@ -67,6 +71,14 @@ class IEEEDataset(Dataset):
         self.data, self.mean, self.std, self.min, self.max = ieee_load_data(
             datadir, participants, use_heart_rate, use_dynamic_features
         )
+
+        if test_local:
+            transformed_data: list[NDArray[np.float32]] = []
+            for series in self.data:
+                length = len(series)
+                val_end = int(length * (train_frac + val_frac))
+                transformed_data.append(series[val_end - self.look_back_window :, :])
+            self.data = transformed_data
 
         assert self.window_length <= 200, (
             f"window_length: {self.window_length}: IEEE for PPG contains only time series of length 200!"
@@ -137,32 +149,24 @@ class IEEEDataModule(BaseDataModule):
         self.test_participants = test_participants
 
     def setup(self, stage: str):
+        common_args = dict(
+            data_dir=self.data_dir,
+            look_back_window=self.look_back_window,
+            prediction_window=self.prediction_window,
+            use_heart_rate=self.use_heart_rate,
+            use_dynamc_features=self.use_dynamic_features,
+            target_channel_dim=self.target_channel_dim,
+        )
         if stage == "fit":
             self.train_dataset = IEEEDataset(
-                self.data_dir,
-                self.look_back_window,
-                self.prediction_window,
-                self.train_participants,
-                self.use_heart_rate,
-                self.use_dynamic_features,
-                self.target_channel_dim,
+                participants=self.train_participants, **common_args
             )
             self.val_dataset = IEEEDataset(
-                self.data_dir,
-                self.look_back_window,
-                self.prediction_window,
-                self.val_participants,
-                self.use_heart_rate,
-                self.use_dynamic_features,
-                self.target_channel_dim,
+                participants=self.val_participants, **common_args
             )
         if stage == "test":
             self.test_dataset = IEEEDataset(
-                self.data_dir,
-                self.look_back_window,
-                self.prediction_window,
-                self.test_participants,
-                self.use_heart_rate,
-                self.use_dynamic_features,
-                self.target_channel_dim,
+                participants=self.test_participants,
+                **common_args,
+                test_local=self.test_local,
             )

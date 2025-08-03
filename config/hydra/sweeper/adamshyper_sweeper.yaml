@@ -6,10 +6,10 @@ params:
 
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
   model.model.d_model: choice(32, 64, 128, 256, 512)
-  model.model.hn1: choice(10, 20, 30, 50)
-  model.model.hn2: choice(5, 10, 15, 20)
-  model.model.hn3: choice(1, 2, 4, 5, 8, 12)
-  model.model.k: choice(1, 3, 5, 10, 15, 20)  # eta parameter from the paper
-  model.model.beta: choice(0.2, 0.3, 0.4, 0.5)
+  model.model.hn1: choice(20, 30, 50)
+  model.model.hn2: choice(10, 15, 20)
+  model.model.hn3: 10 # choice(3, 5, 8, 10, 12)
+  model.model.k: 3 # schoice(1, 3, 5, 10, 15, 20)  # eta parameter from the paper
+  model.model.beta: 0.5 # choice(0.2, 0.3, 0.4, 0.5)
   model.model.gamma: interval(0, 10)
   

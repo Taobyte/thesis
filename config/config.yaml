@@ -19,6 +19,8 @@ use_heart_rate: True
 n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee", "ucihar", "usc"] # these datasets have folds defined in config/experiments
 normalization: "global" # can be either "global", "difference" or  "none"
+train_frac: 0.7
+val_frac: 0.1
 
 numpy_models: ["linear","xgboost", "hlinear", "hxgboost", "exactgp"] # these models get passed the windowed training & val datasets 
 special_models: ["linear","xgboost", "hlinear", "hxgboost", "hmm", "dynamax", "llmtime", "exactgp"] # these models are not trained with Lightning 

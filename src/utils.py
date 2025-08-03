@@ -31,8 +31,6 @@ def setup(
     datamodule = instantiate(
         config.dataset.datamodule,
         normalization=config.normalization,
-        use_only_exo=config.use_only_exo,
-        use_perfect_info=config.use_perfect_info,
     )
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
@@ -217,21 +215,8 @@ def compute_input_channel_dims(
     static_exogenous_variables: int,
     use_dynamic_features: bool,
     use_static_features: bool,
-    use_only_exogenous_features: bool,
-    use_perfect_info: bool,
 ) -> int:
     dims = target_channel_dim
-
-    if use_only_exogenous_features:
-        assert use_dynamic_features or use_static_features, (
-            "Attention you are using only exogenous variables for training, but don't include exogenous variables"
-        )
-        dims = 0
-    elif use_perfect_info:
-        dims += 1
-    else:
-        dims = dims
-
     if use_dynamic_features:
         dims += dynamic_exogenous_variables
     if use_static_features:

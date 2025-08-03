@@ -37,8 +37,7 @@ class BaseDataModule(L.LightningDataModule):
         static_exogenous_variables: int = 6,
         look_back_channel_dim: int = 1,
         normalization: str = "global",
-        use_only_exo: bool = False,
-        use_perfect_info: bool = False,
+        test_local: bool = False,
     ):
         super().__init__()
 
@@ -55,8 +54,6 @@ class BaseDataModule(L.LightningDataModule):
         # Experiment Flags
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
-        self.use_only_exo = use_only_exo
-        self.use_perfect_info = use_perfect_info
 
         self.dynamic_exogenous_variables = dynamic_exogenous_variables
         self.static_exogenous_variables = static_exogenous_variables
@@ -71,6 +68,7 @@ class BaseDataModule(L.LightningDataModule):
         )
 
         self.normalization = normalization
+        self.test_local = test_local
 
         self.train_dataset: Optional[Dataset[NDArray[np.float32]]] = None
         self.val_dataset = None

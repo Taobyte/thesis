@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 from statsmodels.tsa.stattools import grangercausalitytests
 from tqdm import tqdm
@@ -190,6 +191,14 @@ if __name__ == "__main__":
         print(f"Total length of dataset {args.dataset} is {sum(lengths)}")
         print("Heart Rate Quantiles (0%, 25%, 50%, 75%, 100%):", quantiles_hr)
         print("Activity Quantiles (0%, 25%, 50%, 75%, 100%):", quantiles_act)
+
+        fig = px.box(
+            y=lengths,
+            points="all",  # shows all individual data points
+            labels={"y": "Sequence Length"},
+            title=f"Box Plot of Dataset Sequence Lengths ({args.dataset})",
+        )
+        fig.show()
 
     elif args.type == "granger":
         lags = [1, 3, 5, 10, 20, 30]
