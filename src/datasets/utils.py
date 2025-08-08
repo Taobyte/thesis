@@ -38,6 +38,8 @@ class BaseDataModule(L.LightningDataModule):
         look_back_channel_dim: int = 1,
         normalization: str = "global",
         test_local: bool = False,
+        train_frac: float = 0.7,
+        val_frac: float = 0.1,
     ):
         super().__init__()
 
@@ -69,6 +71,8 @@ class BaseDataModule(L.LightningDataModule):
 
         self.normalization = normalization
         self.test_local = test_local
+        self.train_frac = train_frac
+        self.val_frac = val_frac
 
         self.train_dataset: Optional[Dataset[NDArray[np.float32]]] = None
         self.val_dataset = None
@@ -142,7 +146,7 @@ class BaseDataModule(L.LightningDataModule):
         prediction = torch.stack(prediction)
         return self.postprocess_batch(look_back, prediction)
 
-    # used for Gaussian Process model & shap calculation
+    # used for Gaussian Process model
     def get_inducing_points(
         self, num_inducing: int = 500, strategy: str = "random", mode: str = "train"
     ) -> torch.Tensor:

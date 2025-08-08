@@ -7,6 +7,11 @@ pl_model:
   _target_: src.models.llmtime.LLMTime 
   prediction_window: ${prediction_window}
 
+  num_samples: 10
+  temperature: 0.8
+  alpha: 0.99
+  beta: 0.3 
+
 
 trainer:
   max_epochs: 0

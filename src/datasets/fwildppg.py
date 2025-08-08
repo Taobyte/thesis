@@ -4,8 +4,7 @@ import torch
 from typing import Any
 from numpy.typing import NDArray
 
-from src.datasets.utils import BaseDataModule
-from src.datasets.wildppg_dataset import WildPPGDataset
+from src.datasets.wildppg_dataset import WildPPGDataset, WildPPGDataModule
 
 
 class FWildPPGDataset(WildPPGDataset):
@@ -71,7 +70,7 @@ class FWildPPGDataset(WildPPGDataset):
         return self.timeseries
 
 
-class FWildPPG(BaseDataModule):
+class FWildPPG(WildPPGDataModule):
     def __init__(
         self,
         participant: int = 1,
@@ -91,7 +90,7 @@ class FWildPPG(BaseDataModule):
         common_args = dict(
             train_frac=self.train_frac,
             val_frac=self.val_frac,
-            datadir=self.data_dir,
+            data_dir=self.data_dir,
             participants=[self.participant],
             use_heart_rate=self.use_heart_rate,
             look_back_window=self.look_back_window,

@@ -1212,15 +1212,23 @@ class DummyModel(torch.nn.Module):
 
 
 class LLMTime(BaseLightningModule):
-    def __init__(self, model: torch.nn.Module, prediction_window: int = 3, **kwargs):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        prediction_window: int = 3,
+        temperature: float = 0.8,
+        alpha: float = 0.8,
+        beta: float = 0.3,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         assert self.experiment_name == "endo_only"
 
         llma2_hypers = dict(
-            temp=0.7,
-            alpha=0.95,
-            beta=0.3,
+            temp=temperature,
+            alpha=alpha,
+            beta=beta,
             basic=False,
             settings=SerializerSettings(
                 base=10, prec=3, signed=True, half_bin_correction=True
@@ -1244,6 +1252,7 @@ class LLMTime(BaseLightningModule):
             look_back_windows, parallel=False, **self.hypers
         )
         preds = torch.tensor(preds_dict["median"], device=device)  # (B, T)
+        preds = preds.unsqueeze(-1)
         return preds
 
     def train_step(self, batch, batch_idx):
@@ -1251,38 +1260,3 @@ class LLMTime(BaseLightningModule):
 
     def configure_optimizers(self):
         return None
-
-
-if __name__ == "__main__":
-    print(torch.cuda.max_memory_allocated())
-    print()
-
-    llma2_hypers = dict(
-        temp=0.7,
-        alpha=0.95,
-        beta=0.3,
-        basic=False,
-        settings=SerializerSettings(
-            base=10, prec=3, signed=True, half_bin_correction=True
-        ),
-    )
-
-    model_hypers = {
-        "LLMA2": {"model": "llama-7b", **llma2_hypers},
-    }
-
-    model_predict_fns = {
-        "LLMA2": get_llmtime_predictions_data,
-    }
-
-    model_names = list(model_predict_fns.keys())
-    hypers = list(grid_iter(model_hypers["LLMA2"]))
-
-    train = np.zeros((1000,))
-    test = np.ones((100,))
-
-    import pdb
-
-    preds = get_llmtime_predictions_data(train, test, **hypers[0])
-
-    pdb.set_trace()

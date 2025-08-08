@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 
-from typing import Any
+from torch import Tensor
+from typing import Any, Tuple
 from numpy.typing import NDArray
 
-from src.datasets.utils import BaseDataModule
+from src.datasets.ieee_dataset import IEEEDataModule
 from src.datasets.ieee_dataset import IEEEDataset
 
 
@@ -41,7 +42,7 @@ class FIEEEDataset(IEEEDataset):
     def __len__(self) -> int:
         return len(self.timeseries) - self.window_length + 1
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         window_pos = idx
         look_back_window = self.timeseries[
             window_pos : window_pos + self.look_back_window
@@ -71,11 +72,11 @@ class FIEEEDataset(IEEEDataset):
         return self.timeseries
 
 
-class FIEEE(BaseDataModule):
+class FIEEE(IEEEDataModule):
     def __init__(
         self,
         participant: int = 1,
-        use_heart_rate: bool = False,
+        use_heart_rate: bool = True,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
         **kwargs: Any,
@@ -91,7 +92,7 @@ class FIEEE(BaseDataModule):
         common_args = dict(
             train_frac=self.train_frac,
             val_frac=self.val_frac,
-            datadir=self.data_dir,
+            data_dir=self.data_dir,
             participants=[self.participant],
             use_heart_rate=self.use_heart_rate,
             target_channel_dim=self.target_channel_dim,

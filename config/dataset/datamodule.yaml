@@ -15,6 +15,10 @@ datamodule:
   use_dynamic_features: ${use_dynamic_features}
   use_static_features: ${use_static_features}
 
+  test_local: False 
+  train_frac: ${train_frac}
+  val_frac: ${val_frac}
+
   target_channel_dim: null 
   dynamic_exogenous_variables: null 
   static_exogenous_variables: null 

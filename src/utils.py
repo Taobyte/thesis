@@ -32,6 +32,7 @@ def setup(
         config.dataset.datamodule,
         normalization=config.normalization,
     )
+
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(

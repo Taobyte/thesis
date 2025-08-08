@@ -12,7 +12,7 @@ model:
   num_tasks: ${prediction_window}
   kernel: "matern"
   periodic_type: "" 
-  use_linear_trend: 1 
+  use_linear_trend: True 
 
   #Feature Extractor
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}

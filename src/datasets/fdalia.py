@@ -4,8 +4,7 @@ import torch
 from typing import Tuple, Any
 from torch import Tensor
 
-from src.datasets.dalia_dataset import DaLiADataset
-from src.datasets.utils import BaseDataModule
+from src.datasets.dalia_dataset import DaLiADataset, DaLiADataModule
 
 
 class FDaliaDataset(DaLiADataset):
@@ -48,7 +47,7 @@ class FDaliaDataset(DaLiADataset):
         return look_back_window.float(), prediction_window.float()
 
 
-class FDalia(BaseDataModule):
+class FDalia(DaLiADataModule):
     def __init__(
         self,
         participant: int = 1,
@@ -70,7 +69,7 @@ class FDalia(BaseDataModule):
         common_args = dict(
             train_frac=self.train_frac,
             val_frac=self.val_frac,
-            path=self.data_dir,
+            data_dir=self.data_dir,
             participants=[self.participant],
             use_dynamic_features=self.use_dynamic_features,
             use_static_features=self.use_static_features,

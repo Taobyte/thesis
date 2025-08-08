@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    d_model: 64
+    hn1: 30
+    hn2: 15
+    gamma: 7.98
+     
+  pl_model:
+    learning_rate: 0.006

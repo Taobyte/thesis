@@ -4,18 +4,24 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
+from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import arma_order_select_ic, bds
+from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
+from statsmodels.stats.diagnostic import het_arch
 from tqdm import tqdm
 from plotly.subplots import make_subplots
 from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from sklearn.feature_selection import mutual_info_regression
-from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
+from typing import List
+from collections import defaultdict
 
-from src.constants import (
-    dataset_to_name,
-)
+
+from src.constants import dataset_to_name
+
 from src.utils import (
     compute_square_window,
     compute_input_channel_dims,
@@ -23,89 +29,55 @@ from src.utils import (
 )
 
 
-if __name__ == "__main__":
-    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
-    OmegaConf.register_new_resolver("eval", eval)
-    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
-    OmegaConf.register_new_resolver(
-        "compute_input_channel_dims", compute_input_channel_dims
+def partial_correlation(datamodules: List[LightningDataModule]):
+    row_titles = [dataset_to_name[d.name] for d in datamodules]
+    fig = make_subplots(
+        rows=len(datamodules),
+        cols=1,
+        shared_yaxes=True,
+        vertical_spacing=0.05,
+        row_titles=row_titles,
     )
+    for i, datamodule in enumerate(datamodules):
+        dataset = datamodule.train_dataset.data
+        pcs = []
+        for series in dataset:
+            heartrate = series[:, 0]
+            partial_ac = pacf(heartrate, nlags=5)
+            pcs.append(partial_ac)
 
-    parser = argparse.ArgumentParser(description="WandB Results")
+        mean_pac = np.mean(np.stack(pcs), axis=0)
+        std_pac = np.std(np.stack(pcs), axis=0)
+        n = len(mean_pac)
+        x_vals = list(range(n))
 
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        choices=["wildppg", "dalia", "ieee"],
-        required=True,
-        default="ieee",
-        help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' or 'mhc6mwt' ",
-    )
-
-    parser.add_argument(
-        "--type",
-        choices=[
-            "viz",
-            "granger",
-            "pearson",
-            "infos",
-            "mutual",
-            "scatter",
-            "test",
-            "acf",
-            "window_stats",
-            "difference",
-            "pct",
-        ],
-        required=True,
-    )
-
-    args = parser.parse_args()
-
-    with initialize(version_base=None, config_path="../../config/"):
-        cfg = compose(
-            config_name="config",
-            overrides=[
-                f"dataset={args.dataset}",
-                "folds=all",
-                "use_dynamic_features=True",
-                "use_heart_rate=True",
-            ],
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=mean_pac,
+                mode="lines+markers",
+                error_y=dict(
+                    type="data",
+                    array=std_pac,
+                    arrayminus=std_pac,
+                    visible=True,
+                ),
+            ),
+            row=i + 1,
+            col=1,
         )
+    for ann in fig.layout.annotations:
+        ann.font.size = 24
+        ann.font.color = "black"
+        ann.text = f"<b>{ann.text}</b>"
+    fig.update_yaxes(range=[-1, 1])
+    fig.update_layout(showlegend=False)
+    fig.show()
 
-    datamodule = instantiate(cfg.dataset.datamodule)
 
-    datamodule.setup("fit")
-    # datamodule.setup("test")
-    dataset = datamodule.train_dataset.data
-    if args.type == "viz":
-        fig = make_subplots(rows=2 * len(dataset), cols=1)
-
-        for i, series in tqdm(enumerate(dataset)):
-            ppg = series[:, 0]
-            activity = series[:, 1]
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(series))),
-                    y=ppg,
-                    showlegend=False,  # Legend redundant here
-                ),
-                row=2 * i + 1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(series))),
-                    y=activity,
-                    showlegend=False,  # Legend redundant here
-                ),
-                row=2 * i + 2,
-                col=1,
-            )
-            break
-        fig.show()
-
-    elif args.type == "infos":
+def print_infos(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        dataset = datamodule.train_dataset.data
 
         def get_channel_stats(dataset):
             mins = [np.min(s) for s in dataset]
@@ -113,147 +85,43 @@ if __name__ == "__main__":
             means = [np.mean(s) for s in dataset]
             median = [np.median(s) for s in dataset]
             stds = [np.std(s) for s in dataset]
-            return {
-                "mean": means,
-                "median": median,
-                "std": stds,
-                "min": mins,
-                "max": maxs,
-            }
+            return pd.DataFrame(
+                {
+                    "mean": means,
+                    "median": median,
+                    "std": stds,
+                    "min": mins,
+                    "max": maxs,
+                }
+            )
 
         # Stats for HR and Activity
         hr_stats = get_channel_stats([s[:, 0] for s in dataset])
         act_stats = get_channel_stats([s[:, 1] for s in dataset])
-
-        # Flatten all HR and ACT values across the dataset
-        all_hr_values = np.concatenate([s[:, 0] for s in dataset])
-        all_act_values = np.concatenate([s[:, 1] for s in dataset])
-
-        # Compute quantiles
-        quantiles_hr = np.percentile(all_hr_values, [0, 25, 50, 75, 100])
-        quantiles_act = np.percentile(all_act_values, [0, 25, 50, 75, 100])
-
-        stats_names = list(hr_stats.keys())
-
-        fig = make_subplots(
-            rows=2,
-            cols=2,
-            shared_xaxes=True,
-            vertical_spacing=0.1,
-            subplot_titles=("Heart Rate Statistics", "Activity Statistics"),
-        )
-
-        for stat_name in stats_names:
-            fig.add_trace(
-                go.Scatter(
-                    x=[stat_name] * len(hr_stats[stat_name]),
-                    y=hr_stats[stat_name],
-                    mode="markers",
-                    name=f"HR {stat_name}",
-                    marker=dict(symbol="circle", size=6, color="blue"),
-                    showlegend=False,  # Legend redundant here
-                ),
-                row=1,
-                col=1,
-            )
-
-        for stat_name in stats_names:
-            fig.add_trace(
-                go.Scatter(
-                    x=[stat_name] * len(act_stats[stat_name]),
-                    y=act_stats[stat_name],
-                    mode="markers",
-                    name=f"ACT {stat_name}",
-                    marker=dict(symbol="square", size=6, color="orange"),
-                    showlegend=False,
-                ),
-                row=2,
-                col=1,
-            )
-
-        fig.add_trace(go.Box(y=all_hr_values, name="Heart Rate Box Plot"), row=1, col=2)
-        fig.add_trace(go.Box(y=all_act_values, name="Activity Box Plot"), row=2, col=2)
-
-        # Update layout
-        fig.update_layout(
-            height=1200,
-            width=1200,
-            title="Channel Statistics (Heart Rate & Activity)",
-            xaxis=dict(type="category", title="Statistic"),
-            xaxis2=dict(type="category", title="Statistic"),
-            yaxis=dict(title="Heart Rate"),
-            yaxis2=dict(title="Activity Level"),
-        )
-
-        fig.show()
+        print("HR Mean")
+        print(hr_stats.mean())
+        print("HR STDS")
+        print(hr_stats.std())
 
         lengths = [len(s) for s in dataset]
-        print(f"Total length of dataset {args.dataset} is {sum(lengths)}")
-        print("Heart Rate Quantiles (0%, 25%, 50%, 75%, 100%):", quantiles_hr)
-        print("Activity Quantiles (0%, 25%, 50%, 75%, 100%):", quantiles_act)
+        print(f"Total length of dataset {datamodule.name} is {sum(lengths)}")
+        print(f"Min Length: {min(lengths)}")
+        print(f"MaxLength: {max(lengths)}")
 
-        fig = px.box(
-            y=lengths,
-            points="all",  # shows all individual data points
-            labels={"y": "Sequence Length"},
-            title=f"Box Plot of Dataset Sequence Lengths ({args.dataset})",
-        )
-        fig.show()
 
-    elif args.type == "granger":
-        lags = [1, 3, 5, 10, 20, 30]
-        print(
-            f"Computing Granger Causality for dataset {dataset_to_name[datamodule.name]} with lags {lags}"
-        )
+#         fig = px.box(
+#             y=lengths,
+#             points="all",  # shows all individual data points
+#             labels={"y": "Sequence Length"},
+#             title=f"Box Plot of Dataset Sequence Lengths ({datamodule.name})",
+#         )
+#         fig.show()
 
-        fig = make_subplots(
-            rows=len(dataset),
-            cols=1,
-            column_titles=[f"Series {i + 1}" for i in range(len(dataset))],
-            shared_xaxes=False,
-            vertical_spacing=0.05,
-        )
-        mean_p = []
-        for i, series in tqdm(enumerate(dataset)):
-            p_values = []
-            for lag in lags:
-                gc_res = grangercausalitytests(series, [lag], verbose=False)
-                p_value = gc_res[lag][0]["ssr_ftest"][1]
-                p_values.append(round(p_value, 3))
-            fig.add_trace(
-                go.Scatter(
-                    x=lags,
-                    y=p_values,
-                    showlegend=False,
-                ),
-                row=i + 1,
-                col=1,
-            )
-            fig.update_xaxes(
-                title_text="Lags",
-                tickmode="array",
-                tickvals=lags,
-                row=i + 1,
-                col=1,
-            )
-            mean_p.append(np.mean(p_values))
 
-        fig.update_layout(
-            title={
-                "text": f"<b>Granger Causality P-Values for {dataset_to_name[datamodule.name]}</b>",
-                "x": 0.5,
-                "xanchor": "center",
-                "font": dict(size=40, family="Arial", color="black"),
-            },
-        )
-
-        mean_means = np.mean(mean_p)
-        std_means = np.std(mean_p)
-        print(f"Mean {mean_means} and std: {std_means}")
-
-        # fig.show()
-
-    elif args.type == "pearson":
+def max_pearson(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        print(f"Start computing Pearson for {datamodule.name}")
+        dataset = datamodule.train_dataset.data
 
         def max_pearson_corr(x, y):
             x = (x - np.mean(x)) / (np.std(x) * len(x))
@@ -266,99 +134,93 @@ if __name__ == "__main__":
         pearsons = []
         best_lags = []
         for i, series in tqdm(enumerate(dataset)):
-            print(f"Processing series {i + 1}")
             heartrate = series[:, 0]
             activity = series[:, 1]
-            time = list(range(len(heartrate)))
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True)
-
-            fig.add_trace(
-                go.Scatter(
-                    x=time,
-                    y=heartrate,
-                    showlegend=False,
-                ),
-                row=1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=time,
-                    y=activity,
-                    showlegend=False,
-                ),
-                row=2,
-                col=1,
-            )
             max_corr, best_lag = max_pearson_corr(heartrate, activity)
-            print(f"Maximum correlation {max_corr} for lag {best_lag}")
-            print(f"Finished processing series {i}")
-            # fig.show()
-            pearsons.append(max_corr)
-            best_lags.append(best_lag)
-        mean_cor = np.mean(pearsons)
-        std_cor = np.std(pearsons)
+        mean_pearson = np.mean(pearsons)
         median_lag = np.median(best_lags)
-        print(f"Max Abs Corr: {mean_cor} and std {std_cor}")
-        print(f"Median lag {median_lag}")
+        print(f"Mean pearson {mean_pearson} | median lag {median_lag} ")
 
-    elif args.type == "mutual":
-        # TODO: use Mutual Information to get a score for how important the physical activity is
-        mis = []
-        for i, series in enumerate(dataset):
-            print(f"Processing series {i}")
+
+def visualize_timeseries(datamodules: List[LightningDataModule]):
+    n_series_per_dataset = 1
+    pos = 1
+    n_datasets = len(datamodules)
+    row_names = []
+    for d in datamodules:
+        name = dataset_to_name[d.name]
+        for _ in range(n_series_per_dataset):
+            row_names.append(name + " HR")
+            row_names.append(name + " ACT")
+
+    fig = make_subplots(
+        rows=2 * n_series_per_dataset * n_datasets, cols=1, row_titles=row_names
+    )
+    for j, datamodule in enumerate(datamodules):
+        dataset = datamodule.train_dataset.data
+        pos = min(len(dataset) - 1, pos)
+        dataset = dataset[pos : pos + n_series_per_dataset]
+        offset = 2 * j * n_series_per_dataset
+        for i, series in tqdm(enumerate(dataset)):
             heartrate = series[:, 0]
-            activity = series[:, 1].reshape(-1, 1)
-            mi = mutual_info_regression(activity, heartrate)
-            mis.append(mi[0])
-            print(f"Mutual Information Regression Value {mi[0]}")
-
-        print(f"Mean {np.mean(mis)} | Std {np.std(mis)}")
-
-    elif args.type == "test":
-        # Augmented Dicky-Fuller Test
-        fuller = []
-        kpss_cs = []
-        kpss_cts = []
-        for i, series in enumerate(dataset):
-            print(f"Processing series {i}")
-            heartrate = series[:, 0]
-            activity = series[:, 1].reshape(-1, 1)
-
-            ad_hr = adfuller(heartrate)
-            print(f"adfuller heartrate: {ad_hr[1]}")
-
-            kpps_c_hr = kpss(heartrate, regression="c")
-            print(f"KPPS heartrate constant: {kpps_c_hr[1]}")
-            kpps_ct_hr = kpss(heartrate, regression="ct")
-            print(f"KPPS heartrate linear: {kpps_ct_hr[1]}")
-            fuller.append(ad_hr[0])
-            kpss_cs.append(kpps_c_hr[0])
-            kpss_cts.append(kpps_ct_hr[0])
-
-        for name, stats in zip(
-            ["ADF", "KPSS-C", "KPSS-CT"], [fuller, kpss_cs, kpss_cts]
-        ):
-            print(
-                f"{name} Test Statistic Mean: {np.mean(stats):.3f} | Std Dev: {np.std(stats):.3f}"
+            activity = series[:, 1]
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(series))) * 2,
+                    y=heartrate,
+                    showlegend=False,  # Legend redundant here
+                ),
+                row=2 * i + 1 + offset,
+                col=1,
             )
-            print(stats)
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(series))) * 2,
+                    y=activity,
+                    showlegend=False,  # Legend redundant here
+                ),
+                row=2 * i + 2 + offset,
+                col=1,
+            )
+    fig.update_xaxes(
+        title_text="Seconds", row=2 * n_series_per_dataset * n_datasets, col=1
+    )
+    fig.show()
 
-    elif args.type == "scatter":
-        lags = 12
-        if args.dataset in ["wildppg", "dalia"]:
-            max_number = 2
-        else:
-            max_number = len(dataset)
-        fig = make_subplots(
-            rows=max_number,
-            cols=lags,
-            column_titles=[f"Lag {i}" for i in range(lags)],
-        )
 
+def granger_test(datamodules: List[LightningDataModule]):
+    lags = [1, 3, 5, 10, 20, 30]
+    for datamodule in datamodules:
+        print(f"Granger Causality Test for {datamodule.name}")
+        dataset = datamodule.train_dataset.data
+        mean_p: List[float] = []
+        for i, series in tqdm(enumerate(dataset)):
+            p_values: List[float] = []
+            for lag in lags:
+                gc_res = grangercausalitytests(series, [lag], verbose=False)
+                p_value = gc_res[lag][0]["ssr_ftest"][1]
+                p_values.append(round(p_value, 3))
+
+            mean_p.append(np.mean(p_values))
+
+        mean_means = np.mean(mean_p)
+        std_means = np.std(mean_p)
+        print(f"Mean: {mean_means:.4f} and Std: {std_means:.4f}")
+
+
+def scatter_plots(datamodules: List[LightningDataModule]):
+    lags = 12
+    n_series_per_dataset = 1
+    n_dataset = len(datamodules)
+    fig = make_subplots(
+        rows=n_series_per_dataset * n_dataset,
+        cols=lags,
+        column_titles=[f"Lag {i}" for i in range(lags)],
+    )
+    for j, datamodule in enumerate(datamodules):
+        dataset = datamodule.train_dataset.data[:n_series_per_dataset]
+        offset = n_series_per_dataset * j
         for i, series in enumerate(dataset):
-            if i >= max_number:
-                break
             heartrate = series[:, 0]
             activity = series[:, 1]
             for lag in range(lags):
@@ -368,162 +230,158 @@ if __name__ == "__main__":
                         y=heartrate[lag:],
                         mode="markers",
                     ),
-                    row=i + 1,
+                    row=i + 1 + offset,
                     col=lag + 1,
                 )
 
         fig.update_layout(
             # title=f"Scatter Plots plotting Activity against Heartrate for {dataset}",
-            height=200 * max_number,
+            height=200 * n_series_per_dataset * n_dataset,
             width=200 * lags,
             showlegend=False,
         )
 
-        fig.show()
+    fig.show()
 
-    elif args.type == "acf":
-        lags = 50
-        fig = make_subplots(rows=len(dataset) * 3, cols=1)
+
+def mutual_information(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        print(f"Mutual Information Statistics for {datamodule.name}")
+        dataset = datamodule.train_dataset.data
+        mis = []
         for i, series in enumerate(dataset):
             heartrate = series[:, 0]
-            autocorr = acf(heartrate, nlags=lags, fft=True)
-            pautocorr = pacf(heartrate, nlags=lags)
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(heartrate))),
-                    y=heartrate,
-                    mode="markers+lines",
-                    line=dict(width=2),
-                ),
-                row=3 * i + 1,
-                col=1,
-            )
+            activity = series[:, 1].reshape(-1, 1)
+            mi = mutual_info_regression(activity, heartrate)
+            mis.append(mi[0])
 
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(lags + 1)),
-                    y=autocorr,
-                    mode="markers+lines",
-                    line=dict(width=2),
-                ),
-                row=3 * i + 2,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(lags + 1)),
-                    y=pautocorr,
-                    mode="markers+lines",
-                    line=dict(width=2),
-                ),
-                row=3 * i + 3,
-                col=1,
-            )
+        print(f"Mean {np.mean(mis)} | Std {np.std(mis)}")
 
-        fig.update_layout(
-            title="ACF and PACF", height=3 * 200 * len(dataset), showlegend=False
-        )
 
-        fig.show()
-
-    elif args.type == "difference":
-        fig = make_subplots(rows=len(dataset) * 2, cols=3)
-        # dataset = [dataset[0]]
+def bds_test(datamodules: List[LightningDataModule]):
+    n_datasets = len(datamodules)
+    n_series_per_dataset = 1
+    fig = make_subplots(rows=n_datasets * n_series_per_dataset, cols=1)
+    for j, datamodule in enumerate(datamodules):
+        print(f"BDS Test for {datamodule.name}")
+        dataset = datamodule.train_dataset.data
+        offset = n_series_per_dataset * j
+        epsilon_res_stats = defaultdict(list)
+        epsilon_res_p_val = defaultdict(list)
         for i, series in enumerate(dataset):
             heartrate = series[:, 0]
-            activity = series[:, 1]
-            length = len(heartrate)
-            diff = np.diff(heartrate, n=1)
-            diffdiff = np.diff(heartrate, n=2)
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(length)),
-                    y=heartrate,
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=2 * i + 1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(length - 1)),
-                    y=diff,
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=2 * i + 1,
-                col=2,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(length - 2)),
-                    y=diffdiff,
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=2 * i + 1,
-                col=3,
-            )
+            heartrate = (heartrate - np.mean(heartrate)) / np.std(heartrate)
+            #  order_selection = arma_order_select_ic(
+            #      heartrate, max_ar=10, max_ma=10, ic="aic", trend="n"
+            #  )
+            #  best_order = order_selection.aic_min_order  # (p, q)
 
-            for j in range(3):
+            print(f"\n=== Series {i} ===")
+
+            model = ARIMA(heartrate, order=(10, 0, 10), trend="n")
+            model_fit = model.fit()
+
+            residuals = model_fit.resid
+            if i < n_series_per_dataset:
                 fig.add_trace(
                     go.Scatter(
-                        x=list(range(length - j)),
-                        y=activity[j:],
+                        x=list(range(len(residuals))),
+                        y=residuals,
                         mode="lines",
-                        # line=dict(width=2),
                     ),
-                    row=2 * i + 2,
-                    col=j + 1,
+                    row=i + 1 + offset,
+                    col=1,
                 )
 
-        fig.show()
-    elif args.type == "pct":
-        fig = make_subplots(rows=len(dataset) * 3, cols=1)
-        # dataset = [dataset[0]]
-        for i, series in enumerate(dataset):
-            heartrate = series[:, 0]
-            activity = series[:, 1]
-            pct = np.log(heartrate[1:] / heartrate[:-1])
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(pct))),
-                    y=heartrate[1:],
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=3 * i + 1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(pct))),
-                    y=pct,
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=3 * i + 2,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(pct))),
-                    y=activity[1:],
-                    mode="lines",
-                    # line=dict(width=2),
-                ),
-                row=3 * i + 3,
-                col=1,
-            )
-        fig.update_layout(
-            title_text="PCT Transform",
-            height=200 * 3 * len(dataset),  # Calculate total height
-            showlegend=True,
-            hovermode="x unified",
-        )
-        fig.show()
+            std = np.std(residuals)
+            epsilons = np.array([0.5, 1.0, 1.5, 2.0])
+            for epsilon in [epsilons[0]]:
+                bds_result = bds(residuals, max_dim=3, epsilon=epsilon * std)
+                epsilon_res_stats[epsilon].append(bds_result[0])
+                epsilon_res_p_val[epsilon].append(bds_result[1])
 
+        for key, item in epsilon_res_p_val.items():
+            print(f"epsilon={key} * std")
+            print(np.mean(np.stack(item), axis=0))
+
+    fig.show()
+
+
+def arch_test(datamodules: List[LightningDataModule]):
+    pass
+
+
+if __name__ == "__main__":
+    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
+    OmegaConf.register_new_resolver("eval", eval)
+    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
+    OmegaConf.register_new_resolver(
+        "compute_input_channel_dims", compute_input_channel_dims
+    )
+
+    parser = argparse.ArgumentParser(description="WandB Results")
+
+    def list_of_strings(arg):
+        return arg.split(",")
+
+    parser.add_argument(
+        "--datasets",
+        type=list_of_strings,
+        required=True,
+        default=["ieee"],
+        help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' ",
+    )
+
+    parser.add_argument(
+        "--type",
+        choices=[
+            "viz",
+            "infos",
+            "scatter",
+            "granger",
+            "pearson",
+            "mutual",
+            "test",
+            "acf",
+            "window_stats",
+            "difference",
+            "pacf",
+            "bds",
+        ],
+        required=True,
+    )
+
+    args = parser.parse_args()
+    datamodules = []
+    for dataset in args.datasets:
+        with initialize(version_base=None, config_path="../../config/"):
+            cfg = compose(
+                config_name="config",
+                overrides=[
+                    f"dataset={dataset}",
+                    "folds=all",
+                    "use_dynamic_features=True",
+                    "use_heart_rate=True",
+                ],
+            )
+
+        datamodule = instantiate(cfg.dataset.datamodule)
+        datamodule.setup("fit")
+        datamodules.append(datamodule)
+
+    if args.type == "viz":
+        visualize_timeseries(datamodules)
+
+    elif args.type == "infos":
+        print_infos(datamodules)
+    elif args.type == "granger":
+        granger_test(datamodules)
+
+    elif args.type == "pearson":
+        max_pearson(datamodules)
+
+    elif args.type == "pacf":
+        partial_correlation(datamodules)
     elif args.type == "window_stats":
         window_length = 20
         fig = make_subplots(
@@ -583,3 +441,8 @@ if __name__ == "__main__":
             )
 
         fig.show()
+    elif args.type == "bds":
+        bds_test(datamodules)
+
+    elif args.type == "arch":
+        arch_test(datamodules)

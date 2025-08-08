@@ -1,6 +1,5 @@
 from hydra import initialize, compose
 from omegaconf import OmegaConf, DictConfig
-from tqdm import tqdm
 from pathlib import Path
 
 from src.utils import (

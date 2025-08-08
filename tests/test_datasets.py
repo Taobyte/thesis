@@ -1,13 +1,20 @@
+import torch
+
 from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
+from torch import Tensor
+from torch.utils.data import DataLoader
+from typing import Tuple
 
 from src.utils import (
     compute_square_window,
     compute_input_channel_dims,
     get_optuna_name,
 )
+
+from src.normalization import global_z_denorm
 
 OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
 OmegaConf.register_new_resolver("eval", eval)
@@ -17,161 +24,108 @@ OmegaConf.register_new_resolver(
 )
 
 
-dataset_params = {
-    "dalia": {
-        "base_dim": 1,  # PPG or heart rate
-        "heart_rate": True,
-        "activity": True,
-        "is_categorical": False,
-        "n_activities": None,
-    },
-    "wildppg": {
-        "base_dim": 1,  # PPG or heart rate
-        "heart_rate": True,
-        "activity": True,
-        "is_categorical": False,
-        "n_activities": None,
-    },
-    "ieee": {
-        "base_dim": 1,
-        "heart_rate": True,
-        "activity": True,
-        "is_categorical": None,
-        "n_activities": None,
-    },  # PPG or heart rate
-    "chapman": {
-        "base_dim": 4,  # ecg for 4 different locations on body
-        "heart_rate": False,
-        "activity": True,
-        "is_categorical": True,
-        "n_activities": 4,
-        "activity_flag_name": "use_disease",
-    },
-    "ptbxl": {
-        "base_dim": 12,
-        "heart_rate": False,
-        "activity": False,  # TODO change later when exogenous variables are implemented
-        "is_categorical": True,
-        "n_activities": 100,  # TODO,
-        "activity_flag_name": "use_disease",
-    },
-    "ucihar": {
-        "base_dim": 9,  # gyro + acceleration + derived features
-        "heart_rate": False,
-        "activity": True,
-        "is_categorical": True,
-        "n_activities": 6,
-    },
-    "usc": {
-        "base_dim": 6,  # 3 gyro + 3 acceleration
-        "heart_rate": False,
-        "activity": True,
-        "is_categorical": True,
-        "n_activities": 12,
-    },
-    "capture24": {
-        "base_dim": 3,  # acceleration in x,y,z direction
-        "heart_rate": False,
-        "activity": True,
-        "is_categorical": False,
-        "n_activities": None,
-    },
-}
-
-
 def _test_specific_dataset(
-    name: str,
-    base_dim: int,
-    heart_rate: bool,
-    activity: bool,
-    is_categorical: bool,
-    n_activities: int,
-    activity_flag_name: str = None,
+    dataset_name: str = "ieee",
+    experiment: str = "endo_only",
+    normalization: str = "global",
 ):
-    look_back_windows = [16, 64, 100]
-    prediction_windows = [1, 8, 28]
-
-    hr_flags = [False, True] if heart_rate else [False]
-    activity_flags = [False, True] if activity else [False]
+    look_back_windows = [5, 10, 20, 30, 60]
+    prediction_windows = [3, 5, 10, 20, 30]
 
     for look_back_window, prediction_window in tqdm(
         zip(look_back_windows, prediction_windows),
         total=len(look_back_windows) * len(prediction_windows),
     ):
-        for hr_flag in tqdm(hr_flags, total=len(hr_flags)):
-            for activity_flag in tqdm(activity_flags, total=len(activity_flags)):
-                print(
-                    f"[INFO] Test config → lbw={look_back_window}, pw={prediction_window}, hr={hr_flag}, act={activity_flag}"
+        print(f"[INFO] Test config → lbw={look_back_window}, pw={prediction_window}")
+
+        overrides = [f"dataset={dataset_name}", f"experiment={experiment}"]
+        overrides += [
+            f"look_back_window={look_back_window}",
+            f"prediction_window={prediction_window}",
+            f"normalization={normalization}",
+        ]
+
+        with initialize(version_base=None, config_path="../config/"):
+            cfg = compose(config_name="config", overrides=overrides)
+
+        datamodule = instantiate(cfg.dataset.datamodule)
+        datamodule.setup("fit")
+        train_dl = datamodule.train_dataloader()
+        val_dl = datamodule.val_dataloader()
+        datamodule.setup("test")
+        test_dl = datamodule.test_dataloader()
+
+        look_back_channel_dim = datamodule.look_back_channel_dim
+        target_channel_dim = datamodule.target_channel_dim
+
+        def _test_dl(dl: DataLoader[Tuple[Tensor, Tensor, Tensor]]):
+            for batch in dl:
+                lbw, lbw_norm, pw_norm = batch
+                t_x, t_y = lbw_norm.shape[1], pw_norm.shape[1]
+                c_x, c_y = lbw_norm.shape[2], pw_norm.shape[2]
+
+                # test shapes
+                assert t_x == look_back_window and t_y == prediction_window, (
+                    f"t_x: {t_x}, t_y: {t_y}"
+                )
+                assert c_x == look_back_channel_dim and c_y == target_channel_dim, (
+                    f"c_x: {c_x}, c_y: {c_y}"
+                )
+                # test NaN or Inf
+                assert torch.isfinite(lbw_norm).all(), (
+                    "Non-finite (NaN or Inf) values found in lbw_norm"
+                )
+                assert torch.isfinite(pw_norm).all(), (
+                    "Non-finite (NaN or Inf) values found in pw_norm"
+                )
+                assert torch.isfinite(lbw).all(), (
+                    "Non-finite (NaN or Inf) values found in look_back_window"
                 )
 
-                overrides = [f"dataset={name}"]
-                overrides += [
-                    f"look_back_window={look_back_window}",
-                    f"prediction_window={prediction_window}",
-                ]
+                # check type
+                assert lbw.dtype == torch.float32
+                assert lbw_norm.dtype == torch.float32
+                assert pw_norm.dtype == torch.float32
 
-                if hr_flag:
-                    overrides += ["dataset.datamodule.use_heart_rate=True"]
-                activity_channels = 0
-                if activity_flag:
-                    if activity_flag_name:
-                        overrides += [f"dataset.datamodule.{activity_flag_name}=True"]
-                    else:
-                        overrides += ["dataset.datamodule.use_activity_info=True"]
-                    activity_channels = n_activities if is_categorical else 1
+                # check correct normalization
+                if normalization == "global":
+                    mean, std = (
+                        datamodule.train_dataset.mean,
+                        datamodule.train_dataset.std,
+                    )
+                    device = lbw.device
+                    mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
+                    std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
+                    denorm = global_z_denorm(
+                        lbw_norm, datamodule.local_norm_channels, mean, std
+                    )
+                    assert torch.allclose(denorm, lbw, atol=1e-6), (
+                        "Denormalized values not close to original"
+                    )
+                elif normalization == "none":
+                    assert lbw == lbw_norm, (
+                        "Lookback window is not equal to the normalized lookback window!"
+                    )
+                elif normalization == "difference":
+                    assert lbw_norm[:, 0, :] == 0.0, (
+                        "First normed lookback window value for differencing must be 0.0."
+                    )
 
-                with initialize(version_base=None, config_path="../config/"):
-                    cfg = compose(config_name="config", overrides=overrides)
-
-                datamodule = instantiate(cfg.dataset)["datamodule"]
-                datamodule.setup("fit")
-                train_dl = datamodule.train_dataloader()
-                val_dl = datamodule.val_dataloader()
-                datamodule.setup("test")
-                test_dl = datamodule.test_dataloader()
-
-                def _test_dl(dl):
-                    for batch in dl:
-                        x, y = batch
-                        t_x, t_y = x.shape[1], y.shape[1]
-                        c_x, c_y = x.shape[2], y.shape[2]
-
-                        assert t_x == look_back_window and t_y == prediction_window, (
-                            f"t_x: {t_x}, t_y: {t_y}"
-                        )
-                        assert (
-                            c_x == base_dim + activity_channels and c_y == base_dim
-                        ), f"c_x: {c_x}, c_y: {c_y}"
-                        break
-
-                _test_dl(train_dl)
-                _test_dl(val_dl)
-                _test_dl(test_dl)
+        _test_dl(train_dl)
+        _test_dl(val_dl)
+        _test_dl(test_dl)
 
 
 def test_dalia():
-    _test_specific_dataset("dalia", **dataset_params["dalia"])
+    _test_specific_dataset("dalia", experiment="endo_only")
+    _test_specific_dataset("dalia", experiment="endo_exo")
 
 
 def test_ieee():
-    _test_specific_dataset("ieee", **dataset_params["ieee"])
-
-
-def test_chapman():
-    _test_specific_dataset("chapman", **dataset_params["chapman"])
-
-
-def test_usc():
-    _test_specific_dataset("usc", **dataset_params["usc"])
+    _test_specific_dataset("ieee", experiment="endo_only")
+    _test_specific_dataset("ieee", experiment="endo_exo")
 
 
 def test_wildppg():
-    _test_specific_dataset("wildppg", **dataset_params["wildppg"])
-
-
-def test_ucihar():
-    _test_specific_dataset("ucihar", **dataset_params["ucihar"])
-
-
-def test_ptbxl():
-    _test_specific_dataset("ptbxl", **dataset_params["ptbxl"])
+    _test_specific_dataset("wildppg", experiment="endo_only")
+    _test_specific_dataset("wildppg", experiment="endo_exo")

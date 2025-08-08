@@ -27,14 +27,8 @@ Current research heavily focusses on public datasets. For long-term forecasting 
 | [WildPPG](https://arxiv.org/abs/2412.17540)    | PPG / HR                    | 1          | Accelerometer                  |25 Hz |
 | [DaLiA](https://archive.ics.uci.edu/dataset/495/ppg+dalia)      | PPG / HR | 1            | Accelerometer   | 32 Hz|
 | [IEEE](https://ieeexplore.ieee.org/document/6905737)         | PPG / HR           | 1            | Accelerometer  | 25 Hz|
-| [Chapman](https://www.nature.com/articles/s41597-020-0386-x)    | ECG                      | 4 | Disease classes | 25 Hz |
-| [UCIHAR](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones) | Accelerometer, Gyroscope | 9             | Walking, sitting, lying, etc.     | 50 Hz  | 
-| [USC](https://dl.acm.org/doi/10.1145/2370216.2370438)         | Accelerometer, Gyroscope           | 6             | Categorical              | 100 Hz
-| [Capture24](https://arxiv.org/abs/2402.19229)   | Accelerometer    | 3              | MET score      | 25 Hz |
 
 ## Complex Deep Learning Models 
-
-
 
 | Model        | Description | Supports Short Seq | Link |
 |--------------|-------------|---------| ----- |
@@ -45,6 +39,63 @@ Current research heavily focusses on public datasets. For long-term forecasting 
 | GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
 Pattn | Simple baseline forecasting model based on patching and the transfomer architecture | Yes | [GitHub](https://github.com/BennyTMT/LLMsForTimeSeries/tree/main)  
 TimeLLM |  LLM-based timeseries forecasting model using a reprogramming layer and using a frozen LLM as backbone. | Yes | [GitHub](https://github.com/ngruver/llmtime) |
+
+# TODO ADD THIS INFORMATION TO THE README
+\subsubsection{TimesNet}
+The Timesnet model \cite{wu2023timesnettemporal2dvariationmodeling} works by stacking so-called TimesBlocks on top of each other. 
+Each TimesBlock uses the Fast Fourier Transform to extract relevant periods from the multivariate timeseries input. Next, these timeseries are transformed into 2D tensors based on the $k$ periods extracted in the previous stage and fed into a parameter efficient inception block that uses 2D convolutions. Lastly, adaptive aggregation is used, where the $k$ amplitudes are used for weighting the corresponding series representation. For an overview, consider the Figure \ref{sota_timesnet_overview}.The authors claim that this architecture enables extracting multi-scale temporal 2D-variations simultaneously. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/related_work/timesnet_architecture_overview.png}
+    \caption{\textbf{TimesNet Architecture Overview}}
+    \label{sota_timesnet_overview}
+\end{figure}
+
+\subsubsection{SimpleTM}
+The SimpleTM model \cite{chen2025simpletm} is composed of three stages. In the first stage, the multivariate timeseries is tokenized by a learnable stationary wavelet transform. In the second stage, the authors then futrher process the tokens by introducing a geometric product attention, a concept derived from geometric algebra. In the last stage, the transformed token representation is transformed back to a 1D timeseries representation by now using a learnable inverse stationary wavelet transform. In summary, the authors propose to use a wavelet transform to extract multi-scale features and introduce the geometric attention mechanism. The reader can find an overview in Figure \ref{sota_simpletm_overview}. 
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/related_work/simpletm_architecture_overview.png}
+    \caption{\textbf{SimpleTM Architecture Overview}}
+    \label{sota_simpletm_overview}
+\end{figure}
+
+
+\subsubsection{AdaMSHyper}
+AdaMSHyper \cite{shang2024adamshyperadaptivemultiscalehypergraph} stands for Adaptive Multi-Scale Hypergraph Transformer and is based on hypergraphs and graph neural networks. This architecture contains four modules \ref{sota_adamshyper_overview}. In the first module, multiple convolutions are used to transform the 1D timeseries into nodes in the hypergraph. This is done iteratively creating nodes that contain fine-grained and coarse-grained information. The second module is used to learn the hyperedges for each scale and nodes created in the first module. The module creates incidence matrices at each scale to model implicit groud-wise node interactions. The authors also implement a node an hyperedge constraint mechanism that clusters nodes with similar semantic information. The goal in the third module is to extract intra-scale and inter-scale interactions. For the inter-scale interactions, the authors propose a novel hypergraph convolution attention mechanism to capture group-wise interactions among nodes with similar semantic information. For the inter-scale interactions, they use plain attention mechanism with the learnt hyperedges. The last module uses a simple feed-forward network, that takes as input the concatenated node and hyperedge features and predicts the 1D timeseries.  
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures//related_work/adamshyper_architecture_overview.png}
+    \caption{\textbf{AdaMSHyper Architecture Overview}}
+    \label{sota_adamshyper_overview}
+\end{figure}
+
+%\subsubsection{PAttn}
+\subsubsection{TimeXer}
+The TimeXer model \cite{wang2024timexerempoweringtransformerstime} specifically design to distinguish between endogenous and exogenous variables. The model is again divide into four stages. In the beginning, the endogenous 1D timeseries is split up into non-overlapping patches with patch length $p > 1$. In contrast, the exogenous variables are not transformed into a patched representation, each channel is compressed into variat tokens. Since the two representations are not the same, the authors introduce a global token that bridges the gap between the endogenous and exogenous representations. TimeXer now adopts the transformer architecture in the following way. The first attention block is the standard self-attention mechanism for the endogenous patches. The second attention block is replaced by a cross attention block where the endogenous patches serve as the queries and the variat tokens as the keys. The resulting representation is then concatenated with the global token and fed into the feed-forward network. For a visual overview, we refer to Figure \ref{sota_timexer_overview}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures//related_work/timexer_overview.png}
+    \caption{\textbf{TimeXer Architecture Overview}}
+    \label{sota_timexer_overview}
+\end{figure}
+
+\subsubsection{GPT4TS}
+The authors from \cite{zhouOneFitsAll2023} propose to use a pretrained GPT2 language model for timeseries forecasting. The reader can find an overview of the architecture in Figure \ref{sota_gpt4ts_overview}. At the start, the timeseries is fed into an instance normalization layer, followed by transforming it into a patched representation. Next, an learnable input embedding layer is applied to transform the patched timeseries into the required dimension of the pretrained GPT2 model. The GPT2 model contains a stack of transformer blocks and positional embeddings. The authors freeze the multi-head attention mechanism and feed forward networks in the transformer blocks and only finetune the positional embeddings and layer norms in the transformer blocks.  
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures//related_work/gpt4ts_architecture_overview.png}
+    \caption{\textbf{GPT4TS Architecture Overview}}
+    \label{sota_gpt4ts_overview}
+\end{figure}
+
 
 ## Baselines
 - Linear Models
