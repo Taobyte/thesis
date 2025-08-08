@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - model: linear
-  - dataset: wildppg
-  - path: local
+  - dataset: ieee
+  - path: cluster
   - folds: fold_0
   - experiment: endo_only
   - lbw: a # hydra does not like integers! a:5, b:10, c:20, d:30, e:60
