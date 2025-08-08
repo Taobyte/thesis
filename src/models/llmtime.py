@@ -1219,11 +1219,14 @@ class LLMTime(BaseLightningModule):
         temperature: float = 0.8,
         alpha: float = 0.8,
         beta: float = 0.3,
+        num_samples: int = 10,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
         assert self.experiment_name == "endo_only"
+
+        self.num_samples = num_samples
 
         llma2_hypers = dict(
             temp=temperature,
@@ -1249,7 +1252,10 @@ class LLMTime(BaseLightningModule):
         look_back_window = look_back_window[:, :, 0]  # (B, L)
         look_back_windows = [look_back_window[i] for i in range(len(look_back_window))]
         preds_dict = get_llmtime_predictions_data(
-            look_back_windows, parallel=False, **self.hypers
+            look_back_windows,
+            parallel=False,
+            num_samples=self.num_samples,
+            **self.hypers,
         )
         preds = torch.tensor(preds_dict["median"], device=device)  # (B, T)
         preds = preds.unsqueeze(-1)
