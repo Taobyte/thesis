@@ -83,6 +83,7 @@ def train_test_global(
     del datamodule
     local_datamodule, _, _, _ = setup(config, wandb_logger, run_name)
     local_datamodule.test_local = True
+    local_datamodule.setup("fit")  # initialize train_dataset for normalization
 
     if config.model.name not in config.special_models:
         local_test_results = trainer.test(

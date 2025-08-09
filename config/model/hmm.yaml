@@ -1,19 +1,20 @@
 name: "hmm"
 
 model:
-  _target_: src.models.hmm.HMM # dummy model we use hmmlearn
+  _target_: src.models.hmm.LinearAutoregressiveHMM # dummy model we use hmmlearn
+  n_states: 1
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim} 
 
 pl_model: 
-  _target_: src.models.hmm.HMMLightningModule
-  n_states: 64
-  n_iter: 15
-  min_covar: 0.01
-  covariance_type: "full" # "full", "diag", "spherical", "tied"
+  _target_: src.models.hmm.HMM
+  learning_rate: 0.001
 
 trainer:
-  max_epochs: 1
+  max_epochs: 100
   use_early_stopping: False
   patience: 5
 
 data: 
-  batch_size: 256
+  batch_size: 32

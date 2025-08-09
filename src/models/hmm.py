@@ -1,7 +1,11 @@
 import torch
 import torch.nn.functional as F
+
+from einops import rearrange
 from torch import Tensor
-import math
+from typing import Tuple, Any
+
+from src.models.utils import BaseLightningModule
 
 
 class LinearAutoregressiveHMM(torch.nn.Module):
@@ -46,7 +50,16 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         )
 
         # Autoregressive weights
-        self.W = torch.nn.ModuleList([torch.nn.Linear() for _ in range(n_states)])
+        self.W = torch.nn.ParameterList(
+            [
+                torch.nn.Parameter(
+                    torch.randn(
+                        look_back_window, look_back_channel_dim, look_back_channel_dim
+                    )
+                )
+                for _ in range(n_states)
+            ]
+        )
 
     def get_transition_matrix(self):
         return F.softmax(self.transition_matrix, dim=1)  # Each row sums to 1
@@ -74,39 +87,41 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         emissions.shape == (B, L, C)
         Returns: (B, L, n_states)
         """
+
         B, L, C = emissions.shape
+
+        padded = torch.cat(
+            [torch.zeros_like(emissions), emissions], dim=1
+        )  # (B, 2*L, C)
+        inputs = padded.unfold(dimension=1, size=L, step=1)  # (B, F, L, C)
+        inputs = inputs[:, :L, :, :]
+        inputs = rearrange(inputs, "B F L C -> (B F) L C")  # (B*L, L, C)
+        targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
+
         log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
 
         covars = self.get_covariance_matrices()
 
         for state in range(self.n_states):
-            mean = self.means[state]  # (C,)
+            hidden_state_mean = (
+                self.means[state].unsqueeze(0).expand(B * L, -1)
+            )  # (B,C)
             covar = covars[state]  # (C, C)
+            covar_reg = covar + 1e-6 * torch.eye(C, device=covar.device).unsqueeze(
+                0
+            ).expand(B * L, -1, -1)
+            # add linear autoregressive compontent b=B*L d=C
+            ar_component = torch.einsum(
+                "blc,blcd->bd",
+                inputs,
+                self.W[state].unsqueeze(0).expand(B * L, -1, -1, -1),
+            )
 
-            # Compute multivariate Gaussian log probability
-            # Add small epsilon to diagonal for numerical stability
-            covar_reg = covar + 1e-6 * torch.eye(C, device=covar.device)
+            mean = hidden_state_mean + ar_component
 
-            try:
-                chol = torch.linalg.cholesky(covar_reg)
-                # Solve for (x - mu)
-                diff = emissions - mean.unsqueeze(0).unsqueeze(0)  # (B, L, C)
-
-                # Efficient computation using Cholesky decomposition
-                solved = torch.triangular_solve(diff.unsqueeze(-1), chol, upper=False)[
-                    0
-                ]
-                mahal_dist = (solved**2).sum(dim=-2).squeeze(-1)  # (B, L)
-
-                log_det = 2 * torch.diagonal(chol, dim1=-2, dim2=-1).log().sum()
-                log_prob = -0.5 * (mahal_dist + log_det + C * math.log(2 * math.pi))
-
-            except RuntimeError:
-                # Fallback if Cholesky fails
-                covar_reg = covar + 1e-3 * torch.eye(C, device=covar.device)
-                dist = torch.distributions.MultivariateNormal(mean, covar_reg)
-                log_prob = dist.log_prob(emissions)  # (B, L)
-
+            dist = torch.distributions.MultivariateNormal(mean, covar_reg)
+            log_prob = dist.log_prob(targets)  # (B*L, )
+            log_prob = rearrange(log_prob, "(B L) -> B L", L=L)
             log_probs[:, :, state] = log_prob
 
         return log_probs
@@ -116,7 +131,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         Forward algorithm to compute log likelihood
         emissions.shape == (B, L, C)
         Returns: log_likelihood (B,)
-        For each Lbw, I need to compute L inputs e.g lbw = 3 => I1 = (0 0 0) I2 = (0 0 lbw1) I3 = (0 lbw1 lbw2)
         """
         B, L, C = emissions.shape
 
@@ -151,58 +165,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         # Final log likelihood
         log_likelihood = torch.logsumexp(log_alpha[:, -1, :], dim=1)  # (B,)
-        return log_likelihood
-
-    def viterbi(self, emissions: Tensor):
-        """
-        Viterbi algorithm to find most likely state sequence
-        emissions.shape == (B, L, C)
-        Returns: most_likely_states (B, L)
-        """
-        B, L, C = emissions.shape
-
-        # Get emission probabilities
-        emission_log_probs = self.get_gaussian_log_likelihood(
-            emissions
-        )  # (B, L, n_states)
-
-        # Get HMM parameters
-        init_dist = self.get_initial_distribution()  # (n_states,)
-        trans_matrix = self.get_transition_matrix()  # (n_states, n_states)
-
-        # Viterbi tables
-        log_delta = torch.full(
-            (B, L, self.n_states), -float("inf"), device=emissions.device
-        )
-        psi = torch.zeros(
-            (B, L, self.n_states), dtype=torch.long, device=emissions.device
-        )
-
-        # Initialize
-        log_delta[:, 0, :] = torch.log(init_dist) + emission_log_probs[:, 0, :]
-
-        # Forward pass
-        for t in range(1, L):
-            for j in range(self.n_states):
-                # Find most likely previous state
-                log_trans = torch.log(trans_matrix[:, j] + 1e-8)  # (n_states,)
-                scores = log_delta[:, t - 1, :] + log_trans.unsqueeze(
-                    0
-                )  # (B, n_states)
-                log_delta[:, t, j] = (
-                    torch.max(scores, dim=1)[0] + emission_log_probs[:, t, j]
-                )
-                psi[:, t, j] = torch.argmax(scores, dim=1)
-
-        # Backtrack
-        states = torch.zeros((B, L), dtype=torch.long, device=emissions.device)
-        states[:, -1] = torch.argmax(log_delta[:, -1, :], dim=1)
-
-        for t in range(L - 2, -1, -1):
-            for b in range(B):
-                states[b, t] = psi[b, t + 1, states[b, t + 1]]
-
-        return states
+        return log_likelihood, log_alpha
 
     def forward(self, emissions: Tensor) -> Tensor:
         """
@@ -213,9 +176,10 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         B, L, C = emissions.shape
 
         # Get most likely state sequence for the look_back_window
-        hmm_emissions = emissions[:, -self.look_back_window :, :]
-        most_likely_states = self.viterbi(hmm_emissions)  # (B, look_back_window)
-        most_likely_state = most_likely_states[:, -1]  # (B,) - last state
+        # hmm_emissions = emissions[:, -self.look_back_window :, :]
+        # most_likely_states = self.viterbi(hmm_emissions)  # (B, look_back_window)
+        _, log_alpha = self.forward_algorithm(emissions)
+        most_likely_state = log_alpha[:, -1, :].argmax(dim=1)  # (B,) - last state
 
         # Get transition matrix
         trans_matrix = self.get_transition_matrix()  # (n_states, n_states)
@@ -223,7 +187,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         preds = []
         current_emissions = emissions.clone()
 
-        for step in range(self.prediction_window):
+        for _ in range(self.prediction_window):
             # Predict next state
             next_state_dist = trans_matrix[most_likely_state, :]  # (B, n_states)
             most_likely_state = torch.argmax(next_state_dist, dim=1)  # (B,)
@@ -231,13 +195,14 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             # Generate prediction using autoregressive component
             look_back_data = current_emissions[
                 :, -self.look_back_window :, :
-            ]  # (B, look_back_window, C)
+            ]  # (B, L, C)
 
-            # Apply linear transformation: (B, look_back_window, C) @ (look_back_window, C, 1) -> (B, C)
-            ar_pred = torch.einsum(
-                "blc,lcw->bwc", look_back_data, self.W
-            )  # (B, prediction_window=1, C)
-            ar_pred = ar_pred.squeeze(1)  # (B, C)
+            ar_W = torch.stack(
+                [self.W[i] for i in range(self.n_states)], dim=0
+            )  # (n_state, L, C, C)
+            W = ar_W[most_likely_state]  # (B, L, C, C)
+
+            ar_pred = torch.einsum("blc,blcd->bd", look_back_data, W)  # (B,C)
 
             # Add state-specific mean
             state_means = torch.stack(
@@ -261,18 +226,46 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         return preds
 
 
-if __name__ == "__main__":
+class HMM(BaseLightningModule):
+    def __init__(
+        self,
+        model: LinearAutoregressiveHMM,
+        learning_rate: float = 1e-3,
+        **kwargs: Any,
+    ):
+        super().__init__(**kwargs)
+        self.model = model
+        self.learning_rate = learning_rate
 
-    def get_inputs(emissions: Tensor):
-        # emissions.shape == (B, L, C)
-        B, L, C = emissions.shape
-        pad = torch.cat([torch.zeros(B, L, C), emissions], dim=1)
-        I = pad.unfold(dimension=1, size=L, step=1)
-        return I
+    def model_forward(self, look_back_window: Tensor):
+        preds = self.model(look_back_window)
+        return preds
 
-    tensor = torch.Tensor([[[1, 1], [2, 2]], [[3, 3], [4, 4]]])
+    def _shared_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
+        loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
+        loss = -loss.mean()
+        return loss
 
-    I = get_inputs(tensor)
-    import pdb
+    def model_specific_train_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
+        loss = self._shared_step(look_back_window, prediction_window)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
 
-    pdb.set_trace()
+    def model_specific_val_step(
+        self, look_back_window: Tensor, prediction_window: Tensor
+    ) -> Tensor:
+        val_loss = self._shared_step(look_back_window, prediction_window)
+        self.log("val_loss", val_loss, on_step=True, on_epoch=True, logger=True)
+        return val_loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+        )
+
+        return optimizer
