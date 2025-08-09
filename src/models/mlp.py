@@ -43,7 +43,6 @@ class Model(torch.nn.Module):
         prev_dim = in_dim
         for _ in range(n_hid_layers):
             self.layers.append(torch.nn.Linear(prev_dim, hid_dim))
-            self.layers.append(torch.nn.BatchNorm1d(hid_dim))
             self.layers.append(self.activation)
             self.layers.append(torch.nn.Dropout(dropout))
             prev_dim = hid_dim
