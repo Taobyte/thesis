@@ -1114,7 +1114,7 @@ def get_llmtime_predictions_data(
     alpha=0.95,
     beta=0.3,
     basic=False,
-    parallel=True,
+    parallel=False,
     prediction_window: int = 3,
     **kwargs,
 ):

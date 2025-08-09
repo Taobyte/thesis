@@ -60,6 +60,8 @@ n_trials: 50
 hydra:
   run:
     dir: ${path.basedir}/outputs
+  sweep:
+    dir: ${path.checkpoint_path}/multiruns # use scratch space for multirun outputs
 
 
 

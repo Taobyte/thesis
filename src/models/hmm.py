@@ -46,9 +46,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         )
 
         # Autoregressive weights
-        self.W = torch.nn.Parameter(
-            torch.randn(look_back_window, look_back_channel_dim, prediction_window)
-        )
+        self.W = torch.nn.ModuleList([torch.nn.Linear() for _ in range(n_states)])
 
     def get_transition_matrix(self):
         return F.softmax(self.transition_matrix, dim=1)  # Each row sums to 1
@@ -118,6 +116,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         Forward algorithm to compute log likelihood
         emissions.shape == (B, L, C)
         Returns: log_likelihood (B,)
+        For each Lbw, I need to compute L inputs e.g lbw = 3 => I1 = (0 0 0) I2 = (0 0 lbw1) I3 = (0 lbw1 lbw2)
         """
         B, L, C = emissions.shape
 
@@ -205,20 +204,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         return states
 
-    def get_log_likelihood(self, emissions: Tensor):
-        """
-        Compute log likelihood for training
-        emissions.shape == (B, L, C)
-        """
-        B, L, C = emissions.shape
-        assert L > self.look_back_window, (
-            f"Sequence length {L} must be > look_back_window {self.look_back_window}"
-        )
-
-        # Use only the look_back_window for HMM inference
-        hmm_emissions = emissions[:, : self.look_back_window, :]
-        return self.forward_algorithm(hmm_emissions)
-
     def forward(self, emissions: Tensor) -> Tensor:
         """
         Generate predictions using the most likely state sequence
@@ -274,3 +259,20 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         preds = torch.cat(preds, dim=1)  # (B, prediction_window, C)
         return preds
+
+
+if __name__ == "__main__":
+
+    def get_inputs(emissions: Tensor):
+        # emissions.shape == (B, L, C)
+        B, L, C = emissions.shape
+        pad = torch.cat([torch.zeros(B, L, C), emissions], dim=1)
+        I = pad.unfold(dimension=1, size=L, step=1)
+        return I
+
+    tensor = torch.Tensor([[[1, 1], [2, 2]], [[3, 3], [4, 4]]])
+
+    I = get_inputs(tensor)
+    import pdb
+
+    pdb.set_trace()
