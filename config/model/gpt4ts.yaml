@@ -24,12 +24,12 @@ pl_model:
   _target_: src.models.gpt4ts.GPT4TS
   learning_rate: 0.0001
   loss: ${loss_fn}
-  # lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
-  lradj: "none"
+  lradj: "type1" # lr * 0.5**(epoch - 1 // 1)
+  # lradj: "none"
 
 trainer: 
   max_epochs: 1000
-  use_early_stopping: False
+  use_early_stopping: True
   patience: 5
 
 data:
