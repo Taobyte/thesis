@@ -17,7 +17,7 @@ import torch.nn.functional as F
 import torch.fft
 
 from torch import Tensor
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
@@ -190,12 +190,18 @@ class DataEmbedding(nn.Module):
 
 
 class Inception_Block_V1(nn.Module):
-    def __init__(self, in_channels, out_channels, num_kernels=6, init_weight=True):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        num_kernels: int = 6,
+        init_weight: bool = True,
+    ):
         super(Inception_Block_V1, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_kernels = num_kernels
-        kernels = []
+        kernels: List[nn.Conv2d] = []
         for i in range(self.num_kernels):
             kernels.append(
                 nn.Conv2d(in_channels, out_channels, kernel_size=2 * i + 1, padding=i)
@@ -211,17 +217,16 @@ class Inception_Block_V1(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
-        res_list = []
+    def forward(self, x: Tensor):
+        res_list: List[Tensor] = []
         for i in range(self.num_kernels):
             res_list.append(self.kernels[i](x))
         res = torch.stack(res_list, dim=-1).mean(-1)
         return res
 
 
-def FFT_for_Period(x, k=2):
+def FFT_for_Period(x: Tensor, k: int = 2) -> Tuple[List[int], List[float]]:
     # [B, T, C]
-
     xf = torch.fft.rfft(x, dim=1)
     # find period by amplitudes
     frequency_list = abs(xf).mean(0).mean(-1)
@@ -256,7 +261,7 @@ class TimesBlock(nn.Module):
             Inception_Block_V1(d_ff, d_model, num_kernels=num_kernels),
         )
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         B, T, N = x.size()
         period_list, period_weight = FFT_for_Period(x, self.k)
 
@@ -324,7 +329,7 @@ class Model(nn.Module):
         freq: str = "h",
         dropout: float = 0.0,
         use_norm: bool = True,
-    ):
+    ) -> None:
         super(Model, self).__init__()
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
@@ -358,6 +363,10 @@ class Model(nn.Module):
         self.use_norm = use_norm
 
     def forecast(self, x_enc: torch.Tensor, x_mark_enc: torch.Tensor) -> torch.Tensor:
+        B, _, C = x_enc.shape
+        means: Tensor = torch.zeros(B, 1, C, device=x_enc.device, dtype=x_enc.dtype)
+        stdev: Tensor = torch.ones(B, 1, C, device=x_enc.device, dtype=x_enc.dtype)
+
         # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
@@ -394,7 +403,7 @@ class Model(nn.Module):
             )
         return dec_out
 
-    def forward(self, x_enc, x_mark_enc):
+    def forward(self, x_enc: Tensor, x_mark_enc: Tensor) -> Tensor:
         dec_out = self.forecast(x_enc, x_mark_enc)
         return dec_out[:, -self.prediction_window :, :]  # [B, L, D]
 
@@ -456,6 +465,7 @@ class TimesNet(BaseLightningModule):
         return val_loss
 
     def on_train_epoch_end(self):
+        assert self.trainer.max_epochs is not None, "Trainer is not initialized!"
         current_lr = adjust_learning_rate(
             optimizer=self.trainer.optimizers[0],
             epoch=self.current_epoch + 1,

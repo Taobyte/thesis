@@ -9,5 +9,3 @@ use_static_features: False
 use_norm_dl: True
 use_norm_baseline: True
 
-use_only_exogenous_features: False 
-use_perfect_info: False

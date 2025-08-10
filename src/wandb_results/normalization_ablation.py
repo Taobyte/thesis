@@ -6,7 +6,7 @@ from matplotlib import colors
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
-    test_metrics,
+    METRICS,
     dataset_to_name,
     metric_to_name,
     model_to_name,
@@ -30,7 +30,7 @@ def visualize_normalization_difference(
             fig = make_subplots(
                 rows=len(models),
                 cols=4,
-                column_titles=[metric_to_name[metric] for metric in test_metrics],
+                column_titles=[metric_to_name[metric] for metric in METRICS],
                 row_titles=[model_to_name[model] for model in models],
                 shared_xaxes=False,
             )
@@ -50,7 +50,7 @@ def visualize_normalization_difference(
 
                 mean_dict, std_dict = get_metrics(runs)
                 for m, model in enumerate(models):
-                    for j, metric in enumerate(test_metrics):
+                    for j, metric in enumerate(METRICS):
                         look_back_windows = sorted(list(mean_dict[model].keys()))
                         x = [int(lbw) for lbw in look_back_windows]
 

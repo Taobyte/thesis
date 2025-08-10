@@ -7,7 +7,8 @@ from tqdm import tqdm
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
-    test_metrics,
+    METRICS,
+    MODELS,
     dataset_to_name,
     metric_to_name,
     model_to_name,
@@ -17,21 +18,21 @@ from src.constants import (
 
 def visualize_look_back_window_difference(
     datasets: list[str],
-    models: list[str],
     look_back_window: list[int],
     prediction_window: list[int],
-    use_heart_rate: bool,
-    use_dynamic_features: bool,
-    use_static_features: bool,
-    normalization: str,
+    experiment: str = "endo_only",
     start_time: str = "2025-6-05",
     save_html: bool = False,
     use_std: bool = False,
+    models: list[str] = [],
 ):
     num_datasets = len(datasets)
-    n_metrics = 4
+    n_metrics = len(METRICS)
 
-    readable_metric_names = [metric_to_name[m] for m in test_metrics]
+    if len(models) == 0:
+        models = MODELS
+
+    readable_metric_names = [metric_to_name[m] for m in METRICS]
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
     subplot_titles = subplot_titles = readable_metric_names + [""] * (
         (num_datasets - 1) * n_metrics
@@ -53,17 +54,16 @@ def visualize_look_back_window_difference(
             models,
             look_back_window,
             prediction_window,
-            use_heart_rate,
-            use_dynamic_features,
-            use_static_features,
-            normalization,
+            True,
+            "all",
             start_time,
+            experiment_name=experiment,
         )
 
         mean_dict, std_dict = get_metrics(runs)
 
         for i, pw in enumerate(prediction_window):
-            for j, metric in enumerate(test_metrics):
+            for j, metric in enumerate(METRICS):
                 assert set(mean_dict.keys()) == set(models), (
                     f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
                 )

@@ -1,6 +1,10 @@
 import argparse
 
-from src.wandb_results.metric_table import plot_tables
+from src.wandb_results.metric_table import (
+    plot_tables,
+    latex_metric_table,
+    compare_endo_exo_latex_tables,
+)
 from src.wandb_results.activity_ablation import dynamic_feature_ablation
 from src.wandb_results.look_back_ablation import visualize_look_back_window_difference
 from src.wandb_results.normalization_ablation import visualize_normalization_difference
@@ -19,7 +23,15 @@ def main():
     parser.add_argument(
         "--type",
         type=str,
-        choices=["table", "viz", "activity_ablation", "norm_ablation", "optuna"],
+        choices=[
+            "table",
+            "latex_table",
+            "latex_compare",
+            "viz",
+            "activity_ablation",
+            "norm_ablation",
+            "optuna",
+        ],
         required=True,
         default="table",
         help="Plot type. Must be either 'table', 'viz' or 'activity_ablation' .",
@@ -79,7 +91,7 @@ def main():
     parser.add_argument(
         "--models",
         required=False,
-        default=None,
+        default=[],
         type=list_of_strings,
         help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,xgboost| Wrong Example: gpt4ts, timellm )",
     )
@@ -122,20 +134,33 @@ def main():
             args.prediction_window,
             args.use_heart_rate,
             args.experiment,
+            start_time="2025-08-08",
+        )
+    elif args.type == "latex_table":
+        latex_metric_table(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            args.experiment,
+            start_time="2025-08-08",
+        )
+    elif args.type == "latex_compare":
+        compare_endo_exo_latex_tables(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            start_time="2025-08-08",
         )
     elif args.type == "viz":
         visualize_look_back_window_difference(
             args.dataset,
-            args.models,
             args.look_back_window,
             args.prediction_window,
-            args.use_heart_rate,
-            args.use_dynamic_features,
-            args.use_static_features,
-            args.normalization,
+            experiment=args.experiment,
+            start_time="2025-8-08",
             save_html=args.save_html,
-            start_time="2025-6-24",
             use_std=args.use_std,
+            models=args.models,
         )
     elif args.type == "activity_ablation":
         dynamic_feature_ablation(
@@ -158,8 +183,6 @@ def main():
             args.look_back_window,
             args.prediction_window,
             args.use_heart_rate,
-            args.use_dynamic_features,
-            args.use_static_features,
             save_html=args.save_html,
         )
 

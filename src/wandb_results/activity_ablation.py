@@ -8,7 +8,7 @@ from plotly.subplots import make_subplots
 from src.wandb_results.utils import get_metrics, get_runs, add_model_mean_std_to_fig
 from src.constants import (
     metric_to_name,
-    test_metrics,
+    METRICS,
     model_to_name,
     model_colors,
     dataset_to_name,
@@ -70,8 +70,8 @@ def dynamic_feature_ablation(
             for p, pw in enumerate(prediction_window):
                 fig = make_subplots(
                     rows=n_models,
-                    cols=len(test_metrics),
-                    column_titles=[metric_to_name[metric] for metric in test_metrics],
+                    cols=len(METRICS),
+                    column_titles=[metric_to_name[metric] for metric in METRICS],
                     row_titles=[model_to_name[model] for model in models],
                     shared_xaxes=False,
                 )
@@ -107,7 +107,7 @@ def dynamic_feature_ablation(
             fig.update_layout(
                 title_text=f"Activity Ablation | Dataset {dataset_to_name[dataset]} | Prediction Windows {pw} | Window Statistic {window_statistic}",
                 height=n_models * 400,
-                width=len(test_metrics) * 300,
+                width=len(METRICS) * 300,
                 template="plotly_white",
             )
 
@@ -137,7 +137,7 @@ def dynamic_feature_ablation(
             print(f"Processing Activity Ablation Table for {dataset_to_name[dataset]}")
             pw = prediction_window[0]
 
-            for metric in test_metrics:
+            for metric in METRICS:
                 cols = []
                 first_col = []
                 for model in models:

@@ -1,5 +1,22 @@
+from typing import List
+
 # Metrics
-test_metrics = ["MSE", "MAE", "DIRACC", "MASE", "ND", "NRMSE"]
+METRICS = ["MSE", "MAE", "DIRACC", "MASE", "ND", "NRMSE", "SMAPE"]
+
+# Models
+MODELS: List[str] = [
+    "linear",
+    "kalmanfilter",
+    "xgboost",
+    "gp",
+    "mlp",
+    "timesnet",
+    "simpletm",
+    "adamshyper",
+    "patchtst",
+    "timexer",
+    "gpt4ts",
+]
 
 # Colors for plotting
 model_colors = [
@@ -25,9 +42,10 @@ metric_to_name = {
     "MSE": "Mean Squared Error",
     "MAE": "Mean Absolute Deviation",
     "DIRACC": "Directional Accuracy",
-    "MASE": "Mean Absolute Percentage Error",
+    "MASE": "Mean Absolute Scaled Error",
     "ND": "Normalized Difference",
     "NRMSE": "Normalized RMSE",
+    "SMAPE": "Symmetric MAPE",
 }
 
 # Human-readable names for models
@@ -38,7 +56,7 @@ model_to_name = {
     "timellm": "TimeLLM",
     "pattn": "PAttn",
     "simpletm": "SimpleTM",
-    "elastst": "ElasTST",
+    "patchtst": "PatchTST",
     "timexer": "TimeXer",
     "gp": "Gaussian Process",
     "bnn": "Bayesian Neural Network",

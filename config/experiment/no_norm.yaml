@@ -7,7 +7,4 @@ use_static_features: False
 use_norm_dl: False
 use_norm_baseline: False
 
-use_only_exogenous_features: False 
-use_perfect_info: False
-
 loss_fn: "MAE"

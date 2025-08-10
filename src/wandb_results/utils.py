@@ -15,12 +15,23 @@ from typing import Tuple
 
 from src.utils import create_group_run_name
 from src.constants import (
-    test_metrics,
+    METRICS,
     dataset_to_name,
 )
 
 
-def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def get_metrics(
+    runs: list,
+    metrics_to_keep: list[str] = [
+        "MSE",
+        "MAE",
+        "DIRACC",
+        "MASE",
+        "ND",
+        "NRMSE",
+        "SMAPE",
+    ],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Preprocess the run metrics for the wandb training runs in the runs list.
     Returns two dataframes, the first storing the mean and the second the standard deviation for
@@ -35,7 +46,7 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
         look_back_window = name_splitted[-2]
         prediction_window = name_splitted[-1]
         summary = run.summary._json_dict
-        filtered_summary = {k: summary[k] for k in summary if k in test_metrics}
+        filtered_summary = {k: summary[k] for k in summary if k in METRICS}
         metrics[model_name][look_back_window][prediction_window].append(
             filtered_summary
         )
@@ -52,12 +63,17 @@ def get_metrics(runs: list) -> Tuple[pd.DataFrame, pd.DataFrame]:
                 metric_list = defaultdict(list)
                 for metric_dict in z:
                     for metric_name, metric_value in metric_dict.items():
-                        metric_list[metric_name].append(metric_value)
+                        if metric_name in metrics_to_keep:
+                            metric_list[metric_name].append(metric_value)
 
                 mean = {
-                    metric_name: np.mean(v) for metric_name, v in metric_list.items()
+                    metric_name: float(np.mean(v))
+                    for metric_name, v in metric_list.items()
                 }
-                std = {metric_name: np.std(v) for metric_name, v in metric_list.items()}
+                std = {
+                    metric_name: float(np.std(v))
+                    for metric_name, v in metric_list.items()
+                }
                 processed_metrics_mean[model][lbw][pw] = mean
                 processed_metrics_std[model][lbw][pw] = std
 
@@ -75,7 +91,7 @@ def get_runs(
     window_statistic: str = None,
     experiment_name: str = "endo_exo",
 ):
-    if normalization is None:
+    if normalization == "all":
         normalizations = ["global", "local", "none"]
     else:
         normalizations = [normalization]

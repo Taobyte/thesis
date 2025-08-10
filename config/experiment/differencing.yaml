@@ -6,10 +6,7 @@ loss_fn: "MAE"
 use_dynamic_features: True
 use_static_features: False 
 
-use_only_exogenous_features: False 
-use_perfect_info: False
-
 # Non-Stationary Experiments
-use_norm_dl: True
+use_norm_dl: False
 use_norm_baseline: False
 
