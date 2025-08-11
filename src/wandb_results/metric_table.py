@@ -344,10 +344,6 @@ def plot_tables(
             {k: v[str(lbw)][str(pw)] for k, v in std_dict.items()}
         )
 
-        import pdb
-
-        pdb.set_trace()
-
         visualize_metric_table(
             fig,
             i + 1,  # indexing starts at 1 in plotly subplot figures

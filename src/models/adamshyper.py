@@ -1289,9 +1289,6 @@ class multi_adaptive_hypergraoh(nn.Module):
                 list(torch.nonzero(matrix_array[:, col]).flatten().tolist())
                 for col in range(matrix_array.shape[1])
             ]
-            import pdb
-
-            # pdb.set_trace()
 
             node_list = torch.cat(
                 [torch.tensor(sublist) for sublist in result_list if len(sublist) > 0]

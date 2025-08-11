@@ -298,7 +298,6 @@ class TimesBlock(nn.Module):
             # reshape back
             out = out.permute(0, 2, 3, 1).reshape(B, -1, N)
             res.append(out[:, : (self.look_back_window + self.prediction_window), :])
-        # pdb.set_trace()
         res = torch.stack(res, dim=-1)
         # adaptive aggregation
         period_weight = F.softmax(period_weight, dim=1)
