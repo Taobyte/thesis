@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import antropy as ant
 
 from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -27,6 +28,29 @@ from src.utils import (
     compute_input_channel_dims,
     get_optuna_name,
 )
+
+
+def forecastibility(datamodules: List[LightningDataModule]):
+    sf = 0.5
+    for datamodule in datamodules:
+        dataset = datamodule.train_dataset.data
+        # define length of window for STFFT
+        if datamodule.name in ["ieee"]:
+            nperseg = 32
+        else:
+            nperseg = 256
+        results = []
+        for x in dataset:
+            heartrate = x[:, 0]
+            H = ant.spectral_entropy(
+                heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
+            )
+            res = 1 - H
+            results.append(res)
+
+        print(
+            f"Dataset {datamodule.name} | Mean {np.mean(results):.4f} | Std {np.std(results):.4f}"
+        )
 
 
 def partial_correlation(datamodules: List[LightningDataModule]):
@@ -327,9 +351,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--datasets",
         type=list_of_strings,
-        required=True,
-        default=["ieee"],
-        help="Dataset to plot. Must be 'ieee', 'dalia', 'wildppg' ",
+        required=False,
+        default=["dalia", "wildppg", "ieee"],
+        help="Dataset to plot. Must be one or more (separated by,) of 'ieee', 'dalia', 'wildppg' ",
     )
 
     parser.add_argument(
@@ -347,12 +371,13 @@ if __name__ == "__main__":
             "difference",
             "pacf",
             "bds",
+            "forecastibility",
         ],
         required=True,
     )
 
     args = parser.parse_args()
-    datamodules = []
+    datamodules: List[LightningDataModule] = []
     for dataset in args.datasets:
         with initialize(version_base=None, config_path="../../config/"):
             cfg = compose(
@@ -371,9 +396,10 @@ if __name__ == "__main__":
 
     if args.type == "viz":
         visualize_timeseries(datamodules)
-
     elif args.type == "infos":
         print_infos(datamodules)
+    elif args.type == "forecastibility":
+        forecastibility(datamodules)
     elif args.type == "granger":
         granger_test(datamodules)
 

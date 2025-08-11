@@ -3,6 +3,7 @@ defaults:
 
 params:
   model.trainer.use_early_stopping: True
+  model.trainer.max_epochs: 20
 
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
   model.model.d_model: choice(32, 64, 128, 256, 512)

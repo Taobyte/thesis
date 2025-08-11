@@ -62,7 +62,7 @@ def setup(
                 monitor="val_loss",
                 mode="min",
                 patience=config.model.trainer.patience,
-                min_delta=0.001,  # stop if no substantial improvement is being made. Important for models with LR schedulers
+                min_delta=config.min_delta,  # stop if no substantial improvement is being made. Important for models with LR schedulers
             )
         )
 

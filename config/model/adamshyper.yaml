@@ -12,13 +12,13 @@ model:
   window_size: ${compute_square_window:${look_back_window}}  # window_size: [4,4] does not work if look_back_window < 4
 
   # tunable params
-  d_model: 32 # 512
-  hn1: 20 # 50 # number of hyperedges at scale 1
+  d_model: 512
+  hn1: 50 # 50 # number of hyperedges at scale 1
   hn2: 20 # number of hyperedges at scale 2
   hn3: 10 # number of hyperedges at scale 3
   k: 3 # this is the eta parameter in the paper is used in the TOPK function to only take the top k in abs value edges per node and remove the other edges
   beta: 0.5
-  gamma: 5.96100389677849 # 4.2
+  gamma: 4.2
 
   use_norm: ${use_norm_dl}
 
@@ -35,6 +35,6 @@ trainer:
   patience: 5
 
 data:
-  batch_size: 32
+  batch_size: 256
   num_workers: ${num_workers}
 

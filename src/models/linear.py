@@ -79,8 +79,7 @@ class Linear(BaseLightningModule):
         targets = torch.tensor(y_val, dtype=torch.float32, device=self.device)
 
         if self.tune:
-            mae_criterion = torch.nn.L1Loss()
-            loss = mae_criterion(preds, targets)
+            loss = self.mae_criterion(preds, targets)
         else:
             loss = self.criterion(preds, targets)
 

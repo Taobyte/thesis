@@ -53,6 +53,9 @@ wandb:
   save_code: False
   reinit: False
 
+# training 
+min_delta: 0.001
+
 # tuner flag
 tune: False
 n_trials: 50
