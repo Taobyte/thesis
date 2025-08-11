@@ -7,10 +7,108 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tqdm import tqdm
 from itertools import product
+from typing import List
 
 from src.wandb_results.utils import get_metrics, get_runs
 from utils import create_group_run_name
-from src.constants import model_to_name, metric_to_name, dataset_to_name, MODELS
+from src.constants import (
+    model_to_name,
+    metric_to_name,
+    dataset_to_name,
+    MODELS,
+    METRICS,
+)
+
+
+def plot_best_lbw(
+    datasets: list[str],
+    prediction_window: list[int] = [3],
+    experiment: str = "best_endo_exo",
+    start_time: str = "2025-8-08",
+):
+    assert len(prediction_window) == 1
+    pw = prediction_window[0]
+    metrics_to_keep = METRICS  # ["MSE", "MAE", "DIRACC"]
+    cols: dict[str, list[float]] = dict()
+    fst_col: list[str] = []
+    fst_col = metrics_to_keep * len(datasets)
+    cols["Metrics"] = fst_col
+
+    for model_name in MODELS:
+        col: List[float] = []
+        for dataset in datasets:
+            conditions = [
+                # HERE I WANT THAT TAGS CONTAINS dataset name and experiment name!
+                {"state": "finished"},
+                {"created_at": {"$gte": start_time}},
+                {"tags": dataset},  # dataset tag must be present
+                {"tags": experiment},  # experiment tag must be present
+                {"tags": model_name},
+            ]
+            filters = {"$and": conditions}
+
+            api = wandb.Api()
+            best_endo_exo_runs = api.runs("c_keusch/thesis", filters=filters)
+            print(f"Found {len(best_endo_exo_runs)} runs.")
+
+            assert len(best_endo_exo_runs) % 3 == 0, (
+                "Attention, length of runs is not divisible by 3!"
+            )
+            assert len(best_endo_exo_runs) > 0, "No runs were found!"
+
+            best_endo_exo_mean, best_endo_exo_std = get_metrics(best_endo_exo_runs)
+            if model_name not in best_endo_exo_mean:
+                print(f"Attention {model_name} is not in the dict!")
+                continue
+            metrics: list[float] = []
+            for metric_name in metrics_to_keep:
+                lbw = list(best_endo_exo_mean[model_name].keys())[0]
+                if metric_name in best_endo_exo_mean[model_name][str(lbw)][str(pw)]:
+                    metrics.append(
+                        best_endo_exo_mean[model_name][str(lbw)][str(pw)][metric_name]
+                    )
+                else:
+                    metrics.append(np.nan)
+                    print(
+                        f"Metric {metric_name} does not exist for {dataset} {model_name} {lbw}"
+                    )
+            assert len(metrics) == len(metrics_to_keep)
+            col.extend(metrics)
+        cols[model_to_name[model_name]] = col
+
+    df = pd.DataFrame(cols)
+
+    n_metrics = len(metrics_to_keep)
+    # make best value bold
+    for i in range(len(df)):
+        row = df.iloc[i].values
+        current_row = row[1:]
+        if i % n_metrics == 2:
+            # DIRACC is at position 3 in the metric list
+            best_idx = current_row.argmax() + 1
+            worst_idx = current_row.argmin() + 1
+        else:
+            best_idx = current_row.argmin() + 1
+            worst_idx = current_row.argmax() + 1
+        best_val = df.iloc[i, best_idx]
+        worst_val = df.iloc[i, worst_idx]
+        df.iloc[i, best_idx] = rf"\textbf{{{best_val:.3f}}}"
+        df.iloc[i, worst_idx] = rf"\textit{{{worst_val:.3f}}}"
+        for j in range(len(current_row)):
+            if j in [0, best_idx, worst_idx]:
+                continue
+            v = df.iloc[i, j]
+            df.iloc[i, j] = f"{v:.3f}"
+
+    latex_str = df.to_latex(
+        index=False,
+        escape=False,
+        header=True,
+        # column_format=column_format,
+        bold_rows=False,
+        float_format="%.3f",
+    )
+    print(latex_str)
 
 
 def compare_endo_exo_latex_tables(
@@ -171,7 +269,6 @@ def latex_metric_table(
             normalization="all",
         )
 
-        ROUNDING = 3
         mean, std = get_metrics(runs, metrics_to_keep=metrics_to_keep)
         for lbw in look_back_window:
             col: list[float] = []
@@ -189,8 +286,7 @@ def latex_metric_table(
                             f"Metric {metric_name} does not exist for {dataset} {model_name} {lbw}"
                         )
                 assert len(metrics) == len(metrics_to_keep)
-                metrics_rounded = [round(v, ROUNDING) for v in metrics]
-                col.extend(metrics_rounded)
+                col.extend(metrics)
             cols[f"{dataset}_{lbw}"] = col
 
     df = pd.DataFrame(cols)

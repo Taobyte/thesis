@@ -4,6 +4,7 @@ from src.wandb_results.metric_table import (
     plot_tables,
     latex_metric_table,
     compare_endo_exo_latex_tables,
+    plot_best_lbw,
 )
 from src.wandb_results.activity_ablation import dynamic_feature_ablation
 from src.wandb_results.look_back_ablation import visualize_look_back_window_difference
@@ -27,6 +28,7 @@ def main():
             "table",
             "latex_table",
             "latex_compare",
+            "best_lbw_latex",
             "viz",
             "activity_ablation",
             "norm_ablation",
@@ -61,7 +63,7 @@ def main():
     parser.add_argument(
         "--look_back_window",
         type=list_of_ints,
-        required=True,
+        required=False,
         default=[5],
         help="Lookback window size",
     )
@@ -69,7 +71,7 @@ def main():
     parser.add_argument(
         "--prediction_window",
         type=list_of_ints,
-        required=True,
+        required=False,
         default=[3],
         help="Prediction window size",
     )
@@ -150,6 +152,13 @@ def main():
             args.look_back_window,
             args.prediction_window,
             start_time="2025-08-08",
+        )
+    elif args.type == "best_lbw_latex":
+        plot_best_lbw(
+            args.dataset,
+            args.prediction_window,
+            args.experiment,
+            start_time="2025-8-08",
         )
     elif args.type == "viz":
         visualize_look_back_window_difference(
