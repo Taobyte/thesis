@@ -18,6 +18,18 @@ MODELS: List[str] = [
     "gpt4ts",
 ]
 
+BASELINES: List[str] = [
+    "linear",
+    "kalmanfilter",
+    "xgboost",
+    "gp",
+    "mlp",
+    "hlinear",
+    "hxgboost",
+]
+
+DL: List[str] = ["timesnet", "simpletm", "adamshyper", "patchtst", "timexer", "gpt4ts"]
+
 # Colors for plotting
 model_colors = [
     "blue",

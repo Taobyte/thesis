@@ -1,14 +1,18 @@
+import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
 
 from plotly.subplots import make_subplots
 from matplotlib import colors
 from tqdm import tqdm
+from typing import List
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
     METRICS,
     MODELS,
+    BASELINES,
+    DL,
     dataset_to_name,
     metric_to_name,
     model_to_name,
@@ -34,13 +38,14 @@ def visualize_look_back_window_difference(
 
     readable_metric_names = [metric_to_name[m] for m in METRICS]
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
-    subplot_titles = subplot_titles = readable_metric_names + [""] * (
-        (num_datasets - 1) * n_metrics
-    )
-    row_titles = readable_dataset_names
+    subplot_titles = readable_metric_names + [""] * ((num_datasets - 1) * n_metrics)
+    row_titles: list[str] = []
+    for name in readable_dataset_names:
+        row_titles.append(f"{name} Individual")
+        row_titles.append(f"{name} Aggregated")
 
     fig = make_subplots(
-        rows=num_datasets,
+        rows=num_datasets * 2,  # we also plot the aggregated results per baseline or dl
         cols=n_metrics,
         subplot_titles=subplot_titles,
         row_titles=row_titles,
@@ -48,6 +53,7 @@ def visualize_look_back_window_difference(
         horizontal_spacing=0.03,
         vertical_spacing=0.03,
     )
+
     for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
         runs = get_runs(
             dataset,
@@ -67,10 +73,11 @@ def visualize_look_back_window_difference(
                 assert set(mean_dict.keys()) == set(models), (
                     f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
                 )
+                baseline_means: List[float] = []
+                dl_means: List[float] = []
+                row = 2 * b + 1
+                col = j + 1
                 for m, model in enumerate(models):
-                    row = b + 1
-                    col = j + 1
-
                     model_name = model_to_name[model]
 
                     look_back_windows = sorted(list(mean_dict[model].keys()), key=int)
@@ -80,6 +87,11 @@ def visualize_look_back_window_difference(
                         mean_dict[model][lbw][str(pw)][metric]
                         for lbw in look_back_windows
                     ]
+                    if model in BASELINES:
+                        baseline_means.append(means)
+                    elif model in DL:
+                        dl_means.append(means)
+
                     stds = [
                         std_dict[model][lbw][str(pw)][metric]
                         for lbw in look_back_windows
@@ -99,7 +111,7 @@ def visualize_look_back_window_difference(
                             line=dict(color=color),
                             showlegend=(j == 0) and row == 1,
                             legendgroup=model_name,
-                            # legendgrouptitle_text=dataset_name,
+                            legendgrouptitle_text="Individual Perf.",
                         ),
                         row=row,
                         col=col,
@@ -124,28 +136,72 @@ def visualize_look_back_window_difference(
                             row=row,
                             col=col,
                         )
-                    if row == len(datasets):
-                        fig.update_xaxes(
-                            title_text="Lookback Window",
-                            tickmode="array",
-                            tickvals=look_back_windows,
-                            row=row,
-                            col=col,
-                        )
+
+                baseline_means_mean = np.mean(
+                    np.stack(baseline_means), axis=0
+                ).tolist()  # (len(look_back_window),)
+                dl_means_mean = np.mean(np.stack(dl_means), axis=0).tolist()
+                baseline_means_std = np.std(np.stack(baseline_means), axis=0).tolist()
+                # (len(look_back_window),)
+                dl_means_std = np.std(np.stack(dl_means), axis=0).tolist()
+
+                for name, color, y, stds in zip(
+                    ["Baselines", "DL"],
+                    [model_colors[-1], model_colors[-2]],
+                    [baseline_means_mean, dl_means_mean],
+                    [baseline_means_std, dl_means_std],
+                ):
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x,
+                            y=y,
+                            mode="lines+markers",
+                            name=name,
+                            showlegend=(j == 0) and row == 1,
+                            line=dict(color=color),
+                            legendgroup=name,
+                            legendgrouptitle_text="Baselines vs DL",
+                        ),
+                        row=row + 1,
+                        col=col,
+                    )
+
+                    upper = [m + s for m, s in zip(y, stds)]
+                    lower = [m - s for m, s in zip(y, stds)]
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x + x[::-1],
+                            y=upper + lower[::-1],
+                            fill="toself",
+                            fillcolor=f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                            line=dict(color="rgba(255,255,255,0)"),
+                            hoverinfo="skip",
+                            showlegend=False,
+                            name=name,
+                            legendgroup=name,
+                            legendgrouptitle_text="Baselines vs DL",
+                        ),
+                        row=row + 1,
+                        col=col,
+                    )
+
+                if row == 2 * len(datasets):
+                    fig.update_xaxes(
+                        title_text="Lookback Window",
+                        tickmode="array",
+                        tickvals=look_back_windows,
+                        row=row,
+                        col=col,
+                    )
 
     num_rows = num_datasets
     fig.update_layout(
-        height=num_rows * 400,
+        height=num_rows * 800,
         template="plotly_white",
     )
 
-    fig.update_layout(
-        legend=dict(
-            font=dict(
-                size=16  # <-- Change this value to increase/decrease size
-            )
-        )
-    )
+    fig.update_layout(legend=dict(font=dict(size=16)))
 
     for annotation in fig["layout"]["annotations"]:
         if annotation["text"] in row_titles:

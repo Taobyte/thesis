@@ -1,6 +1,7 @@
 #!/bin/bash 
 
 # setup environment 
+source ~/.bashrc
 conda activate thesis
 
 # ressource specs
