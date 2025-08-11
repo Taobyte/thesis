@@ -94,7 +94,7 @@ class HXGBoost(BaseLightningModule):
     ):
         super().__init__(**kwargs)
 
-        assert self.experiment_name == "endo_exo"
+        assert self.experiment_name in ["endo_exo", "best_endo_exo"]
 
         self.use_norm = use_norm
 

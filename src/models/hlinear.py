@@ -59,7 +59,7 @@ class HLinear(BaseLightningModule):
         self.model = model
         self.learning_rate = learning_rate
         self.criterion = get_loss_fn(loss)
-        assert self.experiment_name == "endo_exo"
+        assert self.experiment_name in ["endo_exo", "best_endo_exo"]
 
         self.automatic_optimization = False
 
