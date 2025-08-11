@@ -1,4 +1,6 @@
-experiment_name: "endo_exo"
+# MAKE SURE TO ADD lbw=lbw in the config file!
+
+experiment_name: "best_endo_exo"
 
 use_heart_rate: True 
 use_dynamic_features: True
