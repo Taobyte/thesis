@@ -36,6 +36,22 @@ def visualize_look_back_window_difference(
     if len(models) == 0:
         models = MODELS
 
+    lbw_ablation = True
+    if len(look_back_window) == 1:
+        assert len(prediction_window) > 1
+        lbw = look_back_window[0]
+        x = sorted([int(pw) for pw in prediction_window])
+        lbw_ablation = False
+    elif len(prediction_window) == 1:
+        assert len(look_back_window) > 1
+        pw = prediction_window[0]
+        x = sorted([int(lbw) for lbw in look_back_window])
+        lbw_ablation = True
+    else:
+        raise ValueError(
+            "Invalid input: either look_back_window or prediction_window must have length > 1, but not both."
+        )
+
     readable_metric_names = [metric_to_name[m] for m in METRICS]
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
     subplot_titles = readable_metric_names + [""] * ((num_datasets - 1) * n_metrics)
@@ -67,133 +83,133 @@ def visualize_look_back_window_difference(
         )
 
         mean_dict, std_dict = get_metrics(runs)
+        for j, metric in enumerate(METRICS):
+            assert set(mean_dict.keys()) == set(models), (
+                f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
+            )
+            baseline_means: List[float] = []
+            dl_means: List[float] = []
+            row = 2 * b + 1
+            col = j + 1
+            for m, model in enumerate(models):
+                model_name = model_to_name[model]
 
-        for i, pw in enumerate(prediction_window):
-            for j, metric in enumerate(METRICS):
-                assert set(mean_dict.keys()) == set(models), (
-                    f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
-                )
-                baseline_means: List[float] = []
-                dl_means: List[float] = []
-                row = 2 * b + 1
-                col = j + 1
-                for m, model in enumerate(models):
-                    model_name = model_to_name[model]
-
-                    look_back_windows = sorted(list(mean_dict[model].keys()), key=int)
-                    x = [int(lbw) for lbw in look_back_windows]
-
-                    means = [
-                        mean_dict[model][lbw][str(pw)][metric]
-                        for lbw in look_back_windows
-                    ]
-                    if model in BASELINES:
-                        baseline_means.append(means)
-                    elif model in DL:
-                        dl_means.append(means)
-
-                    stds = [
-                        std_dict[model][lbw][str(pw)][metric]
-                        for lbw in look_back_windows
-                    ]
-                    upper = [m + s for m, s in zip(means, stds)]
-                    lower = [m - s for m, s in zip(means, stds)]
-
-                    color = model_colors[m]
-
-                    # Mean line
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x,
-                            y=means,
-                            mode="lines+markers",
-                            name=model_name,
-                            line=dict(color=color),
-                            showlegend=(j == 0) and row == 1,
-                            legendgroup=model_name,
-                            legendgrouptitle_text="Individual Perf.",
-                        ),
-                        row=row,
-                        col=col,
-                    )
-
-                    # Std deviation band (fill between)
-                    if use_std:
-                        fig.add_trace(
-                            go.Scatter(
-                                x=x + x[::-1],
-                                y=upper + lower[::-1],
-                                fill="toself",
-                                fillcolor=color.replace("1.0", "0.2")
-                                if "rgba" in color
-                                else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
-                                line=dict(color="rgba(255,255,255,0)"),
-                                hoverinfo="skip",
-                                showlegend=False,
-                                name=model_name,
-                                legendgroup=model_name,
-                            ),
-                            row=row,
-                            col=col,
+                means: list[float] = []
+                stds: list[float] = []
+                for ablation_x in x:
+                    if lbw_ablation:
+                        means.append(mean_dict[model][str(ablation_x)][str(pw)][metric])
+                        stds.append(std_dict[model][str(ablation_x)][str(pw)][metric])
+                    else:
+                        means.append(
+                            mean_dict[model][str(lbw)][str(ablation_x)][metric]
                         )
+                        stds.append(std_dict[model][str(lbw)][str(ablation_x)][metric])
 
-                baseline_means_mean = np.mean(
-                    np.stack(baseline_means), axis=0
-                ).tolist()  # (len(look_back_window),)
-                dl_means_mean = np.mean(np.stack(dl_means), axis=0).tolist()
-                baseline_means_std = np.std(np.stack(baseline_means), axis=0).tolist()
-                # (len(look_back_window),)
-                dl_means_std = np.std(np.stack(dl_means), axis=0).tolist()
+                if model in BASELINES:
+                    baseline_means.append(means)
+                elif model in DL:
+                    dl_means.append(means)
 
-                for name, color, y, stds in zip(
-                    ["Baselines", "DL"],
-                    [model_colors[-1], model_colors[-2]],
-                    [baseline_means_mean, dl_means_mean],
-                    [baseline_means_std, dl_means_std],
-                ):
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x,
-                            y=y,
-                            mode="lines+markers",
-                            name=name,
-                            showlegend=(j == 0) and row == 1,
-                            line=dict(color=color),
-                            legendgroup=name,
-                            legendgrouptitle_text="Baselines vs DL",
-                        ),
-                        row=row + 1,
-                        col=col,
-                    )
+                upper = [m + s for m, s in zip(means, stds)]
+                lower = [m - s for m, s in zip(means, stds)]
 
-                    upper = [m + s for m, s in zip(y, stds)]
-                    lower = [m - s for m, s in zip(y, stds)]
+                color = model_colors[m]
 
+                # Mean line
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=means,
+                        mode="lines+markers",
+                        name=model_name,
+                        line=dict(color=color),
+                        showlegend=(j == 0) and row == 1,
+                        legendgroup=model_name,
+                        legendgrouptitle_text="Individual Perf.",
+                    ),
+                    row=row,
+                    col=col,
+                )
+
+                # Std deviation band (fill between)
+                if use_std:
                     fig.add_trace(
                         go.Scatter(
                             x=x + x[::-1],
                             y=upper + lower[::-1],
                             fill="toself",
-                            fillcolor=f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                            fillcolor=color.replace("1.0", "0.2")
+                            if "rgba" in color
+                            else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
                             line=dict(color="rgba(255,255,255,0)"),
                             hoverinfo="skip",
                             showlegend=False,
-                            name=name,
-                            legendgroup=name,
-                            legendgrouptitle_text="Baselines vs DL",
+                            name=model_name,
+                            legendgroup=model_name,
                         ),
-                        row=row + 1,
-                        col=col,
-                    )
-
-                if row == 2 * len(datasets):
-                    fig.update_xaxes(
-                        title_text="Lookback Window",
-                        tickmode="array",
-                        tickvals=look_back_windows,
                         row=row,
                         col=col,
                     )
+
+            # plot aggregated results
+            baseline_means_mean = np.mean(
+                np.stack(baseline_means), axis=0
+            ).tolist()  # (len(look_back_window),)
+            dl_means_mean = np.mean(np.stack(dl_means), axis=0).tolist()
+            baseline_means_std = np.std(np.stack(baseline_means), axis=0).tolist()
+            # (len(look_back_window),)
+            dl_means_std = np.std(np.stack(dl_means), axis=0).tolist()
+
+            for name, color, y, stds in zip(
+                ["Baselines", "DL"],
+                [model_colors[-1], model_colors[-2]],
+                [baseline_means_mean, dl_means_mean],
+                [baseline_means_std, dl_means_std],
+            ):
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        mode="lines+markers",
+                        name=name,
+                        showlegend=(j == 0) and row == 1,
+                        line=dict(color=color),
+                        legendgroup=name,
+                        legendgrouptitle_text="Baselines vs DL",
+                    ),
+                    row=row + 1,
+                    col=col,
+                )
+
+                upper = [m + s for m, s in zip(y, stds)]
+                lower = [m - s for m, s in zip(y, stds)]
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=upper + lower[::-1],
+                        fill="toself",
+                        fillcolor=f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
+                        line=dict(color="rgba(255,255,255,0)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                        name=name,
+                        legendgroup=name,
+                        legendgrouptitle_text="Baselines vs DL",
+                    ),
+                    row=row + 1,
+                    col=col,
+                )
+
+            if row == 2 * len(datasets):
+                fig.update_xaxes(
+                    title_text="Lookback Window",
+                    tickmode="array",
+                    tickvals=look_back_windows,
+                    row=row,
+                    col=col,
+                )
 
     num_rows = num_datasets
     fig.update_layout(

@@ -27,7 +27,7 @@ OmegaConf.register_new_resolver(
 def _test_specific_dataset(
     dataset_name: str = "ieee",
     experiment: str = "endo_only",
-    normalization: str = "global",
+    normalization: str = "difference",
 ):
     look_back_windows = [5, 10, 20, 30, 60]
     prediction_windows = [3, 5, 10, 20, 30]
