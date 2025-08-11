@@ -1,8 +1,8 @@
 #!/bin/bash 
 
 # setup environment 
+source ~/.bashrc
 conda activate thesis
-
 
 # TODO: TUNE DALIA & WILDPPG LOOKBACK WINDOWS!
 
