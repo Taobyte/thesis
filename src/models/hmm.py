@@ -244,8 +244,12 @@ class HMM(BaseLightningModule):
     def _shared_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tensor:
-        loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
-        loss = -loss.mean()
+        # loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
+        # loss = -loss.mean()
+        criterion = torch.nn.MSELoss()
+        preds = self.model(look_back_window)
+        assert preds.shape == prediction_window.shape
+        loss =  criterion(preds, prediction_window)
         return loss
 
     def model_specific_train_step(
