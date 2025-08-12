@@ -8,9 +8,6 @@
 #SBATCH --job-name=tune_job
 #SBATCH --output=/cluster/project/holz/ckeusch/tune_logs/%x_%j.out
 
-TUNING_SPACE = 'int(interval(5,61))'
-
-
 source ~/.bashrc
 conda activate thesis
 module load eth_proxy
@@ -22,7 +19,7 @@ python main.py --multirun \
   normalization=${2} \
   experiment=${3} \
   n_trials=${4} \
-  lbw=tuning \
+  lbw=lbw \
   prediction_window=${5} \
   tune=True \
   overfit=False \
