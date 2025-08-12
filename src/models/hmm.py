@@ -94,8 +94,10 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             [torch.zeros_like(emissions), emissions], dim=1
         )  # (B, 2*L, C)
         inputs = padded.unfold(dimension=1, size=L, step=1)  # (B, F, L, C)
+        import pdb 
+        pdb.set_trace()
         inputs = inputs[:, :L, :, :]
-        inputs = rearrange(inputs, "B F L C -> (B F) L C")  # (B*L, L, C)
+        inputs = rearrange(inputs, "B F C L -> (B F) L C")  # (B*L, L, C)
         targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
 
         log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
