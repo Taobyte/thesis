@@ -8,6 +8,9 @@ from typing import Tuple
 
 
 ## We use the implementation of TCN from https://github.com/locuslab/TCN
+
+
+
 class Chomp1d(nn.Module):
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()
@@ -103,6 +106,50 @@ class TemporalConvNet(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+
+
+def filter_input_vars(
+    insample_y, insample_x_t, outsample_x_t, t_cols, include_var_dict
+):
+    # This function is specific for the EPF task
+    if t.cuda.is_available():
+        device = insample_x_t.get_device()
+    else:
+        device = "cpu"
+    outsample_y = t.zeros((insample_y.shape[0], 1, outsample_x_t.shape[2])).to(device)
+
+    insample_y_aux = t.unsqueeze(insample_y, dim=1)
+
+    insample_x_t_aux = t.cat([insample_y_aux, insample_x_t], dim=1)
+    outsample_x_t_aux = t.cat([outsample_y, outsample_x_t], dim=1)
+    x_t = t.cat([insample_x_t_aux, outsample_x_t_aux], dim=-1)
+    batch_size, n_channels, input_size = x_t.shape
+
+    assert input_size == 168 + 24, f"input_size {input_size} not 168+24"
+
+    x_t = x_t.reshape(batch_size, n_channels, 8, 24)
+
+    input_vars = []
+    for var in include_var_dict.keys():
+        if len(include_var_dict[var]) > 0:
+            t_col_idx = t_cols.index(var)
+            t_col_filter = include_var_dict[var]
+            if var != "week_day":
+                input_vars += [x_t[:, t_col_idx, t_col_filter, :]]
+            else:
+                assert t_col_filter == [-1], (
+                    f"Day of week must be of outsample not {t_col_filter}"
+                )
+                day_var = x_t[:, t_col_idx, t_col_filter, [0]]
+                day_var = day_var.view(batch_size, -1)
+
+    x_t_filter = t.cat(input_vars, dim=1)
+    x_t_filter = x_t_filter.view(batch_size, -1)
+
+    if len(include_var_dict["week_day"]) > 0:
+        x_t_filter = t.cat([x_t_filter, day_var], dim=1)
+
+    return x_t_filter
 
 
 class _StaticFeaturesEncoder(nn.Module):

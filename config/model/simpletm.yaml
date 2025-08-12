@@ -35,4 +35,4 @@ trainer:
   pct_start: 0.2
 
 data:
-  batch_size: 32
+  batch_size: 256
