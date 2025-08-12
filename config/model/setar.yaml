@@ -1,0 +1,25 @@
+name: "setar"
+
+model: 
+  _target_: src.models.setar.Model
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
+
+  # n_regimes = 1 is equivalent to batched linear regression
+  n_regimes: 1 # number of regimes
+  hidden_dim: 8 # dimension of the SETAR regime prediction module
+
+pl_model: 
+  _target_: src.models.setar.SETAR
+  loss_fn: ${loss_fn}
+  learning_rate: 0.001
+
+trainer:
+  max_epochs: 10000
+  use_early_stopping: True
+  patience: 5 
+
+data:
+  batch_size: 256
