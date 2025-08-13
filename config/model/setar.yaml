@@ -8,7 +8,7 @@ model:
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
   # n_regimes = 1 is equivalent to batched linear regression
-  n_regimes: 1 # number of regimes
+  n_regimes: 2 # number of regimes
   hidden_dim: 8 # dimension of the SETAR regime prediction module
 
 pl_model: 
@@ -22,4 +22,4 @@ trainer:
   patience: 5 
 
 data:
-  batch_size: 256
+  batch_size: 100000

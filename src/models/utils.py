@@ -183,6 +183,9 @@ class BaseLightningModule(L.LightningModule):
     def evaluate(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tuple[dict[str, float], dict[str, list[float]]]:
+        import pdb
+
+        pdb.set_trace()
         (
             look_back_window,
             look_back_window_norm,

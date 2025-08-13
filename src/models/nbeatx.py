@@ -10,7 +10,6 @@ from typing import Tuple
 ## We use the implementation of TCN from https://github.com/locuslab/TCN
 
 
-
 class Chomp1d(nn.Module):
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()

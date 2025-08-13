@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from einops import rearrange
 from torch import Tensor
-from typing import Tuple, Any
+from typing import List, Any
 
 from src.models.utils import BaseLightningModule
 
@@ -15,12 +15,14 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         look_back_window: int = 5,
         prediction_window: int = 3,
         look_back_channel_dim: int = 2,
+        target_channel_dim: int = 1,
     ):
         super().__init__()
         self.n_states = n_states
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.look_back_channel_dim = look_back_channel_dim
+        self.target_channel_dim = target_channel_dim
 
         # HMM parameters
         self.transition_matrix = torch.nn.Parameter(torch.randn(n_states, n_states))
@@ -50,12 +52,10 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         )
 
         # Autoregressive weights
-        self.W = torch.nn.ParameterList(
+        self.W = torch.nn.ModuleList(
             [
-                torch.nn.Parameter(
-                    torch.randn(
-                        look_back_window, look_back_channel_dim, look_back_channel_dim
-                    )
+                torch.nn.Linear(
+                    look_back_window * look_back_window, look_back_channel_dim
                 )
                 for _ in range(n_states)
             ]
@@ -95,7 +95,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         )  # (B, 2*L, C)
         inputs = padded.unfold(dimension=1, size=L, step=1)  # (B, F, L, C)
         inputs = inputs[:, :L, :, :]
-        inputs = rearrange(inputs, "B F C L -> (B F) L C")  # (B*L, L, C)
+        inputs = rearrange(inputs, "B F C L -> (B F) (L C)")  # (B*L, L*C)
         targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
 
         log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
@@ -111,12 +111,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
                 0
             ).expand(B * L, -1, -1)
             # add linear autoregressive compontent b=B*L d=C
-            ar_component = torch.einsum(
-                "blc,blcd->bd",
-                inputs,
-                self.W[state].unsqueeze(0).expand(B * L, -1, -1, -1),
-            )
-
+            ar_component = self.W[state](inputs)  # (B*L, C)
             mean = hidden_state_mean + ar_component
 
             dist = torch.distributions.MultivariateNormal(mean, covar_reg)
@@ -197,13 +192,10 @@ class LinearAutoregressiveHMM(torch.nn.Module):
                 :, -self.look_back_window :, :
             ]  # (B, L, C)
 
-            ar_W = torch.stack(
-                [self.W[i] for i in range(self.n_states)], dim=0
-            )  # (n_state, L, C, C)
-            W = ar_W[most_likely_state]  # (B, L, C, C)
-
-            ar_pred = torch.einsum("blc,blcd->bd", look_back_data, W)  # (B,C)
-
+            ar_pred_list: List[Tensor] = []
+            for i, state in enumerate(most_likely_state):
+                ar_pred_list.append(self.W[state](look_back_data[i]))
+            ar_pred = torch.stack(ar_pred_list, dim=0)
             # Add state-specific mean
             state_means = torch.stack(
                 [self.means[i] for i in range(self.n_states)], dim=0
@@ -244,12 +236,12 @@ class HMM(BaseLightningModule):
     def _shared_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tensor:
-        # loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
-        # loss = -loss.mean()
-        criterion = torch.nn.MSELoss()
-        preds = self.model(look_back_window)
-        assert preds.shape == prediction_window.shape
-        loss =  criterion(preds, prediction_window)
+        loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
+        loss = -loss.mean()
+        # criterion = torch.nn.MSELoss()
+        # preds = self.model(look_back_window)
+        # assert preds.shape == prediction_window.shape
+        # loss =  criterion(preds, prediction_window)
         return loss
 
     def model_specific_train_step(
@@ -267,7 +259,12 @@ class HMM(BaseLightningModule):
         return val_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
+        #  optimizer = torch.optim.Adam(
+        #      self.model.parameters(),
+        #      lr=self.learning_rate,
+        #  )
+
+        optimizer = torch.optim.LBFGS(
             self.model.parameters(),
             lr=self.learning_rate,
         )
