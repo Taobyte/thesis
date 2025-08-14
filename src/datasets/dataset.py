@@ -4,10 +4,10 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 from numpy.typing import NDArray
-from typing import Tuple
+from typing import Tuple, Union
 
 
-class HRDataset(Dataset[Tuple[Tensor, Tensor]]):
+class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
     def __init__(
         self,
         data_dir: str,
@@ -21,6 +21,7 @@ class HRDataset(Dataset[Tuple[Tensor, Tensor]]):
         test_local: bool = False,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
+        return_whole_series: bool = False,
     ):
         self.data_dir = data_dir
         self.use_heart_rate = use_heart_rate
@@ -31,6 +32,7 @@ class HRDataset(Dataset[Tuple[Tensor, Tensor]]):
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
         self.target_channel_dim = target_channel_dim
+        self.return_whole_series = return_whole_series
 
         self.data, [self.mean, self.std, self.min, self.max] = self.__read_data__()
         if test_local:
@@ -43,19 +45,26 @@ class HRDataset(Dataset[Tuple[Tensor, Tensor]]):
 
         self.lengths = [len(series) - self.window_length + 1 for series in self.data]
         self.cumulative_lengths = np.cumsum([0] + self.lengths)
-        self.total_length = self.cumulative_lengths[-1]
+        self.total_length = (
+            self.cumulative_lengths[-1] if not return_whole_series else len(self.data)
+        )
 
     def __len__(self) -> int:
         return self.total_length
 
-    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
-        file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
-        index = idx - self.cumulative_lengths[file_idx]
-        window = self.data[file_idx][index : (index + self.window_length)]
-        look_back_window = torch.from_numpy(window[: self.look_back_window, :])
-        prediction_window = torch.from_numpy(window[self.look_back_window :, :])
+    def __getitem__(self, idx: int) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+        if self.return_whole_series:
+            series = self.data[idx]
+            tensor_series = torch.from_numpy(series).float()
+            return tensor_series
+        else:
+            file_idx = np.searchsorted(self.cumulative_lengths, idx, side="right") - 1
+            index = idx - self.cumulative_lengths[file_idx]
+            window = self.data[file_idx][index : (index + self.window_length)]
+            look_back_window = torch.from_numpy(window[: self.look_back_window, :])
+            prediction_window = torch.from_numpy(window[self.look_back_window :, :])
 
-        return look_back_window.float(), prediction_window.float()
+            return look_back_window.float(), prediction_window.float()
 
     def __read_data__(
         self,

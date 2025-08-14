@@ -26,8 +26,9 @@ train_frac: 0.7
 val_frac: 0.1
 
 numpy_models: ["linear","xgboost", "hlinear", "hxgboost", "exactgp"] # these models get passed the windowed training & val datasets 
-special_models: ["linear","xgboost", "hlinear", "hxgboost", "hmm", "dynamax", "llmtime", "exactgp", "dummy"] # these models are not trained with Lightning 
+special_models: ["linear","xgboost", "hlinear", "hxgboost", "exactgp", "dummy"] # these models are not trained with Lightning 
 probabilistic_models: ["gp", "dklgp", "exactgp"] # these models output the mean & std as the prediction
+return_series_models: ["hmm"]
 
 look_back_window: 5
 prediction_window: 3

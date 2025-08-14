@@ -28,9 +28,14 @@ def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
 def setup(
     config: DictConfig, wandb_logger: WandbLogger, run_name: str
 ) -> Tuple[LightningDataModule, LightningModule, Trainer, list[Callback]]:
+    return_whole_series = False
+    if config.model.name in config.return_series_models:
+        return_whole_series = True
+
     datamodule = instantiate(
         config.dataset.datamodule,
         normalization=config.normalization,
+        return_whole_series=return_whole_series,
     )
 
     model_kwargs = get_model_kwargs(config, datamodule)
@@ -45,6 +50,7 @@ def setup(
         probabilistic_models=config.probabilistic_models,
         experiment_name=config.experiment.experiment_name,
         seed=config.seed,
+        return_whole_series=return_whole_series,
     )
 
     callbacks: list[Callback] = []

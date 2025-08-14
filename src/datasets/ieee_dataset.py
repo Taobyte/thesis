@@ -74,16 +74,23 @@ class IEEEDataModule(BaseDataModule):
             use_dynamic_features=self.use_dynamic_features,
             target_channel_dim=self.target_channel_dim,
             test_local=self.test_local,
+            train_frac=self.train_frac,
+            val_frac=self.val_frac,
         )
         if stage == "fit":
             self.train_dataset = IEEEDataset(
-                participants=self.train_participants, **common_args
+                participants=self.train_participants,
+                return_whole_series=self.return_whole_series,
+                **common_args,
             )
             self.val_dataset = IEEEDataset(
-                participants=self.val_participants, **common_args
+                participants=self.val_participants,
+                return_whole_series=self.return_whole_series,
+                **common_args,
             )
         if stage == "test":
             self.test_dataset = IEEEDataset(
                 participants=self.test_participants,
+                return_whole_series=False,
                 **common_args,
             )

@@ -7,7 +7,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from numpy.typing import NDArray
 from einops import rearrange
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 from src.normalization import global_z_norm, min_max_norm
 
@@ -40,6 +40,7 @@ class BaseDataModule(L.LightningDataModule):
         test_local: bool = False,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
+        return_whole_series: bool = False,
     ):
         super().__init__()
 
@@ -62,6 +63,8 @@ class BaseDataModule(L.LightningDataModule):
 
         self.target_channel_dim = target_channel_dim
         self.look_back_channel_dim = look_back_channel_dim
+
+        self.return_whole_series = return_whole_series
 
         self.local_norm_channels = (
             target_channel_dim + dynamic_exogenous_variables
@@ -111,13 +114,49 @@ class BaseDataModule(L.LightningDataModule):
         output = output[:, :, : self.target_channel_dim]
         return look_back_window, input, output
 
+    def postprocess_series(self, series: Tensor) -> Tensor:
+        B, _, C = series.shape
+        device = series.device
+        if self.normalization == "global":
+            mean, std = self.train_dataset.mean, self.train_dataset.std
+            mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
+            std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
+            input = global_z_norm(series, self.local_norm_channels, mean, std)
+        elif self.normalization == "minmax":
+            min, max = self.train_dataset.min, self.train_dataset.max
+            min = torch.tensor(min).reshape(1, 1, -1).to(device).float()
+            max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
+            input = min_max_norm(series, self.local_norm_channels, min, max)
+        elif self.normalization == "difference":
+            pad = torch.zeros(B, 1, C)
+            input = torch.cat([pad, torch.diff(series, dim=1)], dim=1)
+        else:
+            input = series
+
+        return input
+
+    def collate_fn_with_postprocessing(
+        self, batch: Tuple[Tensor, Tensor]
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        look_back, prediction = zip(*batch)
+        look_back = torch.stack(look_back)
+        prediction = torch.stack(prediction)
+        return self.postprocess_batch(look_back, prediction)
+
+    def collate_fn_series(self, series: List[Tensor]):
+        # assumes that we have batch size = 1!
+        train_series = (series[0]).unsqueeze(0)
+        return self.postprocess_series(train_series)
+
     def train_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
-            collate_fn=self.collate_fn_with_postprocessing,
+            collate_fn=self.collate_fn_with_postprocessing
+            if not self.return_whole_series
+            else self.collate_fn_series,
         )
 
     def val_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
@@ -126,7 +165,9 @@ class BaseDataModule(L.LightningDataModule):
             batch_size=min(self.batch_size, len(self.val_dataset)),
             num_workers=self.num_workers,
             shuffle=False,
-            collate_fn=self.collate_fn_with_postprocessing,
+            collate_fn=self.collate_fn_with_postprocessing
+            if not self.return_whole_series
+            else self.collate_fn_series,
         )
 
     def test_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
@@ -137,14 +178,6 @@ class BaseDataModule(L.LightningDataModule):
             shuffle=False,
             collate_fn=self.collate_fn_with_postprocessing,
         )
-
-    def collate_fn_with_postprocessing(
-        self, batch: Tuple[NDArray[np.float32], NDArray[np.float32]]
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        look_back, prediction = zip(*batch)
-        look_back = torch.stack(look_back)
-        prediction = torch.stack(prediction)
-        return self.postprocess_batch(look_back, prediction)
 
     # used for Gaussian Process model
     def get_inducing_points(

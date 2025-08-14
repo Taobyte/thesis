@@ -55,6 +55,7 @@ class BaseLightningModule(L.LightningModule):
         probabilistic_models: list[str] = [],
         experiment_name: str = "endo_only",
         seed: int = 0,
+        return_whole_series: bool = False,
     ):
         super().__init__()
 
@@ -67,6 +68,7 @@ class BaseLightningModule(L.LightningModule):
         self.probabilistic_forecast_models = probabilistic_models
         self.experiment_name = experiment_name
         self.seed = seed
+        self.return_whole_series = return_whole_series
 
         self.evaluator = Evaluator()
 
@@ -135,19 +137,27 @@ class BaseLightningModule(L.LightningModule):
     def training_step(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tensor:
-        _, look_back_window_norm, prediction_window_norm = batch
-        loss = self.model_specific_train_step(
-            look_back_window_norm, prediction_window_norm
-        )
+        if self.return_whole_series:
+            series = batch
+            loss = self.model_specific_train_step(series)
+        else:
+            _, look_back_window_norm, prediction_window_norm = batch
+            loss = self.model_specific_train_step(
+                look_back_window_norm, prediction_window_norm
+            )
         return loss
 
     def validation_step(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+        self, batch: Union[Tensor, Tuple[Tensor, Tensor, Tensor]], batch_idx: int
     ) -> Tensor:
-        _, look_back_window_norm, prediction_window_norm = batch
-        loss = self.model_specific_val_step(
-            look_back_window_norm, prediction_window_norm
-        )
+        if self.return_whole_series:
+            series = batch
+            loss = self.model_specific_val_step(series)
+        else:
+            _, look_back_window_norm, prediction_window_norm = batch
+            loss = self.model_specific_val_step(
+                look_back_window_norm, prediction_window_norm
+            )
         return loss
 
     def test_step(
@@ -164,6 +174,10 @@ class BaseLightningModule(L.LightningModule):
         self.batch_size: list[int] = []
 
         self.metric_full: defaultdict[str, list[float]] = defaultdict(list[float])
+
+        import pdb
+
+        pdb.set_trace()
 
     def on_test_epoch_end(self):
         # log the average metrics to wandb
@@ -183,9 +197,6 @@ class BaseLightningModule(L.LightningModule):
     def evaluate(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tuple[dict[str, float], dict[str, list[float]]]:
-        import pdb
-
-        pdb.set_trace()
         (
             look_back_window,
             look_back_window_norm,

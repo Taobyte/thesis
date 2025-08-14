@@ -112,14 +112,17 @@ class WildPPGDataModule(BaseDataModule):
         if stage == "fit":
             self.train_dataset = WildPPGDataset(
                 participants=self.train_participants,
+                return_whole_series=self.return_whole_series,
                 **common_args,
             )
             self.val_dataset = WildPPGDataset(
                 participants=self.val_participants,
+                return_whole_series=self.return_whole_series,
                 **common_args,
             )
         if stage == "test":
             self.test_dataset = WildPPGDataset(
                 participants=self.test_participants,
+                return_whole_series=False,
                 **common_args,
             )

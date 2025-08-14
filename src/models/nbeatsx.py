@@ -3,11 +3,34 @@ import numpy as np
 import torch as t
 import torch.nn as nn
 
+from functools import partial
+
 from torch.nn.utils import weight_norm
-from typing import Tuple
+from typing import Tuple, List, Union, Any
+
+from src.models.utils import BaseLightningModule
+from src.losses import get_loss_fn
 
 
 ## We use the implementation of TCN from https://github.com/locuslab/TCN
+
+
+def init_weights(module, initialization):
+    if type(module) == t.nn.Linear:
+        if initialization == "orthogonal":
+            t.nn.init.orthogonal_(module.weight)
+        elif initialization == "he_uniform":
+            t.nn.init.kaiming_uniform_(module.weight)
+        elif initialization == "he_normal":
+            t.nn.init.kaiming_normal_(module.weight)
+        elif initialization == "glorot_uniform":
+            t.nn.init.xavier_uniform_(module.weight)
+        elif initialization == "glorot_normal":
+            t.nn.init.xavier_normal_(module.weight)
+        elif initialization == "lecun_normal":
+            pass
+        else:
+            assert 1 < 0, f"Initialization {initialization} not found"
 
 
 class Chomp1d(nn.Module):
@@ -107,50 +130,6 @@ class TemporalConvNet(nn.Module):
         return self.network(x)
 
 
-def filter_input_vars(
-    insample_y, insample_x_t, outsample_x_t, t_cols, include_var_dict
-):
-    # This function is specific for the EPF task
-    if t.cuda.is_available():
-        device = insample_x_t.get_device()
-    else:
-        device = "cpu"
-    outsample_y = t.zeros((insample_y.shape[0], 1, outsample_x_t.shape[2])).to(device)
-
-    insample_y_aux = t.unsqueeze(insample_y, dim=1)
-
-    insample_x_t_aux = t.cat([insample_y_aux, insample_x_t], dim=1)
-    outsample_x_t_aux = t.cat([outsample_y, outsample_x_t], dim=1)
-    x_t = t.cat([insample_x_t_aux, outsample_x_t_aux], dim=-1)
-    batch_size, n_channels, input_size = x_t.shape
-
-    assert input_size == 168 + 24, f"input_size {input_size} not 168+24"
-
-    x_t = x_t.reshape(batch_size, n_channels, 8, 24)
-
-    input_vars = []
-    for var in include_var_dict.keys():
-        if len(include_var_dict[var]) > 0:
-            t_col_idx = t_cols.index(var)
-            t_col_filter = include_var_dict[var]
-            if var != "week_day":
-                input_vars += [x_t[:, t_col_idx, t_col_filter, :]]
-            else:
-                assert t_col_filter == [-1], (
-                    f"Day of week must be of outsample not {t_col_filter}"
-                )
-                day_var = x_t[:, t_col_idx, t_col_filter, [0]]
-                day_var = day_var.view(batch_size, -1)
-
-    x_t_filter = t.cat(input_vars, dim=1)
-    x_t_filter = x_t_filter.view(batch_size, -1)
-
-    if len(include_var_dict["week_day"]) > 0:
-        x_t_filter = t.cat([x_t_filter, day_var], dim=1)
-
-    return x_t_filter
-
-
 class _StaticFeaturesEncoder(nn.Module):
     def __init__(self, in_features, out_features):
         super(_StaticFeaturesEncoder, self).__init__()
@@ -179,9 +158,7 @@ class NBeatsBlock(nn.Module):
         theta_n_dim: int,
         basis: nn.Module,
         n_layers: int,
-        theta_n_hidden: list,
-        include_var_dict,
-        t_cols,
+        theta_n_hidden: list[int],
         batch_normalization: bool,
         dropout_prob: float,
         activation: str,
@@ -195,8 +172,6 @@ class NBeatsBlock(nn.Module):
 
         self.x_s_n_inputs = x_s_n_inputs
         self.x_s_n_hidden = x_s_n_hidden
-        self.include_var_dict = include_var_dict
-        self.t_cols = t_cols
         self.batch_normalization = batch_normalization
         self.dropout_prob = dropout_prob
         self.activations = {
@@ -245,15 +220,6 @@ class NBeatsBlock(nn.Module):
         outsample_x_t: t.Tensor,
         x_s: t.Tensor,
     ) -> Tuple[t.Tensor, t.Tensor]:
-        if self.include_var_dict is not None:
-            insample_y = filter_input_vars(
-                insample_y=insample_y,
-                insample_x_t=insample_x_t,
-                outsample_x_t=outsample_x_t,
-                t_cols=self.t_cols,
-                include_var_dict=self.include_var_dict,
-            )
-
         # Static exogenous
         if (self.x_s_n_inputs > 0) and (self.x_s_n_hidden > 0):
             x_s = self.static_encoder(x_s)
@@ -282,14 +248,14 @@ class NBeats(nn.Module):
         insample_mask: t.Tensor,
         outsample_x_t: t.Tensor,
         x_s: t.Tensor,
-        return_decomposition=False,
-    ):
+        return_decomposition: bool = False,
+    ) -> Union[t.Tensor, Tuple[t.Tensor, t.Tensor]]:
         residuals = insample_y.flip(dims=(-1,))
         insample_x_t = insample_x_t.flip(dims=(-1,))
         insample_mask = insample_mask.flip(dims=(-1,))
 
         forecast = insample_y[:, -1:]  # Level with Naive1
-        block_forecasts = []
+        block_forecasts: List[t.Tensor] = []
         for i, block in enumerate(self.blocks):
             backcast, block_forecast = block(
                 insample_y=residuals,
@@ -356,7 +322,8 @@ class TrendBasis(nn.Module):
                 np.concatenate(
                     [
                         np.power(
-                            np.arange(backcast_size, dtype=np.float) / backcast_size, i
+                            np.arange(backcast_size, dtype=np.float32) / backcast_size,
+                            i,
                         )[None, :]
                         for i in range(polynomial_size)
                     ]
@@ -370,7 +337,8 @@ class TrendBasis(nn.Module):
                 np.concatenate(
                     [
                         np.power(
-                            np.arange(forecast_size, dtype=np.float) / forecast_size, i
+                            np.arange(forecast_size, dtype=np.float32) / forecast_size,
+                            i,
                         )[None, :]
                         for i in range(polynomial_size)
                     ]
@@ -379,55 +347,6 @@ class TrendBasis(nn.Module):
             ),
             requires_grad=False,
         )
-
-    def forward(
-        self, theta: t.Tensor, insample_x_t: t.Tensor, outsample_x_t: t.Tensor
-    ) -> Tuple[t.Tensor, t.Tensor]:
-        cut_point = self.forecast_basis.shape[0]
-        backcast = t.einsum("bp,pt->bt", theta[:, cut_point:], self.backcast_basis)
-        forecast = t.einsum("bp,pt->bt", theta[:, :cut_point], self.forecast_basis)
-        return backcast, forecast
-
-
-class SeasonalityBasis(nn.Module):
-    def __init__(self, harmonics: int, backcast_size: int, forecast_size: int):
-        super().__init__()
-        frequency = np.append(
-            np.zeros(1, dtype=np.float32),
-            np.arange(harmonics, harmonics / 2 * forecast_size, dtype=np.float32)
-            / harmonics,
-        )[None, :]
-        backcast_grid = (
-            -2
-            * np.pi
-            * (np.arange(backcast_size, dtype=np.float32)[:, None] / forecast_size)
-            * frequency
-        )
-        forecast_grid = (
-            2
-            * np.pi
-            * (np.arange(forecast_size, dtype=np.float32)[:, None] / forecast_size)
-            * frequency
-        )
-
-        backcast_cos_template = t.tensor(
-            np.transpose(np.cos(backcast_grid)), dtype=t.float32
-        )
-        backcast_sin_template = t.tensor(
-            np.transpose(np.sin(backcast_grid)), dtype=t.float32
-        )
-        backcast_template = t.cat([backcast_cos_template, backcast_sin_template], dim=0)
-
-        forecast_cos_template = t.tensor(
-            np.transpose(np.cos(forecast_grid)), dtype=t.float32
-        )
-        forecast_sin_template = t.tensor(
-            np.transpose(np.sin(forecast_grid)), dtype=t.float32
-        )
-        forecast_template = t.cat([forecast_cos_template, forecast_sin_template], dim=0)
-
-        self.backcast_basis = nn.Parameter(backcast_template, requires_grad=False)
-        self.forecast_basis = nn.Parameter(forecast_template, requires_grad=False)
 
     def forward(
         self, theta: t.Tensor, insample_x_t: t.Tensor, outsample_x_t: t.Tensor
@@ -452,15 +371,6 @@ class ExogenousBasisInterpretable(nn.Module):
         backcast = t.einsum("bp,bpt->bt", theta[:, cut_point:], backcast_basis)
         forecast = t.einsum("bp,bpt->bt", theta[:, :cut_point], forecast_basis)
         return backcast, forecast
-
-
-class Chomp1d(nn.Module):
-    def __init__(self, chomp_size):
-        super(Chomp1d, self).__init__()
-        self.chomp_size = chomp_size
-
-    def forward(self, x):
-        return x[:, :, : -self.chomp_size].contiguous()
 
 
 class ExogenousBasisWavenet(nn.Module):
@@ -563,3 +473,272 @@ class ExogenousBasisTCN(nn.Module):
         backcast = t.einsum("bp,bpt->bt", theta[:, cut_point:], backcast_basis)
         forecast = t.einsum("bp,bpt->bt", theta[:, :cut_point], forecast_basis)
         return backcast, forecast
+
+
+class Model(nn.Module):
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        shared_weights: bool,
+        activation: str,
+        initialization: str,
+        stack_types: list[str],
+        n_blocks: List[int],
+        n_layers: List[int],
+        n_hidden: List[List[int]],
+        n_polynomials: int,
+        batch_normalization: bool,
+        exogenous_n_channels: int,
+        dropout_prob_theta: float,
+        dropout_prob_exogenous: float,
+        x_s_n_hidden: int,
+        look_back_channel_dim: int = 2,
+        target_channel_dim: int = 1,
+        n_x_s: int = 0,  # number of static exogenous variables
+    ):
+        super().__init__()
+        self.input_size = input_size  # int(input_size_multiplier * output_size)
+        self.output_size = output_size
+        self.shared_weights = shared_weights
+        self.activation = activation
+        self.initialization = initialization
+        self.stack_types = stack_types
+        self.n_blocks = n_blocks
+        self.n_layers = n_layers
+        self.n_hidden = n_hidden
+        self.n_polynomials = n_polynomials
+        self.exogenous_n_channels = exogenous_n_channels
+
+        # Regularization and optimization parameters
+        self.batch_normalization = batch_normalization
+        self.dropout_prob_theta = dropout_prob_theta
+        self.dropout_prob_exogenous = dropout_prob_exogenous
+        self.x_s_n_hidden = x_s_n_hidden
+
+        self.n_x_s = n_x_s
+        self.n_x_t = 1  # hard coded, we either pass in zeros for endo_only or the activity info for endo_exo experiments
+
+        # Data parameters
+        # removed seasonality, var_dict... and t_cols
+
+        block_list = self.create_stack()
+        block_module_list = nn.ModuleList(block_list)
+        self.model = NBeats(block_module_list)
+
+    def forward(
+        self,
+        insample_y: t.Tensor,
+        insample_x_t: t.Tensor,
+        insample_mask: t.Tensor,
+        outsample_x_t: t.Tensor,
+        x_s: t.Tensor,
+        return_decomposition: bool = False,
+    ):
+        return self.model(
+            insample_y,
+            insample_x_t,
+            insample_mask,
+            outsample_x_t,
+            x_s,
+            return_decomposition=return_decomposition,
+        )
+
+    def create_stack(self) -> List[NBeatsBlock]:
+        x_t_n_inputs = self.input_size
+
+        # ------------------------ Model Definition ------------------------#
+        block_list: List[NBeatsBlock] = []
+        self.blocks_regularizer: List[int] = []
+        for i in range(len(self.stack_types)):
+            for block_id in range(self.n_blocks[i]):
+                # Batch norm only on first block
+                if (len(block_list) == 0) and (self.batch_normalization):
+                    batch_normalization_block = True
+                else:
+                    batch_normalization_block = False
+
+                # Dummy of regularizer in block. Override with 1 if exogenous_block
+                self.blocks_regularizer += [0]
+
+                # Shared weights
+                if self.shared_weights and block_id > 0:
+                    nbeats_block = block_list[-1]
+                else:
+                    # removed == seasonality branch!
+                    if self.stack_types[i] == "trend":
+                        nbeats_block = NBeatsBlock(
+                            x_t_n_inputs=x_t_n_inputs,
+                            x_s_n_inputs=self.n_x_s,
+                            x_s_n_hidden=self.x_s_n_hidden,
+                            theta_n_dim=2 * (self.n_polynomials + 1),
+                            basis=TrendBasis(
+                                degree_of_polynomial=self.n_polynomials,
+                                backcast_size=self.input_size,
+                                forecast_size=self.output_size,
+                            ),
+                            n_layers=self.n_layers[i],
+                            theta_n_hidden=self.n_hidden[i],
+                            batch_normalization=batch_normalization_block,
+                            dropout_prob=self.dropout_prob_theta,
+                            activation=self.activation,
+                        )
+                    elif self.stack_types[i] == "identity":
+                        nbeats_block = NBeatsBlock(
+                            x_t_n_inputs=x_t_n_inputs,
+                            x_s_n_inputs=self.n_x_s,
+                            x_s_n_hidden=self.x_s_n_hidden,
+                            theta_n_dim=self.input_size + self.output_size,
+                            basis=IdentityBasis(
+                                backcast_size=self.input_size,
+                                forecast_size=self.output_size,
+                            ),
+                            n_layers=self.n_layers[i],
+                            theta_n_hidden=self.n_hidden[i],
+                            batch_normalization=batch_normalization_block,
+                            dropout_prob=self.dropout_prob_theta,
+                            activation=self.activation,
+                        )
+                    elif self.stack_types[i] == "exogenous":
+                        nbeats_block = NBeatsBlock(
+                            x_t_n_inputs=x_t_n_inputs,
+                            x_s_n_inputs=self.n_x_s,
+                            x_s_n_hidden=self.x_s_n_hidden,
+                            theta_n_dim=2 * self.n_x_t,
+                            basis=ExogenousBasisInterpretable(),
+                            n_layers=self.n_layers[i],
+                            theta_n_hidden=self.n_hidden[i],
+                            batch_normalization=batch_normalization_block,
+                            dropout_prob=self.dropout_prob_theta,
+                            activation=self.activation,
+                        )
+                    elif self.stack_types[i] == "exogenous_tcn":
+                        nbeats_block = NBeatsBlock(
+                            x_t_n_inputs=x_t_n_inputs,
+                            x_s_n_inputs=self.n_x_s,
+                            x_s_n_hidden=self.x_s_n_hidden,
+                            theta_n_dim=2 * (self.exogenous_n_channels),
+                            basis=ExogenousBasisTCN(
+                                self.exogenous_n_channels, self.n_x_t
+                            ),
+                            n_layers=self.n_layers[i],
+                            theta_n_hidden=self.n_hidden[i],
+                            batch_normalization=batch_normalization_block,
+                            dropout_prob=self.dropout_prob_theta,
+                            activation=self.activation,
+                        )
+                    elif self.stack_types[i] == "exogenous_wavenet":
+                        nbeats_block = NBeatsBlock(
+                            x_t_n_inputs=x_t_n_inputs,
+                            x_s_n_inputs=self.n_x_s,
+                            x_s_n_hidden=self.x_s_n_hidden,
+                            theta_n_dim=2 * (self.exogenous_n_channels),
+                            basis=ExogenousBasisWavenet(
+                                self.exogenous_n_channels, self.n_x_t
+                            ),
+                            n_layers=self.n_layers[i],
+                            theta_n_hidden=self.n_hidden[i],
+                            batch_normalization=batch_normalization_block,
+                            dropout_prob=self.dropout_prob_theta,
+                            activation=self.activation,
+                        )
+                        self.blocks_regularizer[-1] = 1
+                    else:
+                        assert 1 < 0, "Block type not found!"
+                # Select type of evaluation and apply it to all layers of block
+                init_function = partial(
+                    init_weights, initialization=self.initialization
+                )
+                nbeats_block.layers.apply(init_function)
+                block_list.append(nbeats_block)
+        return block_list
+
+
+class NBeatsX(BaseLightningModule):
+    def __init__(
+        self,
+        model: Model,
+        weight_decay: float,
+        learning_rate: float = 0.001,
+        loss_fn: str = "MSE",
+        n_lr_decay_steps: int = 3,
+        lr_decay: float = 0.5,
+        **kwargs: Any,
+    ):
+        super().__init__(**kwargs)
+
+        self.model = model
+        self.learning_rate = learning_rate
+        self.weigth_decay = weight_decay
+        self.n_lr_decay_steps = n_lr_decay_steps
+        self.lr_decay = lr_decay
+
+        self.criterion = get_loss_fn(loss_fn=loss_fn)
+        self.mae_criterion = nn.L1Loss()
+
+    def model_forward(self, look_back_window: t.Tensor):
+        B, T, C = look_back_window.shape
+        heartrate = look_back_window[:, :, 0]  # (B, T)
+
+        if self.use_dynamic_features:
+            activity = look_back_window[:, :, 1].unsqueeze(1)  # (B, 1, T)
+            # For future: you need actual future activity values, not zeros
+        else:
+            # If no exogenous features, you might need to handle this differently
+            # Option 1: Use dummy features with proper shape
+            activity = t.zeros((B, 1, T))  # (B, 1, T)
+        outsample_x_t = t.zeros((B, 1, self.prediction_window))
+        prediction = self.model.forward(
+            insample_y=heartrate,  # (B, T)
+            insample_x_t=activity,  # (B, 1, T)
+            insample_mask=t.ones_like(heartrate),  # (B, T)
+            outsample_x_t=outsample_x_t,  # (B, 1, H)
+            x_s=None,
+            return_decomposition=False,
+        )
+
+        return prediction.unsqueeze(-1)
+
+    def _shared_step(
+        self, look_back_window: t.Tensor, prediction_window: t.Tensor
+    ) -> Tuple[t.Tensor, t.Tensor]:
+        preds = self.model_forward(look_back_window)
+        loss = self.criterion(preds, prediction_window)
+        mae_loss = self.mae_criterion(preds, prediction_window)
+        return loss, mae_loss
+
+    def model_specific_train_step(
+        self, look_back_window: t.Tensor, prediction_window: t.Tensor
+    ) -> t.Tensor:
+        loss, _ = self._shared_step(look_back_window, prediction_window)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
+
+    def model_specific_val_step(
+        self, look_back_window: t.Tensor, prediction_window: t.Tensor
+    ) -> t.Tensor:
+        val_loss, mae_loss = self._shared_step(look_back_window, prediction_window)
+        loss = val_loss
+        if self.tune:
+            loss = mae_loss
+        self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = t.optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weigth_decay,
+        )
+        lr_decay_steps = self.trainer.max_epochs // self.n_lr_decay_steps
+        scheduler = t.optim.lr_scheduler.StepLR(
+            optimizer, step_size=lr_decay_steps, gamma=self.lr_decay
+        )
+
+        scheduler_dict = {
+            "scheduler": scheduler,
+            "interval": "epoch",  # because OneCycleLR is stepped per batch
+            "frequency": 1,
+            "name": "StepLR",
+        }
+        return {"optimizer": optimizer, "lr_scheduler": scheduler_dict}

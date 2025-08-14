@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from einops import rearrange
 from torch import Tensor
-from typing import List, Any
+from typing import List, Any, Union
 
 from src.models.utils import BaseLightningModule
 
@@ -55,7 +55,9 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         self.W = torch.nn.ModuleList(
             [
                 torch.nn.Linear(
-                    look_back_window * look_back_window, look_back_channel_dim
+                    look_back_window * look_back_channel_dim,
+                    look_back_channel_dim,
+                    bias=False,
                 )
                 for _ in range(n_states)
             ]
@@ -81,7 +83,30 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             covars.append(covar)
         return covars
 
-    def get_gaussian_log_likelihood(self, emissions: Tensor):
+    def get_inputs(self, emissions: Tensor, is_series: bool = True):
+        if is_series:
+            B, S, C = emissions.shape
+            pad = torch.zeros((B, self.look_back_window, C))
+            concatenated = torch.concatenate([pad, emissions], dim=1)  # (B, L + S, C)
+            inputs = concatenated.unfold(
+                dimension=1, size=self.look_back_window, step=1
+            )
+            inputs = inputs[:, :-1, :, :]
+            inputs = rearrange(inputs, "B F C L -> (B F) (C L)")
+
+        else:
+            padded = torch.cat(
+                [torch.zeros_like(emissions), emissions], dim=1
+            )  # (B, 2*L, C)
+            inputs = padded.unfold(
+                dimension=1, size=self.look_back_window, step=1
+            )  # (B, F, L, C)
+            inputs = inputs[:, : self.look_back_window, :, :]
+            inputs = rearrange(inputs, "B F C L -> (B F) (L C)")  # (B*L, L*C)
+
+        return inputs
+
+    def get_gaussian_log_likelihood(self, emissions: Tensor, is_series: bool = False):
         """
         Compute log likelihood of emissions under multivariate Gaussian for each state
         emissions.shape == (B, L, C)
@@ -90,12 +115,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         B, L, C = emissions.shape
 
-        padded = torch.cat(
-            [torch.zeros_like(emissions), emissions], dim=1
-        )  # (B, 2*L, C)
-        inputs = padded.unfold(dimension=1, size=L, step=1)  # (B, F, L, C)
-        inputs = inputs[:, :L, :, :]
-        inputs = rearrange(inputs, "B F C L -> (B F) (L C)")  # (B*L, L*C)
+        inputs = self.get_inputs(emissions, is_series=is_series)
         targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
 
         log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
@@ -110,6 +130,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             covar_reg = covar + 1e-6 * torch.eye(C, device=covar.device).unsqueeze(
                 0
             ).expand(B * L, -1, -1)
+
             # add linear autoregressive compontent b=B*L d=C
             ar_component = self.W[state](inputs)  # (B*L, C)
             mean = hidden_state_mean + ar_component
@@ -121,17 +142,53 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         return log_probs
 
+    def forward_algorithm_series(self, emissions: Tensor):
+        """
+        emissions: (B, S, C)
+        returns: (log_likelihood: (B,), log_alpha: (B, L_eff, K))
+        """
+        B, S, C = emissions.shape
+        K = self.n_states
+
+        emission_log_probs = self.get_gaussian_log_likelihood(
+            emissions, is_series=True
+        )  # (B, S, K)
+
+        init_dist = self.get_initial_distribution()  # (K,)
+        trans = self.get_transition_matrix()  # (K, K)
+
+        log_alpha = emissions.new_full((B, S, K), -float("inf"))
+
+        log_alpha[:, 0, :] = torch.log(init_dist + 1e-12) + emission_log_probs[:, 0, :]
+
+        # recurrence
+        log_trans = torch.log(trans + 1e-12)  # (K, K)
+        for t in range(1, S):
+            # logsumexp over previous states i
+            prev = log_alpha[:, t - 1, :].unsqueeze(2) + log_trans.unsqueeze(
+                0
+            )  # (B,K,K)
+            log_alpha[:, t, :] = (
+                torch.logsumexp(prev, dim=1) + emission_log_probs[:, t, :]
+            )
+
+        log_likelihood = torch.logsumexp(log_alpha[:, -1, :], dim=1)
+        return log_likelihood, log_alpha
+
     def forward_algorithm(self, emissions: Tensor):
         """
         Forward algorithm to compute log likelihood
         emissions.shape == (B, L, C)
         Returns: log_likelihood (B,)
         """
+
         B, L, C = emissions.shape
+
+        assert L == self.look_back_window
 
         # Get emission probabilities
         emission_log_probs = self.get_gaussian_log_likelihood(
-            emissions
+            emissions, is_series=False
         )  # (B, L, n_states)
 
         # Get HMM parameters
@@ -168,7 +225,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         emissions.shape == (B, L, C)
         Returns: predictions (B, prediction_window, C)
         """
-        B, L, C = emissions.shape
 
         # Get most likely state sequence for the look_back_window
         # hmm_emissions = emissions[:, -self.look_back_window :, :]
@@ -191,10 +247,11 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             look_back_data = current_emissions[
                 :, -self.look_back_window :, :
             ]  # (B, L, C)
+            look_back_data_reshaped = rearrange(look_back_data, "B L C -> B (L C)")
 
             ar_pred_list: List[Tensor] = []
             for i, state in enumerate(most_likely_state):
-                ar_pred_list.append(self.W[state](look_back_data[i]))
+                ar_pred_list.append(self.W[state](look_back_data_reshaped[i]))
             ar_pred = torch.stack(ar_pred_list, dim=0)
             # Add state-specific mean
             state_means = torch.stack(
@@ -223,20 +280,20 @@ class HMM(BaseLightningModule):
         self,
         model: LinearAutoregressiveHMM,
         learning_rate: float = 1e-3,
+        optimizer_name: str = "lbfgs",
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
+        self.optimizer_name = optimizer_name
 
     def model_forward(self, look_back_window: Tensor):
         preds = self.model(look_back_window)
         return preds
 
-    def _shared_step(
-        self, look_back_window: Tensor, prediction_window: Tensor
-    ) -> Tensor:
-        loss, _ = self.model.forward_algorithm(look_back_window)  # (B, )
+    def _shared_step(self, series: Tensor) -> Tensor:
+        loss, _ = self.model.forward_algorithm_series(series)  # (B, )
         loss = -loss.mean()
         # criterion = torch.nn.MSELoss()
         # preds = self.model(look_back_window)
@@ -244,29 +301,28 @@ class HMM(BaseLightningModule):
         # loss =  criterion(preds, prediction_window)
         return loss
 
-    def model_specific_train_step(
-        self, look_back_window: Tensor, prediction_window: Tensor
-    ) -> Tensor:
-        loss = self._shared_step(look_back_window, prediction_window)
+    def model_specific_train_step(self, series: Tensor) -> Tensor:
+        loss = self._shared_step(series)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def model_specific_val_step(
-        self, look_back_window: Tensor, prediction_window: Tensor
-    ) -> Tensor:
-        val_loss = self._shared_step(look_back_window, prediction_window)
+    def model_specific_val_step(self, series: Tensor) -> Tensor:
+        val_loss = self._shared_step(series)
         self.log("val_loss", val_loss, on_step=True, on_epoch=True, logger=True)
         return val_loss
 
-    def configure_optimizers(self):
-        #  optimizer = torch.optim.Adam(
-        #      self.model.parameters(),
-        #      lr=self.learning_rate,
-        #  )
-
-        optimizer = torch.optim.LBFGS(
-            self.model.parameters(),
-            lr=self.learning_rate,
-        )
+    def configure_optimizers(self) -> Union[torch.optim.Adam, torch.optim.LBFGS]:
+        if self.optimizer_name == "adam":
+            optimizer = torch.optim.Adam(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
+        elif self.optimizer_name == "lbfgs":
+            optimizer = torch.optim.LBFGS(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
+        else:
+            raise NotImplementedError()
 
         return optimizer

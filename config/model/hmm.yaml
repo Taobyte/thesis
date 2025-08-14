@@ -2,7 +2,7 @@ name: "hmm"
 
 model:
   _target_: src.models.hmm.LinearAutoregressiveHMM # dummy model we use hmmlearn
-  n_states: 1
+  n_states: 2
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim} 
@@ -11,11 +11,12 @@ model:
 pl_model: 
   _target_: src.models.hmm.HMM
   learning_rate: 0.001
+  optimizer_name: "lbfgs"
 
 trainer:
   max_epochs: 100
   use_early_stopping: False
-  patience: 5
+  patience: 2
 
 data: 
-  batch_size: 8000
+  batch_size: 1

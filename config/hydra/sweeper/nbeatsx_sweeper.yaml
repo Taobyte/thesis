@@ -1,0 +1,12 @@
+defaults:
+ -  shared_sweeper
+
+params:
+  model.pl_model.learning_rate: tag(log, interval(5e-4, 1e-2))
+  model.model.n_hidden: int(interval(8, 512))
+  model.pl_model.weight_decay: tag(log, interval(1e-5, 1.0))
+
+  # regularization
+  model.model.dropout_prob_theta: interval(0.0, 0.5)
+  model.model.dropout_prob_exogenous: interval(0.0, 0.5)
+

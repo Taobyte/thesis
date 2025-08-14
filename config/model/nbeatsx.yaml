@@ -1,0 +1,38 @@
+name: "nbeatsx"
+
+model:
+  _target_: src.models.nbeatsx.Model
+  input_size: ${look_back_window}
+  output_size: ${prediction_window}
+  shared_weights: False 
+  activation: "prelu" # the authors observe better performance with prelu, selu or sigmoid than with relu
+  initialization: "glorot_uniform"
+  stack_types: ["trend", "exogenous", "identity"]
+  n_layers: [2, 2, 2] # length must be equal to len(stack_types)
+  n_blocks: [1, 1, 1] # length must be equal to len(stack_types)
+  n_hidden: [[50], [50], [50]] # length must be equal to len(stack_types)
+  n_polynomials: 2 # the authors observe best performance with 2 polynomials
+  exogenous_n_channels: 1 
+  dropout_prob_theta: 0.0
+  dropout_prob_exogenous: 0.0
+
+  batch_normalization: False  # the authors use no batch normalization
+  x_s_n_hidden: 0 
+  n_x_s: 0 # we do not have static exogenous variables
+
+
+  
+pl_model: 
+  _target_: src.models.nbeatsx.NBeatsX
+  learning_rate: 0.001 
+  weight_decay: 0.0 # TODO
+  n_lr_decay_steps: 3 # the authors half the learning rate at most 3 times per training run
+  loss_fn: "MAE"
+
+trainer: 
+  max_epochs: 1000
+  use_early_stopping: True
+  patience: 5
+
+data:
+  batch_size: 256
