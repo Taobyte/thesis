@@ -5,12 +5,17 @@ import plotly.graph_objects as go
 import plotly.express as px
 import antropy as ant
 
+
+
 from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import arma_order_select_ic, bds
 from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
 from statsmodels.stats.diagnostic import het_arch
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from tqdm import tqdm
 from plotly.subplots import make_subplots
 from hydra import initialize, compose
@@ -18,6 +23,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from sklearn.feature_selection import mutual_info_regression
 from typing import List
+from numpy.typing import NDArray
 from collections import defaultdict
 
 
@@ -133,27 +139,18 @@ def print_infos(datamodules: List[LightningDataModule]):
         print(f"MaxLength: {max(lengths)}")
 
 
-#         fig = px.box(
-#             y=lengths,
-#             points="all",  # shows all individual data points
-#             labels={"y": "Sequence Length"},
-#             title=f"Box Plot of Dataset Sequence Lengths ({datamodule.name})",
-#         )
-#         fig.show()
-
+def max_pearson_corr(x, y):
+    x = (x - np.mean(x)) / (np.std(x) * len(x))
+    y = (y - np.mean(y)) / np.std(y)
+    cors = np.abs(np.correlate(x, y, mode="full"))
+    max_cor = np.max(cors)
+    best_lag = -len(x) + np.argmax(cors)
+    return max_cor, best_lag
 
 def max_pearson(datamodules: List[LightningDataModule]):
     for datamodule in datamodules:
         print(f"Start computing Pearson for {datamodule.name}")
         dataset = datamodule.train_dataset.data
-
-        def max_pearson_corr(x, y):
-            x = (x - np.mean(x)) / (np.std(x) * len(x))
-            y = (y - np.mean(y)) / np.std(y)
-            cors = np.abs(np.correlate(x, y, mode="full"))
-            max_cor = np.max(cors)
-            best_lag = -len(x) + np.argmax(cors)
-            return max_cor, best_lag
 
         pearsons = []
         best_lags = []
@@ -372,6 +369,7 @@ if __name__ == "__main__":
             "pacf",
             "bds",
             "forecastibility",
+            "pca"
         ],
         required=True,
     )
@@ -393,8 +391,137 @@ if __name__ == "__main__":
         datamodule = instantiate(cfg.dataset.datamodule)
         datamodule.setup("fit")
         datamodules.append(datamodule)
+    
+    if args.type == "pca":
 
-    if args.type == "viz":
+        point_size = 16
+
+        def series_to_stats(series: NDArray[np.float32], nperseg: int = 256):
+            LAG = 10
+            heartrate = series[:, 0]
+            activity = series[:, 1]
+            mean = np.mean(heartrate)
+            std = np.std(heartrate)
+            minimum = np.min(heartrate)
+            maximum = np.max(heartrate)
+            median = np.median(heartrate)
+            pacf_stat: List[float] = pacf(heartrate,nlags=3)
+            pacf1 = pacf_stat[1]
+            pacf2 = pacf_stat[2]
+            pacf3 = pacf_stat[3]
+            max_r, lag = max_pearson_corr(heartrate, activity)
+            result = adfuller(heartrate, regression="ctt")
+            granger = grangercausalitytests(series, [LAG])[LAG][0]["ssr_ftest"][0]
+            mi = mutual_info_regression(activity.reshape(-1,1), heartrate)
+
+            sf= 0.5 
+            H = ant.spectral_entropy(
+                heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
+            )
+            res = 1 - H
+
+            return [mean, std, minimum, maximum, median, max_r, lag, pacf1, pacf2, pacf3,result[0], granger, mi, res]
+
+
+        columns = ["mean", "std", "min", "max", "median", "max_r", "lag", "pacf1", "pacf2", "pacf3", "adf", "granger", "mi", "forecastibility", "Dataset"]
+        rows: List[float] = []
+        for i, datamodule in enumerate(datamodules):
+            data = datamodule.train_dataset.data
+            dataset_name = dataset_to_name[datamodule.name]
+            nperseg = 32 if datamodule.name == "ieee" else 256
+            for series in data:
+                series_stats = series_to_stats(series, nperseg=nperseg)
+                series_stats += [dataset_name] # dataset indicator
+                rows.append(series_stats)
+        
+        df = pd.DataFrame(rows, columns=columns)
+
+        color_col = "Dataset"   # column to color points by
+        n_components = 2
+
+        X = df.values[:, :-1]
+        X_scaled = StandardScaler().fit_transform(X)
+        pca = PCA(n_components=n_components, random_state=0)
+        Z = pca.fit_transform(X_scaled)
+
+
+        pca_df = pd.DataFrame({
+            "PC1": Z[:, 0],
+            "PC2": Z[:, 1],
+            color_col: df[color_col]
+        })
+
+        fig = px.scatter(
+            pca_df,
+            x="PC1", y="PC2",
+            color="Dataset",  # Now legend will show the dataset name
+            symbol=color_col, # This keeps your 3-color grouping separate
+            opacity=0.85,
+            labels={
+                "PC1": f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)",
+                "PC2": f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)"
+            },
+            # title="PCA projection",
+            color_discrete_sequence=px.colors.qualitative.Set1  
+        )
+
+        fig.update_traces(marker=dict(size=point_size))  # points in the plot
+        fig.update_layout(
+            coloraxis_showscale=False
+        )
+
+        fig.update_layout(
+            xaxis_title=dict(
+                text=f"<b>PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)</b>",
+                font=dict(size=18)
+            ),
+            yaxis_title=dict(
+                text=f"<b>PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)</b>",
+                font=dict(size=18)
+            )
+        )
+
+        fig.update_layout(
+            legend=dict(
+                font=dict(size=24),
+                itemsizing="constant"
+            ),
+        )
+
+        fig.show()
+
+        n = X_scaled.shape[0]
+        perplexity = int(min(30, max(5, (n - 1) // 3))) if n > 10 else max(2, n // 2)
+
+        tsne = TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            init="pca",            
+            learning_rate="auto",
+            n_iter=1000,
+            random_state=42,
+            verbose=0
+        )
+        Z_tsne = tsne.fit_transform(X_scaled)
+
+        tsne_df = pd.DataFrame({
+            "TSNE1": Z_tsne[:, 0],
+            "TSNE2": Z_tsne[:, 1],
+            color_col: pca_df[color_col],     
+        })
+
+        fig_tsne = px.scatter(
+            tsne_df,
+            x="TSNE1", y="TSNE2",
+            color="Dataset",
+            symbol=color_col,
+            opacity=0.85,
+            color_discrete_sequence=px.colors.qualitative.Set1
+        )
+        fig_tsne.update_traces(marker=dict(size=point_size))
+        fig_tsne.show()
+        
+    elif args.type == "viz":
         visualize_timeseries(datamodules)
     elif args.type == "infos":
         print_infos(datamodules)

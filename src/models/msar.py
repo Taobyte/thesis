@@ -226,9 +226,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         Returns: predictions (B, prediction_window, C)
         """
 
-        # Get most likely state sequence for the look_back_window
-        # hmm_emissions = emissions[:, -self.look_back_window :, :]
-        # most_likely_states = self.viterbi(hmm_emissions)  # (B, look_back_window)
         _, log_alpha = self.forward_algorithm(emissions)
         most_likely_state = log_alpha[:, -1, :].argmax(dim=1)  # (B,) - last state
 

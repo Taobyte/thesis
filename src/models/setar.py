@@ -1,7 +1,7 @@
 import torch
 
 from einops import rearrange
-from typing import Tuple, Any
+from typing import Tuple, Any, Union
 
 from src.losses import get_loss_fn
 from src.models.utils import BaseLightningModule
@@ -35,7 +35,8 @@ class Model(torch.nn.Module):
             ]
         )
         self.regime_layer = torch.nn.Sequential(
-            # torch.nn.BatchNorm1d(look_back_channel_dim * look_back_window),
+            torch.nn.BatchNorm1d(look_back_window),
+            torch.nn.Flatten(),
             torch.nn.Linear(look_back_window * look_back_channel_dim, hidden_dim),
             torch.nn.ReLU(),
             torch.nn.Linear(hidden_dim, n_regimes),
@@ -48,7 +49,7 @@ class Model(torch.nn.Module):
         predictions = torch.stack(
             [layer(x_reshaped) for layer in self.layers], dim=1
         )  # B n_regimes T*C
-        weights = self.regime_layer(x_reshaped).unsqueeze(-1)  # B n_regimes 1
+        weights = self.regime_layer(x).unsqueeze(-1)  # B n_regimes 1
         weighted_pred = predictions * weights
         out = weighted_pred.sum(dim=1)
         out_reshaped = rearrange(out, "B (T C) -> B T C", C=self.target_channel_dim)
@@ -61,6 +62,7 @@ class SETAR(BaseLightningModule):
         model: Model,
         learning_rate: float = 0.001,
         loss_fn: str = "MSE",
+        optimizer_name: str = "lbgfs",
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -68,6 +70,8 @@ class SETAR(BaseLightningModule):
         self.criterion = get_loss_fn(loss_fn)
         self.mae_criterion = torch.nn.L1Loss()
         self.learning_rate = learning_rate
+
+        self.optimizer_name = optimizer_name
 
     def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         return self.model(look_back_window)
@@ -98,10 +102,18 @@ class SETAR(BaseLightningModule):
         self.log("val_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        optimizer = torch.optim.LBFGS(
-            self.model.parameters(),
-            lr=self.learning_rate,
-        )
+    def configure_optimizers(self) -> Union[torch.optim.Adam, torch.optim.LBFGS]:
+        if self.optimizer_name == "adam":
+            optimizer = torch.optim.Adam(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
+        elif self.optimizer_name == "lbfgs":
+            optimizer = torch.optim.LBFGS(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
+        else:
+            raise NotImplementedError()
+
         return optimizer

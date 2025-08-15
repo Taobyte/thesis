@@ -1,0 +1,14 @@
+defaults:
+ -  shared_sweeper
+
+params:
+
+  normalization: choice("none", "global", "difference")
+
+  model.pl_model.learning_rate: tag(log, interval(5e-4, 1e-2))
+  model.pl_model.optimizer: choice("adam", "lbfgs")
+
+  model.model.n_states: int(interval(1, 17))
+  model.pl_model.weight_decay: tag(log, interval(1e-5, 1.0))
+
+

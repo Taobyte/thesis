@@ -175,10 +175,6 @@ class BaseLightningModule(L.LightningModule):
 
         self.metric_full: defaultdict[str, list[float]] = defaultdict(list[float])
 
-        import pdb
-
-        pdb.set_trace()
-
     def on_test_epoch_end(self):
         # log the average metrics to wandb
         avg_metrics = self.calculate_weighted_average(

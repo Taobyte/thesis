@@ -1,21 +1,24 @@
-name: "hmm"
+name: "msar"
 
 model:
-  _target_: src.models.hmm.LinearAutoregressiveHMM # dummy model we use hmmlearn
-  n_states: 2
-  look_back_window: ${look_back_window}
+  _target_: src.models.msar.LinearAutoregressiveHMM # dummy model we use hmmlearn
   prediction_window: ${prediction_window}
   look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim} 
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
+  # tunable parameters
+  look_back_window: ${look_back_window}
+  n_states: 2
+
 pl_model: 
-  _target_: src.models.hmm.HMM
+  _target_: src.models.msar.HMM
   learning_rate: 0.001
+  weight_decay: 0.0
   optimizer_name: "lbfgs"
 
 trainer:
   max_epochs: 100
-  use_early_stopping: False
+  use_early_stopping: True
   patience: 2
 
 data: 

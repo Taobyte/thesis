@@ -4,30 +4,36 @@ model:
   _target_: src.models.nbeatsx.Model
   input_size: ${look_back_window}
   output_size: ${prediction_window}
+  exogenous_n_channels: 1 
   shared_weights: False 
   activation: "prelu" # the authors observe better performance with prelu, selu or sigmoid than with relu
   initialization: "glorot_uniform"
-  stack_types: ["trend", "exogenous", "identity"]
-  n_layers: [2, 2, 2] # length must be equal to len(stack_types)
-  n_blocks: [1, 1, 1] # length must be equal to len(stack_types)
-  n_hidden: [[50], [50], [50]] # length must be equal to len(stack_types)
-  n_polynomials: 2 # the authors observe best performance with 2 polynomials
-  exogenous_n_channels: 1 
-  dropout_prob_theta: 0.0
-  dropout_prob_exogenous: 0.0
-
+  
   batch_normalization: False  # the authors use no batch normalization
   x_s_n_hidden: 0 
   n_x_s: 0 # we do not have static exogenous variables
+
+  # tunable parameters
+  stack_types: ["trend", "exogenous", "identity"]
+  n_blocks: [1, 1, 1] # length must be equal to len(stack_types)
+  n_layers: [2, 2, 2] # length must be equal to len(stack_types) | number of FCNN layers in each block and stack
+  n_hidden: 50 # length must be equal to len(stack_types)
+  kernel_size: 2
+
+  n_polynomials: 2 # the authors observe best performance with 2 polynomials
+  dropout_prob_theta: 0.0
+  dropout_prob_exogenous: 0.0
+
+
 
 
   
 pl_model: 
   _target_: src.models.nbeatsx.NBeatsX
   learning_rate: 0.001 
-  weight_decay: 0.0 # TODO
+  weight_decay: 0.0 # is in (1e-5, 1.0)
   n_lr_decay_steps: 3 # the authors half the learning rate at most 3 times per training run
-  loss_fn: "MAE"
+  loss_fn: "MAE" # the authors use the L1 loss instead of MSE
 
 trainer: 
   max_epochs: 1000

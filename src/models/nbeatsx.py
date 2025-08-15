@@ -486,15 +486,14 @@ class Model(nn.Module):
         stack_types: list[str],
         n_blocks: List[int],
         n_layers: List[int],
-        n_hidden: List[List[int]],
+        n_hidden: int,
         n_polynomials: int,
         batch_normalization: bool,
         exogenous_n_channels: int,
         dropout_prob_theta: float,
         dropout_prob_exogenous: float,
         x_s_n_hidden: int,
-        look_back_channel_dim: int = 2,
-        target_channel_dim: int = 1,
+        kernel_size: int = 2,
         n_x_s: int = 0,  # number of static exogenous variables
     ):
         super().__init__()
@@ -506,7 +505,10 @@ class Model(nn.Module):
         self.stack_types = stack_types
         self.n_blocks = n_blocks
         self.n_layers = n_layers
-        self.n_hidden = n_hidden
+        n_hidden_list: List[List[int]] = []
+        for n in n_layers:
+            n_hidden_list.append([n_hidden for _ in range(n)])
+        self.n_hidden = n_hidden_list
         self.n_polynomials = n_polynomials
         self.exogenous_n_channels = exogenous_n_channels
 
@@ -519,8 +521,8 @@ class Model(nn.Module):
         self.n_x_s = n_x_s
         self.n_x_t = 1  # hard coded, we either pass in zeros for endo_only or the activity info for endo_exo experiments
 
-        # Data parameters
-        # removed seasonality, var_dict... and t_cols
+        self.kernel_size = kernel_size
+        assert kernel_size <= input_size
 
         block_list = self.create_stack()
         block_module_list = nn.ModuleList(block_list)
@@ -619,7 +621,9 @@ class Model(nn.Module):
                             x_s_n_hidden=self.x_s_n_hidden,
                             theta_n_dim=2 * (self.exogenous_n_channels),
                             basis=ExogenousBasisTCN(
-                                self.exogenous_n_channels, self.n_x_t
+                                self.exogenous_n_channels,
+                                self.n_x_t,
+                                kernel_size=self.kernel_size,
                             ),
                             n_layers=self.n_layers[i],
                             theta_n_hidden=self.n_hidden[i],
@@ -634,7 +638,9 @@ class Model(nn.Module):
                             x_s_n_hidden=self.x_s_n_hidden,
                             theta_n_dim=2 * (self.exogenous_n_channels),
                             basis=ExogenousBasisWavenet(
-                                self.exogenous_n_channels, self.n_x_t
+                                self.exogenous_n_channels,
+                                self.n_x_t,
+                                kernel_size=self.kernel_size,
                             ),
                             n_layers=self.n_layers[i],
                             theta_n_hidden=self.n_hidden[i],

@@ -77,9 +77,9 @@ class BaseDataModule(L.LightningDataModule):
         self.train_frac = train_frac
         self.val_frac = val_frac
 
-        self.train_dataset: Optional[Dataset[NDArray[np.float32]]] = None
+        self.train_dataset: Dataset[NDArray[np.float32]] = None 
         self.val_dataset = None
-        self.test_dataset = None
+        self.test_dataset = None 
 
     def postprocess_batch(
         self, look_back_window: Tensor, prediction_window: Tensor

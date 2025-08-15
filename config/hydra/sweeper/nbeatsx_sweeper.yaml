@@ -3,8 +3,12 @@ defaults:
 
 params:
   model.pl_model.learning_rate: tag(log, interval(5e-4, 1e-2))
-  model.model.n_hidden: int(interval(8, 512))
   model.pl_model.weight_decay: tag(log, interval(1e-5, 1.0))
+
+  # architecture
+  model.model.stack_types: choice(["identity", "exogenous_tcn"], ["exogenous_tcn" , "identity"], ["identity", "exogenous_wavenet"], [""exogenous_wavenet" , "identity"])
+  model.model.n_hidden: int(interval(50,501))
+  kernel_size: choice(2,3,4,5)
 
   # regularization
   model.model.dropout_prob_theta: interval(0.0, 0.5)
