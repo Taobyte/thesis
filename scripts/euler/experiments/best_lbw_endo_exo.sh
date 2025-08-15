@@ -4,7 +4,7 @@
 source ~/.bashrc
 conda activate thesis
 
-# TODO: TUNE DALIA & WILDPPG LOOKBACK WINDOWS!
+# TODO: add setar, msar, nbeatsx
 
 # ressource specs
 TIME=24:00:00

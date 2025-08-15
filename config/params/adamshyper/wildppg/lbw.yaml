@@ -1,0 +1,13 @@
+# @package _global_
+
+look_back_window: 7
+
+model:
+  model:
+    d_model: 256
+    hn1: 50
+    hn2: 20
+    gamma: 6.08
+     
+  pl_model:
+    learning_rate: 0.0098
