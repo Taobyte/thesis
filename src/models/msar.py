@@ -278,12 +278,15 @@ class HMM(BaseLightningModule):
         model: LinearAutoregressiveHMM,
         learning_rate: float = 1e-3,
         optimizer_name: str = "lbfgs",
+        weight_decay: float = 0.0,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
         self.optimizer_name = optimizer_name
+
+        self.weight_decay = weight_decay
 
     def model_forward(self, look_back_window: Tensor):
         preds = self.model(look_back_window)
@@ -313,11 +316,13 @@ class HMM(BaseLightningModule):
             optimizer = torch.optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
+                weight_decay=self.weight_decay
             )
         elif self.optimizer_name == "adamw":
             optimizer = torch.optim.AdamW(
                 self.model.parameters(),
                 lr=self.learning_rate,
+                weight_decay=self.weight_decay
             )
         elif self.optimizer_name == "lbfgs":
             optimizer = torch.optim.LBFGS(
