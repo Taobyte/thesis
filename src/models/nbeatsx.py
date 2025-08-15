@@ -684,6 +684,7 @@ class NBeatsX(BaseLightningModule):
 
     def model_forward(self, look_back_window: t.Tensor):
         B, T, C = look_back_window.shape
+        device = look_back_window.device
         heartrate = look_back_window[:, :, 0]  # (B, T)
 
         if self.use_dynamic_features:
@@ -692,8 +693,8 @@ class NBeatsX(BaseLightningModule):
         else:
             # If no exogenous features, you might need to handle this differently
             # Option 1: Use dummy features with proper shape
-            activity = t.zeros((B, 1, T))  # (B, 1, T)
-        outsample_x_t = t.zeros((B, 1, self.prediction_window))
+            activity = t.zeros((B, 1, T), device=device)  # (B, 1, T)
+        outsample_x_t = t.zeros((B, 1, self.prediction_window),device=device)
         prediction = self.model.forward(
             insample_y=heartrate,  # (B, T)
             insample_x_t=activity,  # (B, 1, T)
