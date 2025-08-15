@@ -128,7 +128,7 @@ class BaseDataModule(L.LightningDataModule):
             max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
             input = min_max_norm(series, self.local_norm_channels, min, max)
         elif self.normalization == "difference":
-            pad = torch.zeros(B, 1, C)
+            pad = torch.zeros(B, 1, C, device=device)
             input = torch.cat([pad, torch.diff(series, dim=1)], dim=1)
         else:
             input = series

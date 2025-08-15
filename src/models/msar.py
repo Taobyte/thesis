@@ -84,9 +84,10 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         return covars
 
     def get_inputs(self, emissions: Tensor, is_series: bool = True):
+        device = emissions.device
         if is_series:
             B, S, C = emissions.shape
-            pad = torch.zeros((B, self.look_back_window, C))
+            pad = torch.zeros((B, self.look_back_window, C),device=device)
             concatenated = torch.concatenate([pad, emissions], dim=1)  # (B, L + S, C)
             inputs = concatenated.unfold(
                 dimension=1, size=self.look_back_window, step=1
@@ -96,7 +97,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         else:
             padded = torch.cat(
-                [torch.zeros_like(emissions), emissions], dim=1
+                [torch.zeros_like(emissions, device=device), emissions], dim=1
             )  # (B, 2*L, C)
             inputs = padded.unfold(
                 dimension=1, size=self.look_back_window, step=1
@@ -148,6 +149,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         returns: (log_likelihood: (B,), log_alpha: (B, L_eff, K))
         """
         B, S, C = emissions.shape
+        device = emissions.device
         K = self.n_states
 
         emission_log_probs = self.get_gaussian_log_likelihood(
@@ -157,7 +159,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         init_dist = self.get_initial_distribution()  # (K,)
         trans = self.get_transition_matrix()  # (K, K)
 
-        log_alpha = emissions.new_full((B, S, K), -float("inf"))
+        log_alpha = emissions.new_full((B, S, K), -float("inf"), device=device)
 
         log_alpha[:, 0, :] = torch.log(init_dist + 1e-12) + emission_log_probs[:, 0, :]
 
