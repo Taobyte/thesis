@@ -6,7 +6,7 @@ params:
   model.pl_model.weight_decay: tag(log, interval(1e-5, 1.0))
 
   # architecture
-  model.model.stack_types: choice(["identity", "exogenous_tcn"], ["exogenous_tcn" , "identity"], ["identity", "exogenous_wavenet"], [""exogenous_wavenet" , "identity"])
+  model.model.stack_types: choice(["identity", "exogenous_tcn"], ["exogenous_tcn" , "identity"], ["identity", "exogenous_wavenet"], ["exogenous_wavenet" , "identity"])
   model.model.n_hidden: int(interval(50,501))
   kernel_size: choice(2,3,4,5)
 

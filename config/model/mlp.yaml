@@ -16,6 +16,7 @@ model:
 pl_model: 
   _target_: src.models.mlp.MLP
   learning_rate: 0.001
+  weight_decay: 0.0
   loss: ${loss_fn}
 
 trainer:
