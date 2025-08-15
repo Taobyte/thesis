@@ -404,7 +404,7 @@ class ExogenousBasisWavenet(nn.Module):
                     in_channels=out_features,
                     out_channels=out_features,
                     padding=padding,
-                    kernel_size=3,
+                    kernel_size=kernel_size,
                     dilation=dilation,
                 )
             )

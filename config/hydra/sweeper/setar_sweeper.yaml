@@ -2,7 +2,12 @@ defaults:
  -  shared_sweeper
 
 params:
-  normalization: choice("none", "global", "difference")
+  normalization: choice("none", "global")
+  
   model.pl_model.learning_rate: tag(log, interval(1e-5, 0.01))
+  model.pl_model.optimizer_name: choice("adam", "lbfgs", "adamw")
+  
+  model.data.batch_size: choice(32,256,100000)
+
   model.model.hidden_dim: choice(1,2,4,8,16,32,64)
-  model.model.n_regimes: int(interval(1,11))
+  model.model.n_regimes: choice(1,2,4,8,16) 

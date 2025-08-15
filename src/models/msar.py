@@ -314,6 +314,11 @@ class HMM(BaseLightningModule):
                 self.model.parameters(),
                 lr=self.learning_rate,
             )
+        elif self.optimizer_name == "adamw":
+            optimizer = torch.optim.AdamW(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
         elif self.optimizer_name == "lbfgs":
             optimizer = torch.optim.LBFGS(
                 self.model.parameters(),

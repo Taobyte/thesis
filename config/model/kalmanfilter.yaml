@@ -6,13 +6,13 @@ model:
   prediction_window: ${prediction_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
   obs_dim: ${dataset.datamodule.look_back_channel_dim}
-  state_dim: 32 
+  state_dim: 8
   use_dynamic_features: ${use_dynamic_features}
   use_static_features: ${use_static_features}
   dynamic_exogenous_variables: ${dataset.datamodule.dynamic_exogenous_variables}
   static_exogenous_variables: ${dataset.datamodule.static_exogenous_variables}
 
-  smoothness_weight: 0.01
+  smoothness_weight: 0.0
   reconstruction_weight: 0.0
 
   use_norm: ${use_norm_baseline}
@@ -20,6 +20,7 @@ model:
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter
   learning_rate: 0.001
+  optimizer_name: "adamw"
   loss: ${loss_fn}
   weight_decay: 0.0
 
@@ -29,4 +30,4 @@ trainer:
   patience: 2
 
 data:
-  batch_size: 128
+  batch_size: 256

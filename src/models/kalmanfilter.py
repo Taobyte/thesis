@@ -557,7 +557,9 @@ class Model(BaseKalmanFilter):
             losses["total"] = state_loss
         else:
             recon_loss = F.mse_loss(pred_observations, observations)
+            mae_loss = F.l1_loss(pred_observations, observations)
             losses["reconstruction_loss"] = recon_loss
+            losses["mae_loss"] = mae_loss
             losses["total"] = recon_loss
 
         # Smoothness regularization
@@ -617,8 +619,8 @@ class KalmanFilter(BaseLightningModule):
         loss: str = "MSE",
         learning_rate: float = 0.001,
         weight_decay: float = 0.0,
-        exo_weight: float = 0.5,
-        **kwargs,
+        optimizer_name: str = "adam",
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
@@ -627,7 +629,8 @@ class KalmanFilter(BaseLightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
 
-        self.exo_weight = exo_weight
+        self.optimizer_name = optimizer_name
+
 
     def model_forward(self, look_back_window: torch.Tensor):
         assert len(look_back_window.shape) == 3
@@ -636,6 +639,31 @@ class KalmanFilter(BaseLightningModule):
         preds = self.model(look_back_window)
 
         return preds[:, :, : self.model.target_channel_dim]
+    
+    def _shared_step(self, series: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        heartrate = series[:,:, :self.target_channel_dim]
+        if self.model.control_dim > 0:
+            activity = series[:, : , self.target_channel_dim:]
+        else:
+            activity = None
+
+        losses = self.model.compute_losses(heartrate, activity)
+        loss = losses["total"]
+        mae_loss = losses["mae_loss"]
+        return loss, mae_loss
+
+    # def model_specific_train_step(self, series: torch.Tensor):
+    #     loss, _ = self._shared_step(series)
+    #     self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
+    #     return loss
+    
+    # def model_specific_val_step(self, series: torch.Tensor):
+    #     val_loss, mae_loss = self._shared_step(series)
+    #     loss = val_loss 
+    #     if self.tune:
+    #         loss = mae_loss
+    #     self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
+    #     return loss
 
     def model_specific_train_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
@@ -649,6 +677,8 @@ class KalmanFilter(BaseLightningModule):
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
 
         return loss
+
+
 
     def model_specific_val_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
@@ -665,9 +695,18 @@ class KalmanFilter(BaseLightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-        )
+        if self.optimizer_name == "adam":
+            optimizer = torch.optim.Adam(
+                self.model.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name == "adamw":
+            optimizer = torch.optim.AdamW(
+                self.model.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+        elif self.optimizer_name == "lbfgs":
+            optimizer = torch.optim.LBFGS(self.model.parameters(), lr=self.learning_rate)
         return optimizer

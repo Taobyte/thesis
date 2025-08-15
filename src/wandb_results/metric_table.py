@@ -28,11 +28,26 @@ def plot_best_lbw(
 ):
     assert len(prediction_window) == 1
     pw = prediction_window[0]
-    metrics_to_keep = METRICS  # ["MSE", "MAE", "DIRACC"]
+    metrics_to_keep = METRICS  
+    for metric in ["NRMSE", "ND"]:
+        metrics_to_keep.remove(metric)
+
+    metrics_to_keep += ["LBW"] # also include the best LBW
+    n_metrics = len(metrics_to_keep)
     cols: dict[str, list[float]] = dict()
-    fst_col: list[str] = []
-    fst_col = metrics_to_keep * len(datasets)
-    cols["Metrics"] = fst_col
+
+    dataset_col: List[str] = []
+    for dataset_name in datasets:
+            human_readable_name = dataset_to_name[dataset_name]
+            dataset_col.append(rf"\multirow{{{n_metrics}}}{{*}}{{{human_readable_name}}}")
+            for _ in range(len(metrics_to_keep) - 1):
+                dataset_col.append("")
+    
+    cols["Datasets"] = dataset_col
+
+    metric_col: list[str] = []
+    metric_col= metrics_to_keep * len(datasets)
+    cols["Metrics"] = metric_col
 
     for model_name in MODELS:
         col: List[float] = []
@@ -49,20 +64,21 @@ def plot_best_lbw(
 
             api = wandb.Api()
             best_endo_exo_runs = api.runs("c_keusch/thesis", filters=filters)
-            print(f"Found {len(best_endo_exo_runs)} runs.")
-
+            assert len(best_endo_exo_runs) > 0, "No runs were found!"
             assert len(best_endo_exo_runs) % 3 == 0, (
                 "Attention, length of runs is not divisible by 3!"
             )
-            assert len(best_endo_exo_runs) > 0, "No runs were found!"
+            for run in best_endo_exo_runs:
+                print(f"Lookback window {run.config['look_back_window']}")
 
             best_endo_exo_mean, best_endo_exo_std = get_metrics(best_endo_exo_runs)
             if model_name not in best_endo_exo_mean:
                 print(f"Attention {model_name} is not in the dict!")
                 continue
+
+            lbw = list(best_endo_exo_mean[model_name].keys())[0]
             metrics: list[float] = []
-            for metric_name in metrics_to_keep:
-                lbw = list(best_endo_exo_mean[model_name].keys())[0]
+            for metric_name in metrics_to_keep[:-1]:
                 if metric_name in best_endo_exo_mean[model_name][str(lbw)][str(pw)]:
                     metrics.append(
                         best_endo_exo_mean[model_name][str(lbw)][str(pw)][metric_name]
@@ -72,33 +88,49 @@ def plot_best_lbw(
                     print(
                         f"Metric {metric_name} does not exist for {dataset} {model_name} {lbw}"
                     )
+
+            metrics.append(lbw)
             assert len(metrics) == len(metrics_to_keep)
             col.extend(metrics)
         cols[model_to_name[model_name]] = col
 
     df = pd.DataFrame(cols)
 
-    n_metrics = len(metrics_to_keep)
+    n_best = 3 # take the best three values and make them bold, double underlined and underlined
+
     # make best value bold
     for i in range(len(df)):
+        # skip LBW rows
+        if i % n_metrics == (n_metrics - 1):
+            continue
         row = df.iloc[i].values
-        current_row = row[1:]
+        current_row = row[2:]
         if i % n_metrics == 2:
             # DIRACC is at position 3 in the metric list
-            best_idx = current_row.argmax() + 1
-            worst_idx = current_row.argmin() + 1
+            best_indices = np.argsort(current_row)[-n_best:] + 2
+            worst_idx = current_row.argmin() + 2
         else:
-            best_idx = current_row.argmin() + 1
-            worst_idx = current_row.argmax() + 1
-        best_val = df.iloc[i, best_idx]
+            best_indices = (np.argsort(current_row)[:n_best])[::-1] + 2
+            worst_idx = current_row.argmax() + 2
+
+        best_indices = best_indices.tolist()
+
+        third_best_val = df.iloc[i, best_indices[0]]
+        second_best_val = df.iloc[i, best_indices[1]]
+        best_val = df.iloc[i, best_indices[2]]
         worst_val = df.iloc[i, worst_idx]
-        df.iloc[i, best_idx] = rf"\textbf{{{best_val:.3f}}}"
-        df.iloc[i, worst_idx] = rf"\textit{{{worst_val:.3f}}}"
+
+        df.iloc[i, best_indices[0]] =  rf"\underline{{{float(third_best_val):.3f}}}"
+        df.iloc[i,best_indices[1]] =  rf"\underline{{\underline{{{float(second_best_val):.3f}}}}}" 
+        df.iloc[i,best_indices[2]] = rf"\textbf{{{float(best_val):.3f}}}"
+        df.iloc[i, worst_idx] = rf"\textit{{{float(worst_val):.3f}}}"
+
         for j in range(len(current_row)):
-            if j in [0, best_idx, worst_idx]:
+            abs_col = j + 2
+            if abs_col in ([worst_idx] + best_indices):
                 continue
-            v = df.iloc[i, j]
-            df.iloc[i, j] = f"{v:.3f}"
+            v = df.iloc[i, abs_col]
+            df.iloc[i, abs_col] = f"{float(v):.3f}"
 
     latex_str = df.to_latex(
         index=False,
@@ -106,7 +138,7 @@ def plot_best_lbw(
         header=True,
         # column_format=column_format,
         bold_rows=False,
-        float_format="%.3f",
+        # float_format="%.3f",
     )
     print(latex_str)
 

@@ -42,8 +42,8 @@ def main():
     parser.add_argument(
         "--dataset",
         type=list_of_strings,
-        required=True,
-        default=["dalia"],
+        required=False,
+        default=["dalia", "wildppg", "ieee"],
         help="Dataset must be one of the following: dalia, ieee, wildppg, chapman, ucihar, usc, capture24",
     )
 

@@ -4,7 +4,7 @@
 source ~/.bashrc
 conda activate thesis
 
-# TODO: add setar, msar, nbeatsx
+# TODO: add setar, msar, nbeatsx | add back ieee to datasets
 
 # ressource specs
 TIME=24:00:00

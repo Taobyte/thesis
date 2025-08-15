@@ -14,11 +14,11 @@ model:
   n_x_s: 0 # we do not have static exogenous variables
 
   # tunable parameters
-  stack_types: ["trend", "exogenous", "identity"]
-  n_blocks: [1, 1, 1] # length must be equal to len(stack_types)
-  n_layers: [2, 2, 2] # length must be equal to len(stack_types) | number of FCNN layers in each block and stack
+  stack_types: ["exogenous_wavenet", "identity"]
+  n_blocks: [1, 1] # length must be equal to len(stack_types)
+  n_layers: [2, 2] # length must be equal to len(stack_types) | number of FCNN layers in each block and stack
   n_hidden: 50 # length must be equal to len(stack_types)
-  kernel_size: 2
+  kernel_size: 5 
 
   n_polynomials: 2 # the authors observe best performance with 2 polynomials
   dropout_prob_theta: 0.0

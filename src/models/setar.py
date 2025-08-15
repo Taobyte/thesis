@@ -63,6 +63,7 @@ class SETAR(BaseLightningModule):
         learning_rate: float = 0.001,
         loss_fn: str = "MSE",
         optimizer_name: str = "lbgfs",
+        weight_decay: float = 0.0,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -70,6 +71,7 @@ class SETAR(BaseLightningModule):
         self.criterion = get_loss_fn(loss_fn)
         self.mae_criterion = torch.nn.L1Loss()
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
         self.optimizer_name = optimizer_name
 
@@ -107,6 +109,13 @@ class SETAR(BaseLightningModule):
             optimizer = torch.optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
+                weight_decay=self.weight_decay
+            )
+        elif self.optimizer_name == "adamw":
+            optimizer = torch.optim.AdamW(
+                self.model.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay
             )
         elif self.optimizer_name == "lbfgs":
             optimizer = torch.optim.LBFGS(
