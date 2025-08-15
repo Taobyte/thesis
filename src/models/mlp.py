@@ -27,6 +27,10 @@ class Model(torch.nn.Module):
             self.activation = torch.nn.ReLU()
         elif activation == "tanh":
             self.activation = torch.nn.Tanh()
+        elif activation == "gelu":
+            self.activation = torch.nn.GELU()
+        elif activation == "sigmoid":
+            self.activation = torch.nn.Sigmoid()
         elif activation == "none":
             self.activation = torch.nn.Identity()
         else:
@@ -96,11 +100,13 @@ class MLP(BaseLightningModule):
         model: torch.nn.Module,
         learning_rate: float = 0.001,
         loss: str = "MSE",
+        weight_decay: float = 0.0,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.model = model
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.criterion = get_loss_fn(loss)
         self.mae_loss = torch.nn.L1Loss()
 
@@ -131,5 +137,5 @@ class MLP(BaseLightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         return optimizer
