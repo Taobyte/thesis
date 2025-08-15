@@ -17,7 +17,7 @@ n_trials: ${n_trials}
 n_jobs: 1
 search_space: null
 custom_search_space: null
-max_failure_rate: 0.5
+# max_failure_rate: 0.5 does not work
 use_wandb: True # added to use wandb logging
 metric_name: "val_loss"
 wandb_kwargs:
