@@ -80,7 +80,13 @@ def local_z_norm_numpy(
         mean = np.mean(batch, axis=1, keepdims=True)
         std = np.std(batch, axis=1, keepdims=True) + 1e-5
     assert mean is not None and std is not None
-    normed = (batch - mean) / std
+    _, L, C = batch.shape
+    _, _, c_mean = mean.shape
+    n_channels_to_norm = min(C, c_mean)
+
+    normed = (batch - mean[:, :, :n_channels_to_norm]) / (
+        std[:, :, :n_channels_to_norm] + 1e-6
+    )
     return normed, mean, std
 
 

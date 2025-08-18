@@ -9,6 +9,7 @@ from einops import rearrange
 
 from src.losses import get_loss_fn
 from src.models.utils import BaseLightningModule
+from src.normalization import local_z_norm_numpy
 
 
 class Model(torch.nn.Module):
@@ -21,6 +22,7 @@ class Model(torch.nn.Module):
         look_back_window: int,
         prediction_window: int,
         target_channel_dim: int = 1,
+        use_norm: bool = False,
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -29,19 +31,42 @@ class Model(torch.nn.Module):
 
         self.model = LinearRegression()
 
+        self.use_norm = use_norm
+        if use_norm:
+            lbw_train_dataset, mean, std = local_z_norm_numpy(lbw_train_dataset)
+            pw_train_dataset, _, _ = local_z_norm_numpy(pw_train_dataset, mean, std)
+            lbw_val_dataset, mean, std = local_z_norm_numpy(lbw_val_dataset)
+            pw_val_dataset, _, _ = local_z_norm_numpy(pw_val_dataset, mean, std)
+
         self.lbw_train_dataset = lbw_train_dataset
         self.pw_train_dataset = pw_train_dataset
         self.lbw_val_dataset = lbw_val_dataset
         self.pw_val_dataset = pw_val_dataset
 
-    def forward(self, x: Tensor) -> Tensor:
-        _, _, c = x.shape
-        device = x.device
-        x = rearrange(x, "B T C -> B (T C)")
-        x = x.detach().cpu().numpy()
-        pred = self.model.predict(x)
+    def forward(self, look_back_window: Tensor) -> Tensor:
+        device = look_back_window.device
+        if self.use_norm:
+            means = look_back_window.mean(1, keepdim=True).detach()
+            look_back_window = look_back_window - means
+            stdev = torch.sqrt(
+                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            look_back_window /= stdev
+
+        look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
+        look_back_window = look_back_window.detach().cpu().numpy()
+        pred = self.model.predict(look_back_window)
         pred = rearrange(pred, "B (T C) -> B T C", C=self.target_channel_dim)
         pred = torch.from_numpy(pred).to(device)
+
+        if self.use_norm:
+            pred = pred * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            pred = pred + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
         return pred
 
 

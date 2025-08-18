@@ -5,6 +5,7 @@ model:
   look_back_window: ${look_back_window}
   prediction_window: ${prediction_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
+  use_norm: ${use_norm_baseline}
 
 pl_model: 
   _target_: src.models.linear.Linear

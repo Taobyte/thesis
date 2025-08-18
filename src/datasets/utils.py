@@ -3,11 +3,12 @@ import random
 import torch
 import lightning as L
 
+from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from numpy.typing import NDArray
 from einops import rearrange
-from typing import Tuple, Optional, List
+from typing import Tuple, List
 
 from src.normalization import global_z_norm, min_max_norm
 
@@ -77,9 +78,9 @@ class BaseDataModule(L.LightningDataModule):
         self.train_frac = train_frac
         self.val_frac = val_frac
 
-        self.train_dataset: Dataset[NDArray[np.float32]] = None 
+        self.train_dataset: Dataset[NDArray[np.float32]] = None
         self.val_dataset = None
-        self.test_dataset = None 
+        self.test_dataset = None
 
     def postprocess_batch(
         self, look_back_window: Tensor, prediction_window: Tensor
@@ -144,9 +145,18 @@ class BaseDataModule(L.LightningDataModule):
         return self.postprocess_batch(look_back, prediction)
 
     def collate_fn_series(self, series: List[Tensor]):
+        # lengths before padding
+        lengths = torch.tensor([s.size(0) for s in series], dtype=torch.long)
+
+        # pad all series to max length
+        # pad_sequence pads with 0s by default, batch_first=True -> (B, L, C)
+        padded = pad_sequence(series, batch_first=True, padding_value=0.0)
+
+        return padded, lengths
         # assumes that we have batch size = 1!
-        train_series = (series[0]).unsqueeze(0)
-        return self.postprocess_series(train_series)
+        # max_length = max([len(s) for s in series])
+        # train_series = (series[0]).unsqueeze(0)
+        # return self.postprocess_series(train_series)
 
     def train_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
@@ -277,27 +287,3 @@ class BaseDataModule(L.LightningDataModule):
 
     def get_test_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("test")
-
-    def get_numpy_normalized(self, type: str = "train") -> list[NDArray[np.float32]]:
-        assert type in ["train", "val"]
-        if type == "train":
-            data = self.train_dataset.data
-        elif type == "val":
-            data = self.val_dataset.data
-        normalized_data: list[NDArray[np.float32]] = []
-        for s in data:
-            if self.normalization == "global":
-                mean = self.train_dataset.mean
-                std = self.train_dataset.std
-                normalized = (s - mean) / (std + 1e-6)
-            elif self.normalization == "minmax":
-                min = self.train_dataset.min
-                max = self.train_dataset.max
-                normalized = (s - min) / (max - min)
-            elif self.normalization == "difference":
-                normalized = np.diff(s, axis=0)
-            else:
-                normalized = s
-            normalized_data.append(normalized)
-
-        return normalized_data

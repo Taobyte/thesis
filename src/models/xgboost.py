@@ -93,9 +93,9 @@ class XGBoost(BaseLightningModule):
         pw_val = model.pw_val_dataset
         if use_norm:
             lbw_train, mean, std = local_z_norm_numpy(lbw_train)
-            pw_train = local_z_norm_numpy(pw_train, mean, std)
+            pw_train, _, _ = local_z_norm_numpy(pw_train, mean, std)
             lbw_val, mean, std = local_z_norm_numpy(lbw_val)
-            pw_val = local_z_norm_numpy(pw_val, mean, std)
+            pw_val, _, _ = local_z_norm_numpy(pw_val, mean, std)
         self.X_train = rearrange(lbw_train, "B T C -> B (T C)")
         self.y_train = rearrange(pw_train, "B T C -> B (T C)")
         self.X_val = rearrange(lbw_val, "B T C -> B (T C)")

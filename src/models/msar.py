@@ -46,7 +46,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         # Covariance matrices for each state (using Cholesky decomposition for positive definiteness)
         self.covar_chol = torch.nn.ParameterList(
             [
-                torch.nn.Parameter(torch.eye(look_back_channel_dim))
+                torch.nn.Parameter(torch.randn((look_back_channel_dim,)))
                 for _ in range(n_states)
             ]
         )
@@ -71,23 +71,23 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
     def get_covariance_matrices(self):
         """Get positive definite covariance matrices using Cholesky decomposition"""
-        covars = []
-        for chol in self.covar_chol:
-            # Make sure diagonal is positive
-            chol_tril = torch.tril(chol)
-            diag_indices = torch.arange(chol_tril.size(0))
-            chol_tril[diag_indices, diag_indices] = torch.exp(
-                chol_tril[diag_indices, diag_indices]
-            )
-            covar = chol_tril @ chol_tril.T
-            covars.append(covar)
+        covars = [torch.diag(torch.exp(v)) for v in self.covar_chol]
+        #  for chol in self.covar_chol:
+        #      # Make sure diagonal is positive
+        #      chol_tril = torch.tril(chol)
+        #      diag_indices = torch.arange(chol_tril.size(0))
+        #      chol_tril[diag_indices, diag_indices] = torch.exp(
+        #          chol_tril[diag_indices, diag_indices]
+        #      )
+        #      covar = chol_tril @ chol_tril.T
+        #      covars.append(covar)
         return covars
 
     def get_inputs(self, emissions: Tensor, is_series: bool = True):
         device = emissions.device
         if is_series:
             B, S, C = emissions.shape
-            pad = torch.zeros((B, self.look_back_window, C),device=device)
+            pad = torch.zeros((B, self.look_back_window, C), device=device)
             concatenated = torch.concatenate([pad, emissions], dim=1)  # (B, L + S, C)
             inputs = concatenated.unfold(
                 dimension=1, size=self.look_back_window, step=1
@@ -143,11 +143,12 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         return log_probs
 
-    def forward_algorithm_series(self, emissions: Tensor):
+    def forward_algorithm_series(self, emissions: Tensor, lengths: Tensor):
         """
         emissions: (B, S, C)
         returns: (log_likelihood: (B,), log_alpha: (B, L_eff, K))
         """
+
         B, S, C = emissions.shape
         device = emissions.device
         K = self.n_states
@@ -173,8 +174,12 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             log_alpha[:, t, :] = (
                 torch.logsumexp(prev, dim=1) + emission_log_probs[:, t, :]
             )
+        # log_likelihood = torch.logsumexp(log_alpha[:, -1, :], dim=1)
+        # return log_likelihood, log_alpha
+        last_idx = lengths - 1
+        last_alpha = log_alpha[torch.arange(B, device=device), last_idx, :]  # (B, K)
+        log_likelihood = torch.logsumexp(last_alpha, dim=1)  # (B,)
 
-        log_likelihood = torch.logsumexp(log_alpha[:, -1, :], dim=1)
         return log_likelihood, log_alpha
 
     def forward_algorithm(self, emissions: Tensor):
@@ -294,8 +299,8 @@ class HMM(BaseLightningModule):
         preds = self.model(look_back_window)
         return preds
 
-    def _shared_step(self, series: Tensor) -> Tensor:
-        loss, _ = self.model.forward_algorithm_series(series)  # (B, )
+    def _shared_step(self, series: Tensor, lengths: Tensor) -> Tensor:
+        loss, _ = self.model.forward_algorithm_series(series, lengths)  # (B, )
         loss = -loss.mean()
         # criterion = torch.nn.MSELoss()
         # preds = self.model(look_back_window)
@@ -303,13 +308,13 @@ class HMM(BaseLightningModule):
         # loss =  criterion(preds, prediction_window)
         return loss
 
-    def model_specific_train_step(self, series: Tensor) -> Tensor:
-        loss = self._shared_step(series)
+    def model_specific_train_step(self, series: Tensor, lengths: Tensor) -> Tensor:
+        loss = self._shared_step(series, lengths)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
         return loss
 
-    def model_specific_val_step(self, series: Tensor) -> Tensor:
-        val_loss = self._shared_step(series)
+    def model_specific_val_step(self, series: Tensor, lengths: Tensor) -> Tensor:
+        val_loss = self._shared_step(series, lengths)
         self.log("val_loss", val_loss, on_step=True, on_epoch=True, logger=True)
         return val_loss
 
@@ -318,13 +323,13 @@ class HMM(BaseLightningModule):
             optimizer = torch.optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                weight_decay=self.weight_decay
+                weight_decay=self.weight_decay,
             )
         elif self.optimizer_name == "adamw":
             optimizer = torch.optim.AdamW(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                weight_decay=self.weight_decay
+                weight_decay=self.weight_decay,
             )
         elif self.optimizer_name == "lbfgs":
             optimizer = torch.optim.LBFGS(

@@ -25,8 +25,11 @@ def plot_best_lbw(
     prediction_window: list[int] = [3],
     experiment: str = "best_endo_exo",
     start_time: str = "2025-8-08",
+    models: list[str] = [],
 ):
     assert len(prediction_window) == 1
+    if len(models) == 0:
+        models = MODELS
     pw = prediction_window[0]
     metrics_to_keep = METRICS
     for metric in ["NRMSE", "ND"]:
@@ -49,7 +52,7 @@ def plot_best_lbw(
     metric_col = metrics_to_keep * len(datasets)
     cols["Metrics"] = metric_col
 
-    for model_name in MODELS:
+    for model_name in models:
         col: List[float] = []
         for dataset in datasets:
             conditions = [
@@ -79,9 +82,11 @@ def plot_best_lbw(
             lbw = list(best_endo_exo_mean[model_name].keys())[0]
             metrics: list[float] = []
             for metric_name in metrics_to_keep[:-1]:
+                factor = 100 if metric_name == "SMAPE" else 1
                 if metric_name in best_endo_exo_mean[model_name][str(lbw)][str(pw)]:
                     metrics.append(
-                        best_endo_exo_mean[model_name][str(lbw)][str(pw)][metric_name]
+                        factor
+                        * best_endo_exo_mean[model_name][str(lbw)][str(pw)][metric_name]
                     )
                 else:
                     metrics.append(np.nan)

@@ -138,8 +138,8 @@ class BaseLightningModule(L.LightningModule):
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tensor:
         if self.return_whole_series:
-            series = batch
-            loss = self.model_specific_train_step(series)
+            series, lengths = batch
+            loss = self.model_specific_train_step(series, lengths)
         else:
             _, look_back_window_norm, prediction_window_norm = batch
             loss = self.model_specific_train_step(
@@ -151,8 +151,8 @@ class BaseLightningModule(L.LightningModule):
         self, batch: Union[Tensor, Tuple[Tensor, Tensor, Tensor]], batch_idx: int
     ) -> Tensor:
         if self.return_whole_series:
-            series = batch
-            loss = self.model_specific_val_step(series)
+            series, lengths = batch
+            loss = self.model_specific_val_step(series, lengths)
         else:
             _, look_back_window_norm, prediction_window_norm = batch
             loss = self.model_specific_val_step(

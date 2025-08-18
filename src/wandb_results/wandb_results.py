@@ -159,6 +159,7 @@ def main():
             args.prediction_window,
             args.experiment,
             start_time="2025-8-08",
+            models=args.models,
         )
     elif args.type == "viz":
         visualize_look_back_window_difference(
