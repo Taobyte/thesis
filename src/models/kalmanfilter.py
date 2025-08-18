@@ -399,23 +399,38 @@ class Model(BaseKalmanFilter):
         """
         device = prior_covariance.device
 
-        # Compute innovation covariance
-        S = (
-            torch.bmm(
-                torch.bmm(observation_matrix, prior_covariance),
-                observation_matrix.transpose(1, 2),
-            )
-            + observation_noise
-        )
+        P = prior_covariance
+        H = observation_matrix
+        R = observation_noise
+
+        HP = torch.bmm(H, P)  # (B, m, n)
+        S = torch.bmm(HP, H.transpose(1, 2)) + R  # (B, m, m)
+
+        # jitter for stability
+        jitter = 1e-6
+        eye_m = torch.eye(S.size(1), device=S.device, dtype=S.dtype).expand_as(S)
+        S = S + jitter * eye_m
 
         # Add small diagonal for numerical stability
-        S = S + torch.eye(S.size(1), device=device) * 1e-6
+        L = torch.linalg.cholesky(S)  # (B, m, m)
+        X = torch.cholesky_solve(HP, L)  # (B, m, n)  solves S X = HP
+        K = X.transpose(1, 2)
 
-        # Compute Kalman gain
-        K = torch.bmm(
-            torch.bmm(prior_covariance, observation_matrix.transpose(1, 2)),
-            torch.inverse(S),
-        )
+        # Compute innovation covariance
+        # S = (
+        #     torch.bmm(
+        #         torch.bmm(observation_matrix, prior_covariance),
+        #         observation_matrix.transpose(1, 2),
+        #     )
+        #     + observation_noise
+        # )
+
+        # S = S + torch.eye(S.size(1), device=device) * 1e-6
+        # # Compute Kalman gain
+        # K = torch.bmm(
+        #     torch.bmm(prior_covariance, observation_matrix.transpose(1, 2)),
+        #     torch.inverse(S),
+        # )
 
         return K
 
@@ -631,7 +646,6 @@ class KalmanFilter(BaseLightningModule):
 
         self.optimizer_name = optimizer_name
 
-
     def model_forward(self, look_back_window: torch.Tensor):
         assert len(look_back_window.shape) == 3
 
@@ -639,11 +653,11 @@ class KalmanFilter(BaseLightningModule):
         preds = self.model(look_back_window)
 
         return preds[:, :, : self.model.target_channel_dim]
-    
+
     def _shared_step(self, series: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        heartrate = series[:,:, :self.target_channel_dim]
+        heartrate = series[:, :, : self.target_channel_dim]
         if self.model.control_dim > 0:
-            activity = series[:, : , self.target_channel_dim:]
+            activity = series[:, :, self.target_channel_dim :]
         else:
             activity = None
 
@@ -656,10 +670,10 @@ class KalmanFilter(BaseLightningModule):
     #     loss, _ = self._shared_step(series)
     #     self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
     #     return loss
-    
+
     # def model_specific_val_step(self, series: torch.Tensor):
     #     val_loss, mae_loss = self._shared_step(series)
-    #     loss = val_loss 
+    #     loss = val_loss
     #     if self.tune:
     #         loss = mae_loss
     #     self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
@@ -677,8 +691,6 @@ class KalmanFilter(BaseLightningModule):
         self.log("train_loss", loss, on_epoch=True, on_step=True, logger=True)
 
         return loss
-
-
 
     def model_specific_val_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
@@ -708,5 +720,7 @@ class KalmanFilter(BaseLightningModule):
                 weight_decay=self.weight_decay,
             )
         elif self.optimizer_name == "lbfgs":
-            optimizer = torch.optim.LBFGS(self.model.parameters(), lr=self.learning_rate)
+            optimizer = torch.optim.LBFGS(
+                self.model.parameters(), lr=self.learning_rate
+            )
         return optimizer

@@ -8,15 +8,18 @@ model:
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
   # n_regimes = 1 is equivalent to batched linear regression
-  n_regimes: 2 # number of regimes
-  hidden_dim: 8 # dimension of the SETAR regime prediction module
+  n_regimes: 8 # number of regimes
+  dropout: 0.0
+
+  use_last: False
+  revin: True
 
 pl_model: 
   _target_: src.models.setar.SETAR
   loss_fn: ${loss_fn}
   learning_rate: 0.001
   weight_decay: 0.0
-  optimizer_name: "lbfgs" # can be 'adam' or 'lbfgs'
+  optimizer_name: "adamw" # can be 'adam', 'adamw' or 'lbfgs'
 
 trainer:
   max_epochs: 10000
@@ -24,4 +27,4 @@ trainer:
   patience: 2 
 
 data:
-  batch_size: 100000 # train with all samples at once
+  batch_size: 8

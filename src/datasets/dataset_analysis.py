@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import antropy as ant
-
+import pycatch22
 
 
 from lightning import LightningDataModule
@@ -138,14 +138,20 @@ def print_infos(datamodules: List[LightningDataModule]):
         print(f"Min Length: {min(lengths)}")
         print(f"MaxLength: {max(lengths)}")
 
+def max_pearson_corr(y, x, max_lag=20):
+    lags = np.arange(-max_lag, max_lag+1)
+    corr = []
+    for lag in lags:
+        if lag < 0:
+            corr.append(np.corrcoef(x[:lag], y[-lag:])[0,1])
+        elif lag > 0:
+            corr.append(np.corrcoef(x[lag:], y[:-lag])[0,1])
+        else:
+            corr.append(np.corrcoef(x, y)[0,1])
+    max_cor = np.abs(np.array(corr)).max()
+    max_lag = lags[np.abs(np.array(corr)).argmax()]
+    return float(max_cor), int(max_lag)
 
-def max_pearson_corr(x, y):
-    x = (x - np.mean(x)) / (np.std(x) * len(x))
-    y = (y - np.mean(y)) / np.std(y)
-    cors = np.abs(np.correlate(x, y, mode="full"))
-    max_cor = np.max(cors)
-    best_lag = -len(x) + np.argmax(cors)
-    return max_cor, best_lag
 
 def max_pearson(datamodules: List[LightningDataModule]):
     for datamodule in datamodules:
@@ -158,10 +164,12 @@ def max_pearson(datamodules: List[LightningDataModule]):
             heartrate = series[:, 0]
             activity = series[:, 1]
             max_corr, best_lag = max_pearson_corr(heartrate, activity)
+            pearsons.append(max_corr)
+            best_lags.append(best_lag)
+        print(list(zip(pearsons, best_lags)))
         mean_pearson = np.mean(pearsons)
         median_lag = np.median(best_lags)
         print(f"Mean pearson {mean_pearson} | median lag {median_lag} ")
-
 
 def visualize_timeseries(datamodules: List[LightningDataModule]):
     n_series_per_dataset = 1
@@ -331,6 +339,23 @@ def bds_test(datamodules: List[LightningDataModule]):
 def arch_test(datamodules: List[LightningDataModule]):
     pass
 
+def compute_catch22_correlation(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        data = datamodule.train_dataset.data 
+        correlations: List[float] = []
+        for series in data:
+            heartrate = series[:, 0]
+            activity = series[:, 1]
+            h_res = pycatch22.catch22_all(heartrate)["values"]
+            a_res = pycatch22.catch22_all(activity)["values"]
+            correlation = np.corrcoef(h_res,a_res, rowvar=False)
+            correlations.append(correlation[0,1])
+        
+        final_cor = np.mean(correlations) + 1 / (1 + np.std(correlations))
+        print(f"Mean {np.mean(correlations)}")
+        print(f"STD {np.std(correlations)}")
+        print(f"Dataset {datamodule.name} has cor = {final_cor}")
+
 
 if __name__ == "__main__":
     OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
@@ -369,7 +394,8 @@ if __name__ == "__main__":
             "pacf",
             "bds",
             "forecastibility",
-            "pca"
+            "pca",
+            "catch22"
         ],
         required=True,
     )
@@ -391,8 +417,9 @@ if __name__ == "__main__":
         datamodule = instantiate(cfg.dataset.datamodule)
         datamodule.setup("fit")
         datamodules.append(datamodule)
-    
-    if args.type == "pca":
+    if args.type == "catch22":
+        compute_catch22_correlation(datamodules)
+    elif args.type == "pca":
 
         point_size = 16
 
@@ -419,6 +446,8 @@ if __name__ == "__main__":
                 heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
             )
             res = 1 - H
+            # TODO
+            # return dict(mean=mean, std=std, minimum=minimum, maximum=maximum, median=median,pacf1=pacf1, pacf2=pacf2, pacf3=pacf3)
 
             return [mean, std, minimum, maximum, median, max_r, lag, pacf1, pacf2, pacf3,result[0], granger, mi, res]
 

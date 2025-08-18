@@ -8,6 +8,6 @@ conda activate thesis
 TIME=24:00:00
 
 BLNNAME="bl_difference"
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=dalia,wildppg,ieee lbw=a,b,c,d,e pw=a model=linear,hlinear,kalmanfilter,xgboost,hxgboost,gp,mlp normalization=difference use_wandb=True tune=False experiment=endo_exo folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=dalia,wildppg,ieee lbw=lbw pw=a model=linear,hlinear,kalmanfilter,xgboost,hxgboost,gp,mlp normalization=difference use_wandb=True tune=False experiment=differencing folds=fold_0,fold_1,fold_2"
 sbatch --job-name="$BLNNAME" -o "$BLNNAME" --time="$TIME" --wrap="$JOB"
 

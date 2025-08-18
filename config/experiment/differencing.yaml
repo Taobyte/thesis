@@ -1,6 +1,6 @@
-experiment_name: "mae_loss"
+experiment_name: "differencing"
 
-loss_fn: "MAE"
+loss_fn: "MSE"
 
 # Exogenous Variables Experiments
 use_dynamic_features: True
