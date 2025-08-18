@@ -23,7 +23,7 @@ model:
 
 pl_model: 
   _target_: src.models.gp.GaussianProcess
-  learning_rate: ${params.gp.learning_rate}
+  learning_rate: 0.001 
   use_feature_extractor: False
   use_norm: ${use_norm_baseline}
   jitter: 1e-4

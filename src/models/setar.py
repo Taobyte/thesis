@@ -94,6 +94,7 @@ class Model(torch.nn.Module):
         self,
         n_regimes: int = 2,
         dropout: float = 0.2,
+        input_dropout: float = 0.0,
         look_back_window: int = 5,
         prediction_window: int = 3,
         look_back_channel_dim: int = 2,
@@ -128,6 +129,7 @@ class Model(torch.nn.Module):
             torch.nn.Linear(n_regimes, n_regimes),
         )
         self.head_dropout = HeadDropout(dropout)
+        self.dropout = torch.nn.Dropout(input_dropout)
 
         self.use_last = use_last
         self.revin = revin
@@ -135,6 +137,7 @@ class Model(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.rev(x, "norm") if self.revin else self.rev(x)
+        x = self.dropout(x)
 
         # flatten the input tensor
         x_reshaped = rearrange(x, "B L C -> B (L C)")

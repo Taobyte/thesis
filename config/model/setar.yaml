@@ -10,6 +10,7 @@ model:
   # n_regimes = 1 is equivalent to batched linear regression
   n_regimes: 8 # number of regimes
   dropout: 0.0
+  input_dropout: 0.0
 
   use_last: False
   revin: True
