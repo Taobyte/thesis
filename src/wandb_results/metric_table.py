@@ -28,25 +28,25 @@ def plot_best_lbw(
 ):
     assert len(prediction_window) == 1
     pw = prediction_window[0]
-    metrics_to_keep = METRICS  
+    metrics_to_keep = METRICS
     for metric in ["NRMSE", "ND"]:
         metrics_to_keep.remove(metric)
 
-    metrics_to_keep += ["LBW"] # also include the best LBW
+    metrics_to_keep += ["LBW"]  # also include the best LBW
     n_metrics = len(metrics_to_keep)
     cols: dict[str, list[float]] = dict()
 
     dataset_col: List[str] = []
     for dataset_name in datasets:
-            human_readable_name = dataset_to_name[dataset_name]
-            dataset_col.append(rf"\multirow{{{n_metrics}}}{{*}}{{{human_readable_name}}}")
-            for _ in range(len(metrics_to_keep) - 1):
-                dataset_col.append("")
-    
+        human_readable_name = dataset_to_name[dataset_name]
+        dataset_col.append(rf"\multirow{{{n_metrics}}}{{*}}{{{human_readable_name}}}")
+        for _ in range(len(metrics_to_keep) - 1):
+            dataset_col.append("")
+
     cols["Datasets"] = dataset_col
 
     metric_col: list[str] = []
-    metric_col= metrics_to_keep * len(datasets)
+    metric_col = metrics_to_keep * len(datasets)
     cols["Metrics"] = metric_col
 
     for model_name in MODELS:
@@ -96,7 +96,7 @@ def plot_best_lbw(
 
     df = pd.DataFrame(cols)
 
-    n_best = 3 # take the best three values and make them bold, double underlined and underlined
+    n_best = 3  # take the best three values and make them bold, double underlined and underlined
 
     # make best value bold
     for i in range(len(df)):
@@ -120,9 +120,11 @@ def plot_best_lbw(
         best_val = df.iloc[i, best_indices[2]]
         worst_val = df.iloc[i, worst_idx]
 
-        df.iloc[i, best_indices[0]] =  rf"\underline{{{float(third_best_val):.3f}}}"
-        df.iloc[i,best_indices[1]] =  rf"\underline{{\underline{{{float(second_best_val):.3f}}}}}" 
-        df.iloc[i,best_indices[2]] = rf"\textbf{{{float(best_val):.3f}}}"
+        df.iloc[i, best_indices[0]] = rf"\underline{{{float(third_best_val):.3f}}}"
+        df.iloc[i, best_indices[1]] = (
+            rf"\underline{{\underline{{{float(second_best_val):.3f}}}}}"
+        )
+        df.iloc[i, best_indices[2]] = rf"\textbf{{{float(best_val):.3f}}}"
         df.iloc[i, worst_idx] = rf"\textit{{{float(worst_val):.3f}}}"
 
         for j in range(len(current_row)):
