@@ -17,7 +17,7 @@ pl_model:
   optimizer_name: "lbfgs"
 
 trainer:
-  max_epochs: 100
+  max_epochs: 10000
   use_early_stopping: True
   patience: 2
 
