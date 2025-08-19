@@ -152,7 +152,7 @@ class BaseDataModule(L.LightningDataModule):
         # pad_sequence pads with 0s by default, batch_first=True -> (B, L, C)
         padded = pad_sequence(series, batch_first=True, padding_value=0.0)
 
-        return padded, lengths
+        return self.postprocess_series(padded), lengths
         # assumes that we have batch size = 1!
         # max_length = max([len(s) for s in series])
         # train_series = (series[0]).unsqueeze(0)

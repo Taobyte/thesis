@@ -92,8 +92,9 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             inputs = concatenated.unfold(
                 dimension=1, size=self.look_back_window, step=1
             )
+
             inputs = inputs[:, :-1, :, :]
-            inputs = rearrange(inputs, "B F C L -> (B F) (C L)")
+            inputs = rearrange(inputs, "B F C L -> (B F) (L C)")
 
         else:
             padded = torch.cat(

@@ -1,8 +1,7 @@
 import numpy as np
 import torch
 
-from typing import Any
-from numpy.typing import NDArray
+from typing import Any, Union, Tuple
 
 from src.datasets.wildppg_dataset import WildPPGDataset, WildPPGDataModule
 
@@ -38,36 +37,31 @@ class LWildPPGDataset(WildPPGDataset):
         self.max = np.max(timeseries, axis=0)
 
     def __len__(self) -> int:
-        return len(self.timeseries) - self.window_length + 1
+        return (
+            1
+            if self.return_whole_series
+            else len(self.timeseries) - self.window_length + 1
+        )
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
-        window_pos = idx
-        look_back_window = self.timeseries[
-            window_pos : window_pos + self.look_back_window
-        ]
-        prediction_window = self.timeseries[
-            window_pos + self.look_back_window : window_pos + self.window_length
-        ]
+    def __getitem__(
+        self, idx: int
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        if self.return_whole_series:
+            tensor_series = torch.from_numpy(self.timeseries).float()
+            return tensor_series
+        else:
+            window_pos = idx
+            look_back_window = self.timeseries[
+                window_pos : window_pos + self.look_back_window
+            ]
+            prediction_window = self.timeseries[
+                window_pos + self.look_back_window : window_pos + self.window_length
+            ]
 
-        look_back_window = torch.from_numpy(look_back_window).float()
-        prediction_window = torch.from_numpy(prediction_window[:, :]).float()
+            look_back_window = torch.from_numpy(look_back_window).float()
+            prediction_window = torch.from_numpy(prediction_window[:, :]).float()
 
-        return look_back_window, prediction_window
-
-    def get_normalized_timeseries(self) -> NDArray[np.float32]:
-        assert self.flag == "train"
-        if self.normalization == "global":
-            return (self.timeseries - self.mean) / (self.std + 1e-8)
-        elif self.normalization == "minmax":
-            return (self.timeseries - self.min) / (self.max - self.min)
-        elif self.normalization == "difference":
-            ts = self.timeseries
-            if ts.ndim == 1:
-                pad = np.zeros((1,))
-            else:
-                pad = np.zeros((1, ts.shape[-1]))
-            return np.concatenate([pad, np.diff(ts, axis=0)], axis=0)
-        return self.timeseries
+            return look_back_window, prediction_window
 
 
 class LWildPPG(WildPPGDataModule):
@@ -99,7 +93,15 @@ class LWildPPG(WildPPGDataModule):
             use_dynamic_features=self.use_dynamic_features,
         )
         if stage == "fit":
-            self.train_dataset = LWildPPGDataset(flag="train", **common_args)
-            self.val_dataset = LWildPPGDataset(flag="val", **common_args)
+            self.train_dataset = LWildPPGDataset(
+                flag="train",
+                return_whole_series=self.return_whole_series,
+                **common_args,
+            )
+            self.val_dataset = LWildPPGDataset(
+                flag="val", return_whole_series=self.return_whole_series, **common_args
+            )
         if stage == "test":
-            self.test_dataset = LWildPPGDataset(flag="test", **common_args)
+            self.test_dataset = LWildPPGDataset(
+                flag="test", return_whole_series=False, **common_args
+            )

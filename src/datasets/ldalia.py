@@ -80,7 +80,15 @@ class LDalia(DaLiADataModule):
             window_statistic=self.window_statistic,
         )
         if stage == "fit":
-            self.train_dataset = LDaliaDataset(flag="train", **common_args)
-            self.val_dataset = LDaliaDataset(flag="val", **common_args)
+            self.train_dataset = LDaliaDataset(
+                flag="train",
+                return_whole_series=self.return_whole_series,
+                **common_args,
+            )
+            self.val_dataset = LDaliaDataset(
+                flag="val", return_whole_series=self.return_whole_series, **common_args
+            )
         if stage == "test":
-            self.test_dataset = LDaliaDataset(flag="test", **common_args)
+            self.test_dataset = LDaliaDataset(
+                flag="test", return_whole_series=False, **common_args
+            )
