@@ -59,6 +59,25 @@ def tune(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> float:
     return avg_val_loss
 
 
+def tune_local(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> float:
+    results: List[float] = []
+    for participant in config.dataset.participants:
+        datamodule, pl_model, trainer, callbacks = setup(config, wandb_logger, run_name)
+        datamodule.participant = participant
+        checkpoint_callback = callbacks[0]
+        trainer.fit(pl_model, datamodule=datamodule)
+        if config.model.name not in config.special_models:
+            val_results = trainer.validate(datamodule=datamodule, ckpt_path="best")
+        else:
+            val_results = trainer.validate(pl_model, datamodule=datamodule)
+        results.append(val_results[0]["val_loss_epoch"])
+        delete_checkpoint(trainer, checkpoint_callback)
+        del datamodule, pl_model, trainer, callbacks
+
+    averaged_results = float(np.mean(results))
+    return averaged_results
+
+
 def train_test_global(
     config: DictConfig, wandb_logger: WandbLogger, run_name: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:

@@ -1,11 +1,11 @@
 defaults:
   - wildppg
 
-name: "fwildppg"
+name: "lwildppg"
 participants: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
 datamodule:
-  _target_: src.datasets.fwildppg.FWildPPG
+  _target_: src.datasets.lwildppg.LWildPPGp
   participant: 0
 
 

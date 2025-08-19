@@ -8,13 +8,13 @@ model:
 
   # tunable parameters
   look_back_window: ${look_back_window}
-  n_states: 8
+  n_states: 1 
 
 pl_model: 
   _target_: src.models.msar.HMM
-  learning_rate: 0.001
+  learning_rate: 0.1
   weight_decay: 0.0
-  optimizer_name: "adamw"
+  optimizer_name: "lbfgs"
 
 trainer:
   max_epochs: 100

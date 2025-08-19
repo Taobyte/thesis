@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from src.datasets.wildppg_dataset import WildPPGDataset, WildPPGDataModule
 
 
-class FWildPPGDataset(WildPPGDataset):
+class LWildPPGDataset(WildPPGDataset):
     def __init__(
         self,
         flag: str = "train",
@@ -70,7 +70,7 @@ class FWildPPGDataset(WildPPGDataset):
         return self.timeseries
 
 
-class FWildPPG(WildPPGDataModule):
+class LWildPPG(WildPPGDataModule):
     def __init__(
         self,
         participant: int = 1,
@@ -99,7 +99,7 @@ class FWildPPG(WildPPGDataModule):
             use_dynamic_features=self.use_dynamic_features,
         )
         if stage == "fit":
-            self.train_dataset = FWildPPGDataset(flag="train", **common_args)
-            self.val_dataset = FWildPPGDataset(flag="val", **common_args)
+            self.train_dataset = LWildPPGDataset(flag="train", **common_args)
+            self.val_dataset = LWildPPGDataset(flag="val", **common_args)
         if stage == "test":
-            self.test_dataset = FWildPPGDataset(flag="test", **common_args)
+            self.test_dataset = LWildPPGDataset(flag="test", **common_args)

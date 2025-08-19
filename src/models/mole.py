@@ -163,7 +163,7 @@ class Model(torch.nn.Module):
         return out_reshaped_rev[:, :, : self.target_channel_dim]
 
 
-class SETAR(BaseLightningModule):
+class MOLE(BaseLightningModule):
     def __init__(
         self,
         model: Model,

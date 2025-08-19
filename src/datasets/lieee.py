@@ -9,7 +9,7 @@ from src.datasets.ieee_dataset import IEEEDataModule
 from src.datasets.ieee_dataset import IEEEDataset
 
 
-class FIEEEDataset(IEEEDataset):
+class LIEEEDataset(IEEEDataset):
     def __init__(
         self,
         flag: str = "train",
@@ -72,7 +72,7 @@ class FIEEEDataset(IEEEDataset):
         return self.timeseries
 
 
-class FIEEE(IEEEDataModule):
+class LIEEE(IEEEDataModule):
     def __init__(
         self,
         participant: int = 1,
@@ -102,7 +102,7 @@ class FIEEE(IEEEDataModule):
             use_dynamic_features=self.use_dynamic_features,
         )
         if stage == "fit":
-            self.train_dataset = FIEEEDataset(flag="train", **common_args)
-            self.val_dataset = FIEEEDataset(flag="val", **common_args)
+            self.train_dataset = LIEEEDataset(flag="train", **common_args)
+            self.val_dataset = LIEEEDataset(flag="val", **common_args)
         if stage == "test":
-            self.test_dataset = FIEEEDataset(flag="test", **common_args)
+            self.test_dataset = LIEEEDataset(flag="test", **common_args)

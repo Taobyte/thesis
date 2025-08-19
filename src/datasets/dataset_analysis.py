@@ -10,7 +10,7 @@ import pycatch22
 from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.stattools import arma_order_select_ic, bds
+from statsmodels.tsa.stattools import bds
 from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
 from statsmodels.stats.diagnostic import het_arch
 from sklearn.preprocessing import StandardScaler
@@ -25,7 +25,7 @@ from sklearn.feature_selection import mutual_info_regression
 from typing import List
 from numpy.typing import NDArray
 from collections import defaultdict
-
+from src.normalization import local_z_norm_numpy, min_max_norm_numpy
 
 from src.constants import dataset_to_name
 
@@ -34,6 +34,115 @@ from src.utils import (
     compute_input_channel_dims,
     get_optuna_name,
 )
+
+
+def visualize_histogram(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        data = datamodule.train_dataset.data
+        logs = []
+        for series in data:
+            heartrate = series[:, 0]
+            log_ratio = np.log(heartrate[1:] / heartrate[:-1])
+            logs.append(log_ratio)
+
+        concatenated = np.concatenate(logs)
+        print(f"Mean {np.mean(concatenated)}")
+        print(f"Std {np.std(concatenated)}")
+        fig = px.histogram(concatenated, nbins=30, title=f"Histogram {datamodule.name}")
+        fig.show()
+
+
+def visualize_norm(datamodules: List[LightningDataModule]):
+    n_series_per_dataset = 1
+    pos = 1
+    n_datasets = len(datamodules)
+    row_names = []
+    for d in datamodules:
+        name = dataset_to_name[d.name]
+        for _ in range(n_series_per_dataset):
+            row_names.append(name + " HR")
+            row_names.append(name + " Norm")
+
+    fig = make_subplots(
+        rows=2 * n_series_per_dataset * n_datasets, cols=1, row_titles=row_names
+    )
+    for j, datamodule in enumerate(datamodules):
+        train_dataset = datamodule.train_dataset
+        dataset = train_dataset.data
+        pos = min(len(dataset) - 1, pos)
+        dataset = dataset[pos : pos + n_series_per_dataset]
+        offset = 2 * j * n_series_per_dataset
+        mean = train_dataset.mean[0]
+        std = train_dataset.std[0]
+        for i, series in tqdm(enumerate(dataset)):
+            heartrate = series[:, 0]
+            globally = (heartrate - mean) / (std + 1e-8)
+            locally, _, _ = local_z_norm_numpy(heartrate[np.newaxis, :, np.newaxis])
+            locally = locally[0, :, 0]
+            min_max, _, _ = min_max_norm_numpy(heartrate[np.newaxis, :, np.newaxis])
+            min_max = min_max[0, :, 0]
+            differenced = np.diff(heartrate)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(heartrate))) * 2,
+                    y=heartrate,
+                    showlegend=True,
+                    name="Heartrate",
+                    opacity=1.0,
+                ),
+                row=2 * i + 1 + offset,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(globally))) * 2,
+                    y=globally,
+                    showlegend=True,
+                    name="Global",
+                    opacity=0.7,
+                ),
+                row=2 * i + 2 + offset,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(locally))) * 2,
+                    y=locally,
+                    showlegend=True,
+                    name="Local",
+                    opacity=0.7,
+                ),
+                row=2 * i + 2 + offset,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(differenced))) * 2,
+                    y=differenced,
+                    showlegend=True,
+                    name="Difference",
+                    opacity=0.7,
+                ),
+                row=2 * i + 2 + offset,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(min_max))) * 2,
+                    y=min_max,
+                    showlegend=True,
+                    name="Min-Max",
+                    opacity=0.7,
+                ),
+                row=2 * i + 2 + offset,
+                col=1,
+            )
+
+    fig.update_xaxes(
+        title_text="Seconds", row=2 * n_series_per_dataset * n_datasets, col=1
+    )
+    fig.show()
 
 
 def forecastibility(datamodules: List[LightningDataModule]):
@@ -138,16 +247,17 @@ def print_infos(datamodules: List[LightningDataModule]):
         print(f"Min Length: {min(lengths)}")
         print(f"MaxLength: {max(lengths)}")
 
+
 def max_pearson_corr(y, x, max_lag=20):
-    lags = np.arange(-max_lag, max_lag+1)
+    lags = np.arange(-max_lag, max_lag + 1)
     corr = []
     for lag in lags:
         if lag < 0:
-            corr.append(np.corrcoef(x[:lag], y[-lag:])[0,1])
+            corr.append(np.corrcoef(x[:lag], y[-lag:])[0, 1])
         elif lag > 0:
-            corr.append(np.corrcoef(x[lag:], y[:-lag])[0,1])
+            corr.append(np.corrcoef(x[lag:], y[:-lag])[0, 1])
         else:
-            corr.append(np.corrcoef(x, y)[0,1])
+            corr.append(np.corrcoef(x, y)[0, 1])
     max_cor = np.abs(np.array(corr)).max()
     max_lag = lags[np.abs(np.array(corr)).argmax()]
     return float(max_cor), int(max_lag)
@@ -170,6 +280,7 @@ def max_pearson(datamodules: List[LightningDataModule]):
         mean_pearson = np.mean(pearsons)
         median_lag = np.median(best_lags)
         print(f"Mean pearson {mean_pearson} | median lag {median_lag} ")
+
 
 def visualize_timeseries(datamodules: List[LightningDataModule]):
     n_series_per_dataset = 1
@@ -339,18 +450,19 @@ def bds_test(datamodules: List[LightningDataModule]):
 def arch_test(datamodules: List[LightningDataModule]):
     pass
 
+
 def compute_catch22_correlation(datamodules: List[LightningDataModule]):
     for datamodule in datamodules:
-        data = datamodule.train_dataset.data 
+        data = datamodule.train_dataset.data
         correlations: List[float] = []
         for series in data:
             heartrate = series[:, 0]
             activity = series[:, 1]
             h_res = pycatch22.catch22_all(heartrate)["values"]
             a_res = pycatch22.catch22_all(activity)["values"]
-            correlation = np.corrcoef(h_res,a_res, rowvar=False)
-            correlations.append(correlation[0,1])
-        
+            correlation = np.corrcoef(h_res, a_res, rowvar=False)
+            correlations.append(correlation[0, 1])
+
         final_cor = np.mean(correlations) + 1 / (1 + np.std(correlations))
         print(f"Mean {np.mean(correlations)}")
         print(f"STD {np.std(correlations)}")
@@ -395,7 +507,9 @@ if __name__ == "__main__":
             "bds",
             "forecastibility",
             "pca",
-            "catch22"
+            "catch22",
+            "norm_viz",
+            "beliefppg",
         ],
         required=True,
     )
@@ -417,10 +531,13 @@ if __name__ == "__main__":
         datamodule = instantiate(cfg.dataset.datamodule)
         datamodule.setup("fit")
         datamodules.append(datamodule)
+    if args.type == "beliefppg":
+        visualize_histogram(datamodules)
+    elif args.type == "norm_viz":
+        visualize_norm(datamodules)
     if args.type == "catch22":
         compute_catch22_correlation(datamodules)
     elif args.type == "pca":
-
         point_size = 16
 
         def series_to_stats(series: NDArray[np.float32], nperseg: int = 256):
@@ -432,16 +549,16 @@ if __name__ == "__main__":
             minimum = np.min(heartrate)
             maximum = np.max(heartrate)
             median = np.median(heartrate)
-            pacf_stat: List[float] = pacf(heartrate,nlags=3)
+            pacf_stat: List[float] = pacf(heartrate, nlags=3)
             pacf1 = pacf_stat[1]
             pacf2 = pacf_stat[2]
             pacf3 = pacf_stat[3]
             max_r, lag = max_pearson_corr(heartrate, activity)
             result = adfuller(heartrate, regression="ctt")
             granger = grangercausalitytests(series, [LAG])[LAG][0]["ssr_ftest"][0]
-            mi = mutual_info_regression(activity.reshape(-1,1), heartrate)
+            mi = mutual_info_regression(activity.reshape(-1, 1), heartrate)
 
-            sf= 0.5 
+            sf = 0.5
             H = ant.spectral_entropy(
                 heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
             )
@@ -449,10 +566,40 @@ if __name__ == "__main__":
             # TODO
             # return dict(mean=mean, std=std, minimum=minimum, maximum=maximum, median=median,pacf1=pacf1, pacf2=pacf2, pacf3=pacf3)
 
-            return [mean, std, minimum, maximum, median, max_r, lag, pacf1, pacf2, pacf3,result[0], granger, mi, res]
+            return [
+                mean,
+                std,
+                minimum,
+                maximum,
+                median,
+                max_r,
+                lag,
+                pacf1,
+                pacf2,
+                pacf3,
+                result[0],
+                granger,
+                mi,
+                res,
+            ]
 
-
-        columns = ["mean", "std", "min", "max", "median", "max_r", "lag", "pacf1", "pacf2", "pacf3", "adf", "granger", "mi", "forecastibility", "Dataset"]
+        columns = [
+            "mean",
+            "std",
+            "min",
+            "max",
+            "median",
+            "max_r",
+            "lag",
+            "pacf1",
+            "pacf2",
+            "pacf3",
+            "adf",
+            "granger",
+            "mi",
+            "forecastibility",
+            "Dataset",
+        ]
         rows: List[float] = []
         for i, datamodule in enumerate(datamodules):
             data = datamodule.train_dataset.data
@@ -460,12 +607,12 @@ if __name__ == "__main__":
             nperseg = 32 if datamodule.name == "ieee" else 256
             for series in data:
                 series_stats = series_to_stats(series, nperseg=nperseg)
-                series_stats += [dataset_name] # dataset indicator
+                series_stats += [dataset_name]  # dataset indicator
                 rows.append(series_stats)
-        
+
         df = pd.DataFrame(rows, columns=columns)
 
-        color_col = "Dataset"   # column to color points by
+        color_col = "Dataset"  # column to color points by
         n_components = 2
 
         X = df.values[:, :-1]
@@ -473,48 +620,41 @@ if __name__ == "__main__":
         pca = PCA(n_components=n_components, random_state=0)
         Z = pca.fit_transform(X_scaled)
 
-
-        pca_df = pd.DataFrame({
-            "PC1": Z[:, 0],
-            "PC2": Z[:, 1],
-            color_col: df[color_col]
-        })
+        pca_df = pd.DataFrame(
+            {"PC1": Z[:, 0], "PC2": Z[:, 1], color_col: df[color_col]}
+        )
 
         fig = px.scatter(
             pca_df,
-            x="PC1", y="PC2",
+            x="PC1",
+            y="PC2",
             color="Dataset",  # Now legend will show the dataset name
-            symbol=color_col, # This keeps your 3-color grouping separate
+            symbol=color_col,  # This keeps your 3-color grouping separate
             opacity=0.85,
             labels={
-                "PC1": f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)",
-                "PC2": f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)"
+                "PC1": f"PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)",
+                "PC2": f"PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)",
             },
             # title="PCA projection",
-            color_discrete_sequence=px.colors.qualitative.Set1  
+            color_discrete_sequence=px.colors.qualitative.Set1,
         )
 
         fig.update_traces(marker=dict(size=point_size))  # points in the plot
-        fig.update_layout(
-            coloraxis_showscale=False
-        )
+        fig.update_layout(coloraxis_showscale=False)
 
         fig.update_layout(
             xaxis_title=dict(
-                text=f"<b>PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)</b>",
-                font=dict(size=18)
+                text=f"<b>PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)</b>",
+                font=dict(size=18),
             ),
             yaxis_title=dict(
-                text=f"<b>PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)</b>",
-                font=dict(size=18)
-            )
+                text=f"<b>PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)</b>",
+                font=dict(size=18),
+            ),
         )
 
         fig.update_layout(
-            legend=dict(
-                font=dict(size=24),
-                itemsizing="constant"
-            ),
+            legend=dict(font=dict(size=24), itemsizing="constant"),
         )
 
         fig.show()
@@ -525,31 +665,34 @@ if __name__ == "__main__":
         tsne = TSNE(
             n_components=2,
             perplexity=perplexity,
-            init="pca",            
+            init="pca",
             learning_rate="auto",
             n_iter=1000,
             random_state=42,
-            verbose=0
+            verbose=0,
         )
         Z_tsne = tsne.fit_transform(X_scaled)
 
-        tsne_df = pd.DataFrame({
-            "TSNE1": Z_tsne[:, 0],
-            "TSNE2": Z_tsne[:, 1],
-            color_col: pca_df[color_col],     
-        })
+        tsne_df = pd.DataFrame(
+            {
+                "TSNE1": Z_tsne[:, 0],
+                "TSNE2": Z_tsne[:, 1],
+                color_col: pca_df[color_col],
+            }
+        )
 
         fig_tsne = px.scatter(
             tsne_df,
-            x="TSNE1", y="TSNE2",
+            x="TSNE1",
+            y="TSNE2",
             color="Dataset",
             symbol=color_col,
             opacity=0.85,
-            color_discrete_sequence=px.colors.qualitative.Set1
+            color_discrete_sequence=px.colors.qualitative.Set1,
         )
         fig_tsne.update_traces(marker=dict(size=point_size))
         fig_tsne.show()
-        
+
     elif args.type == "viz":
         visualize_timeseries(datamodules)
     elif args.type == "infos":

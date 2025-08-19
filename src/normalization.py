@@ -90,6 +90,27 @@ def local_z_norm_numpy(
     return normed, mean, std
 
 
+def min_max_norm_numpy(
+    batch: NDArray[np.float32],
+    minimum: Optional[NDArray[np.float32]] = None,
+    maximum: Optional[NDArray[np.float32]] = None,
+):
+    if minimum is None and maximum is None:
+        minimum = np.min(batch, axis=1, keepdims=True)
+        maximum = np.max(batch, axis=1, keepdims=True)
+    assert minimum is not None and maximum is not None
+
+    _, _, C = batch.shape
+    _, _, c_min = minimum.shape
+    n_channels_to_norm = min(C, c_min)
+
+    normed = (batch[:, :, :n_channels_to_norm] - minimum[:, :, :n_channels_to_norm]) / (
+        maximum[:, :, :n_channels_to_norm] - minimum[:, :, :n_channels_to_norm]
+    )
+
+    return normed, minimum, maximum
+
+
 def undo_differencing(look_back_window: torch.Tensor, predicted_deltas: torch.Tensor):
     _, _, c = predicted_deltas.shape
     last_value = look_back_window[:, -1:, :c]

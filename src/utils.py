@@ -98,26 +98,14 @@ def create_group_run_name(
     normalization: str = "global",
     experiment_name: str = "endo_only",
 ) -> Tuple[str, str, list[str]]:
-    hr_or_ppg = "hr" if use_heart_rate else "ppg"
-    dataset_to_signal_type = {
-        "dalia": hr_or_ppg,
-        "wildppg": hr_or_ppg,
-        "ieee": hr_or_ppg,
-        "fdalia": "hr",
-        "fieee": "hr",
-        "fwildppg": "hr",
-    }
-
-    signal_type = dataset_to_signal_type[dataset_name]
-
     fold = ""
     if dataset_name in fold_datasets:
         fold = f"fold_{fold_nr}_"
 
-    group_name = f"{normalization}_{dataset_name}_{signal_type}_{experiment_name}_{look_back_window}_{prediction_window}"
-    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{signal_type}_{experiment_name}_{look_back_window}_{prediction_window}"
+    group_name = f"{normalization}_{dataset_name}_{experiment_name}_{look_back_window}_{prediction_window}"
+    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}"
 
-    tags = [dataset_name, model_name, signal_type, normalization, experiment_name]
+    tags = [dataset_name, model_name, normalization, experiment_name]
     if dataset_name in fold_datasets:
         tags.append(fold)
 

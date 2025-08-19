@@ -7,7 +7,7 @@ from torch import Tensor
 from src.datasets.dalia_dataset import DaLiADataset, DaLiADataModule
 
 
-class FDaliaDataset(DaLiADataset):
+class LDaliaDataset(DaLiADataset):
     def __init__(
         self,
         flag: str = "train",
@@ -47,7 +47,7 @@ class FDaliaDataset(DaLiADataset):
         return look_back_window.float(), prediction_window.float()
 
 
-class FDalia(DaLiADataModule):
+class LDalia(DaLiADataModule):
     def __init__(
         self,
         participant: int = 1,
@@ -80,7 +80,7 @@ class FDalia(DaLiADataModule):
             window_statistic=self.window_statistic,
         )
         if stage == "fit":
-            self.train_dataset = FDaliaDataset(flag="train", **common_args)
-            self.val_dataset = FDaliaDataset(flag="val", **common_args)
+            self.train_dataset = LDaliaDataset(flag="train", **common_args)
+            self.val_dataset = LDaliaDataset(flag="val", **common_args)
         if stage == "test":
-            self.test_dataset = FDaliaDataset(flag="test", **common_args)
+            self.test_dataset = LDaliaDataset(flag="test", **common_args)

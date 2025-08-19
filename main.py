@@ -7,7 +7,7 @@ import lightning as L
 from omegaconf import DictConfig, OmegaConf
 from typing import Optional
 
-from src.train_test_tune import tune, train_test_global, train_test_local
+from src.train_test_tune import tune, tune_local, train_test_global, train_test_local
 from src.utils import (
     setup_wandb_logger,
     get_optuna_name,
@@ -35,14 +35,19 @@ def main(config: DictConfig) -> Optional[float]:
 
     # print(OmegaConf.to_yaml(config))
     if config.tune:
-        avg_val_loss = tune(config, wandb_logger, run_name)
+        if config.dataset.name in config.global_datasets:
+            avg_val_loss = tune(config, wandb_logger, run_name)
+        elif config.dataset.name in config.local_datasets:
+            avg_val_loss = tune_local(config, wandb_logger, run_name)
+        else:
+            raise NotImplementedError()
         return avg_val_loss
     else:
         if config.dataset.name in config.global_datasets:
             assert config.dataset.name in ["ieee", "dalia", "wildppg"]
             train_test_global(config, wandb_logger, run_name)
         elif config.dataset.name in config.local_datasets:
-            assert config.dataset.name in ["fieee", "fdalia", "fwildppg"]
+            assert config.dataset.name in ["lieee", "ldalia", "lwildppg"]
             train_test_local(config, wandb_logger, run_name)
         else:
             raise NotImplementedError()

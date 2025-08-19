@@ -16,6 +16,7 @@ MODELS: List[str] = [
     "patchtst",
     "timexer",
     "gpt4ts",
+    "nbeatsx",
 ]
 
 BASELINES: List[str] = [
@@ -86,7 +87,9 @@ dataset_to_name = {
     "dalia": "DaLiA",
     "wildppg": "WildPPG",
     "ieee": "IEEE",
-    "mhc6mwt": "My Heart Counts Six-Minute Walk Test",
+    "ldalia": "Dalia",
+    "lwildppg": "LWildPPG",
+    "liee": "LIEEE",
 }
 
 # Human-readable names for experiments

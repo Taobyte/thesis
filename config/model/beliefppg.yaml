@@ -1,0 +1,16 @@
+name: "beliefppg"
+
+model: 
+  _target_: src.models.beliefppg.Model
+
+pl_model: 
+  _target_: src.models.beliefppg.BeliefPPG
+  prediction_window: ${prediction_window}
+
+trainer:
+  max_epochs: 1
+  use_early_stopping: False
+  patience: 0 
+
+data:
+  batch_size: 256
