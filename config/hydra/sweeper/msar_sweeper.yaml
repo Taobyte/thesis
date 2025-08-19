@@ -3,12 +3,12 @@ defaults:
 
 params:
 
-  model.pl_model.optimizer_name: choice("adam", "adamw")
-  model.pl_model.learning_rate: choice(0.0001, 0.001, 0.01, 0.1) # tag(log, interval(5e-4, 1e-2))
+  model.pl_model.optimizer_name: choice("lbfgs", "adamw")
+  model.pl_model.learning_rate: choice(0.001, 0.01, 0.1) # tag(log, interval(5e-4, 1e-2))
   model.pl_model.weight_decay: choice(0.0, 1e-6, 1e-5, 1e-4, 5e-4) # tag(log, interval(1e-5, 1.0))
 
   model.model.n_states: choice(1,2,4,8,16) 
 
-  model.data.batch_size: choice(2,4,8,16)
+  model.data.batch_size: 16
 
 
