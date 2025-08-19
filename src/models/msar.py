@@ -16,6 +16,8 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         prediction_window: int = 3,
         look_back_channel_dim: int = 2,
         target_channel_dim: int = 1,
+        jitter: float = 1e-6,
+        sigma_min: float = 1e-2,
     ):
         super().__init__()
         self.n_states = n_states
@@ -23,6 +25,9 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         self.prediction_window = prediction_window
         self.look_back_channel_dim = look_back_channel_dim
         self.target_channel_dim = target_channel_dim
+
+        self.jitter = jitter
+        self.sigma_min = sigma_min
 
         # HMM parameters
         self.transition_matrix = torch.nn.Parameter(torch.randn(n_states, n_states))
@@ -71,7 +76,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
     def get_covariance_matrices(self):
         """Get positive definite covariance matrices using Cholesky decomposition"""
-        covars = [torch.diag(torch.exp(v)) for v in self.covar_chol]
+        covars = [torch.diag(F.softplus(v) + self.sigma_min) for v in self.covar_chol]
         #  for chol in self.covar_chol:
         #      # Make sure diagonal is positive
         #      chol_tril = torch.tril(chol)
@@ -129,9 +134,9 @@ class LinearAutoregressiveHMM(torch.nn.Module):
                 self.means[state].unsqueeze(0).expand(B * L, -1)
             )  # (B,C)
             covar = covars[state]  # (C, C)
-            covar_reg = covar + 1e-6 * torch.eye(C, device=covar.device).unsqueeze(
-                0
-            ).expand(B * L, -1, -1)
+            covar_reg = covar + self.jitter * torch.eye(
+                C, device=covar.device
+            ).unsqueeze(0).expand(B * L, -1, -1)
 
             # add linear autoregressive compontent b=B*L d=C
             ar_component = self.W[state](inputs)  # (B*L, C)
