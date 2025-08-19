@@ -3,10 +3,14 @@ defaults:
 
 params:
   
+  model.pl_model.optimizer_name: choice("adam", "adamw")
   model.pl_model.learning_rate: tag(log, interval(1e-5, 0.01))
-  model.pl_model.optimizer_name: choice("adam", "lbfgs", "adamw")
+  model.pl_model.weight_decay: choice(0.0, 1e-6, 1e-5, 1e-4, 5e-4)
   
-  model.data.batch_size: choice(8,32, 64, 256,100000)
+  model.data.batch_size: choice(8,32,64,256,1024)
 
-  model.model.hidden_dim: choice(1,2,4,8,16,32,64)
-  model.model.n_regimes: choice(1,2,4,8,16) 
+  model.model.n_regimes: choice(1,2,4,8,16,32) 
+  model.model.use_last: choice(True, False)
+  model.model.dropout: choice(0.0, 0.1, 0.2)
+  model.model.input_dropout: choice(0.0, 0.1, 0.2, 0.3, 0.4, 0.5)
+
