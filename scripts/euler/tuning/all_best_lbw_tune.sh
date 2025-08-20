@@ -1,7 +1,7 @@
 N_TRIALS=50
 PREDICTION_WINDOW=3
-BASELINE_NONE=(linear hlinear setar kalmanfilter xgboost hxgboost)
-BASELINE_DL_GLOBAL=(gp mlp timesnet simpletm adamshyper patchtst timexer gpt4ts)
+BASELINE_NONE=(linear xgboost)
+BASELINE_DL_GLOBAL=(mole msar kalmanfilter gp mlp timesnet simpletm adamshyper patchtst timexer gpt4ts nbeatsx)
 
 for MODEL in "${BASELINE_NONE[@]}"
 do
