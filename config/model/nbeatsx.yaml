@@ -24,9 +24,6 @@ model:
   dropout_prob_theta: 0.0
   dropout_prob_exogenous: 0.0
 
-
-
-
   
 pl_model: 
   _target_: src.models.nbeatsx.NBeatsX
@@ -34,6 +31,7 @@ pl_model:
   weight_decay: 0.0 # is in (1e-5, 1.0)
   n_lr_decay_steps: 3 # the authors half the learning rate at most 3 times per training run
   loss_fn: "MAE" # the authors use the L1 loss instead of MSE
+  use_norm: ${use_norm_dl}
 
 trainer: 
   max_epochs: 1000

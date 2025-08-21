@@ -1,0 +1,16 @@
+# @package _global_
+
+look_back_window: 31
+
+model:
+  pl_model:
+    optimizer_name: "adamw"
+    learning_rate: 0.0078
+    weight_decay: 0.0005
+  model:
+    n_regimes: 8
+    use_last: False 
+    dropout: 0.0 
+    input_dropout: 0.3
+  data:
+    batch_size: 64

@@ -669,6 +669,7 @@ class NBeatsX(BaseLightningModule):
         loss_fn: str = "MSE",
         n_lr_decay_steps: int = 3,
         lr_decay: float = 0.5,
+        use_norm: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -682,19 +683,25 @@ class NBeatsX(BaseLightningModule):
         self.criterion = get_loss_fn(loss_fn=loss_fn)
         self.mae_criterion = nn.L1Loss()
 
+        self.use_norm = use_norm
+
     def model_forward(self, look_back_window: t.Tensor):
+        if self.use_norm:
+            means = look_back_window.mean(1, keepdim=True).detach()
+            look_back_window = look_back_window - means
+            stdev = t.sqrt(
+                t.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            look_back_window /= stdev
         B, T, C = look_back_window.shape
         device = look_back_window.device
         heartrate = look_back_window[:, :, 0]  # (B, T)
 
         if self.use_dynamic_features:
             activity = look_back_window[:, :, 1].unsqueeze(1)  # (B, 1, T)
-            # For future: you need actual future activity values, not zeros
         else:
-            # If no exogenous features, you might need to handle this differently
-            # Option 1: Use dummy features with proper shape
             activity = t.zeros((B, 1, T), device=device)  # (B, 1, T)
-        outsample_x_t = t.zeros((B, 1, self.prediction_window),device=device)
+        outsample_x_t = t.zeros((B, 1, self.prediction_window), device=device)
         prediction = self.model.forward(
             insample_y=heartrate,  # (B, T)
             insample_x_t=activity,  # (B, 1, T)
@@ -704,7 +711,18 @@ class NBeatsX(BaseLightningModule):
             return_decomposition=False,
         )
 
-        return prediction.unsqueeze(-1)
+        prediction = prediction.unsqueeze(-1)
+
+        if self.use_norm:
+            prediction = prediction * (
+                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+            prediction = prediction + (
+                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+            )
+
+        return prediction
 
     def _shared_step(
         self, look_back_window: t.Tensor, prediction_window: t.Tensor
