@@ -1,13 +1,13 @@
 # @package _global_
 
-look_back_window: 23
+look_back_window: 33
 
 model:
   model:
-    n_estimators: 830
-    max_depth: 9 
-    reg_alpha: 0.00006 
-    reg_lambda: 0.167
-    subsample: 0.875
-    colsample_bytree: 0.844
-    learning_rate: 0.0204
+    n_estimators: 820
+    max_depth: 3 
+    reg_alpha: 1.486 
+    reg_lambda: 0.00005 
+    subsample: 0.664 
+    colsample_bytree: 0.889 
+    learning_rate: 0.052

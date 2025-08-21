@@ -1,10 +1,12 @@
-experiment_name: "no_norm"
+experiment_name: "min_max_norm"
+normalization: "minmax"
+
+loss_fn: "MSE"
 
 use_heart_rate: True 
 use_dynamic_features: True
 use_static_features: False 
 
 use_norm_dl: False
-use_norm_baseline: False
+use_norm_baseline: True
 
-loss_fn: "MAE"

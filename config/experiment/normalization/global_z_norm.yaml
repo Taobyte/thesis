@@ -1,0 +1,13 @@
+experiment_name: "global_z_norm"
+normalization: "global"
+
+use_heart_rate: True 
+use_dynamic_features: True
+use_static_features: False 
+
+use_norm_dl: False
+use_norm_baseline: False
+
+loss_fn: "MSE"
+
+

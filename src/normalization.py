@@ -48,7 +48,7 @@ def min_max_norm(
         max[:, :, :c] - min_tensor[:, :, :c]
     )
 
-    combined = torch.concat((x_norm, x_static), dim=2)
+    combined = torch.cat((x_norm, x_static), dim=2)
 
     return combined
 
@@ -67,7 +67,7 @@ def min_max_denorm(
     x_denorm = (
         x[:, :, :c] * (max[:, :, :c] - min_tensor[:, :, :c]) + min_tensor[:, :, :c]
     )
-    combined = torch.concat((x_denorm, x_static), dim=2)
+    combined = torch.cat((x_denorm, x_static), dim=2)
     return combined
 
 

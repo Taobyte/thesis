@@ -228,6 +228,7 @@ class BaseLightningModule(L.LightningModule):
             max = train_dataset.max
             min = Tensor(min).reshape(1, 1, -1).to(device).float()
             max = Tensor(max).reshape(1, 1, -1).to(device).float()
+
             preds = min_max_denorm(preds, self.local_norm_channels, min, max)
             prediction_window = min_max_denorm(
                 prediction_window_norm, self.local_norm_channels, min, max

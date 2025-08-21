@@ -1,0 +1,12 @@
+# @package _global_
+
+look_back_window: 5
+
+model:
+  pl_model:
+    optimizer_name: adamw
+    learning_rate: 0.1 
+    weight_decay: 1e-06
+  
+  model:
+    n_states: 8

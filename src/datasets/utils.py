@@ -100,7 +100,7 @@ class BaseDataModule(L.LightningDataModule):
             min = torch.tensor(min).reshape(1, 1, -1).to(device).float()
             max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
             input = min_max_norm(look_back_window, self.local_norm_channels, min, max)
-            output = min_max_norm(prediction_window, self.local_norm_channels, max, min)
+            output = min_max_norm(prediction_window, self.local_norm_channels, min, max)
         elif self.normalization == "difference":
             pad = torch.zeros(B, 1, C)
             input = torch.cat([pad, torch.diff(look_back_window, dim=1)], dim=1)
