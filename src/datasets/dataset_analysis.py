@@ -11,8 +11,7 @@ from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import bds
-from statsmodels.tsa.stattools import kpss, adfuller, acf, pacf
-from statsmodels.stats.diagnostic import het_arch
+from statsmodels.tsa.stattools import kpss, adfuller, pacf
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -34,6 +33,35 @@ from src.utils import (
     compute_input_channel_dims,
     get_optuna_name,
 )
+
+
+def adfuller_test(datamodules: List[LightningDataModule]):
+    for datamodule in datamodules:
+        print(f"DATASET: {datamodule.name}")
+        data = datamodule.train_dataset.data
+        stats, diff_stats = [], []
+        p, diff_p = [], []
+        for series in data:
+            heartrate = series[:, 0]
+            test = adfuller(heartrate, regression="ct")
+            diff = np.diff(heartrate)
+            diff_test = adfuller(diff, regression="ct")
+
+            stats.append(test[0])
+            p.append(test[1])
+
+            diff_stats.append(diff_test[0])
+            diff_p.append(diff_test[1])
+
+            print(f"Test Statistic: {test[0]:.4f} | P Value: {test[1]:.4f}")
+            print(
+                f"DIFF Test Statistic: {diff_test[0]:.4f} | P Value: {diff_test[1]:.4f}"
+            )
+
+        print(f"Test Mean Stats {np.mean(stats):.4f} | Mean P: {np.mean(p):.4f}")
+        print(
+            f"DIFF Test Mean Stats {np.mean(diff_stats):.4f} | Mean P: {np.mean(diff_p):.4f}"
+        )
 
 
 def visualize_histogram(datamodules: List[LightningDataModule]):
@@ -168,7 +196,9 @@ def forecastibility(datamodules: List[LightningDataModule]):
         )
 
 
-def partial_correlation(datamodules: List[LightningDataModule]):
+def partial_correlation(
+    datamodules: List[LightningDataModule], nlags: int = 10, use_diff: bool = True
+):
     row_titles = [dataset_to_name[d.name] for d in datamodules]
     fig = make_subplots(
         rows=len(datamodules),
@@ -182,7 +212,9 @@ def partial_correlation(datamodules: List[LightningDataModule]):
         pcs = []
         for series in dataset:
             heartrate = series[:, 0]
-            partial_ac = pacf(heartrate, nlags=5)
+            if use_diff:
+                heartrate = np.diff(heartrate)
+            partial_ac = pacf(heartrate, nlags=nlags)
             pcs.append(partial_ac)
 
         mean_pac = np.mean(np.stack(pcs), axis=0)
@@ -510,6 +542,7 @@ if __name__ == "__main__":
             "catch22",
             "norm_viz",
             "beliefppg",
+            "adfuller",
         ],
         required=True,
     )
@@ -531,7 +564,9 @@ if __name__ == "__main__":
         datamodule = instantiate(cfg.dataset.datamodule)
         datamodule.setup("fit")
         datamodules.append(datamodule)
-    if args.type == "beliefppg":
+    if args.type == "adfuller":
+        adfuller_test(datamodules)
+    elif args.type == "beliefppg":
         visualize_histogram(datamodules)
     elif args.type == "norm_viz":
         visualize_norm(datamodules)

@@ -23,4 +23,4 @@ python main.py --multirun \
   prediction_window=${5} \
   tune=True \
   overfit=False \
-  +sweeps=lbw
+  +sweeps={6} # local_lbw or lbw

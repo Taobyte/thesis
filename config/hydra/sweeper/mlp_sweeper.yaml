@@ -4,7 +4,6 @@ defaults:
 params:
   model.pl_model.learning_rate: choice(3e-4, 1e-3, 3e-3) # tag(log, interval(1e-5, 0.01))
   model.pl_model.weight_decay: choice(0.0, 1e-6, 1e-5, 1e-4, 5e-4)
-  model.pl_model.loss: choice("MSE", "MAE")
 
   model.model.hid_dim: choice(8,16,32,64,128)
   model.model.n_hid_layers: choice(1,2,3,4)

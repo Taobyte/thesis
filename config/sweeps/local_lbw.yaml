@@ -1,0 +1,6 @@
+# @package _global_
+
+hydra:
+  sweeper:
+    params:
+      look_back_window: int(range(3,21))

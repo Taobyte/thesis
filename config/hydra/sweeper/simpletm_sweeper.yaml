@@ -2,7 +2,6 @@ defaults:
  -  shared_sweeper
 
 params:
-  model.trainer.use_early_stopping: True
   model.pl_model.learning_rate: tag(log, interval(1e-4, 5e-2))
 
   model.model.d_model: choice(32, 64, 128, 256, 512)

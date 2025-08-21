@@ -33,10 +33,12 @@ class MultitaskGPModel(gpytorch.models.ExactGP):
             likelihood,
         )
 
-        self.lbw_train_dataset = torch.from_numpy(lbw_train_dataset)
-        self.pw_train_dataset = torch.from_numpy(pw_train_dataset)
-        self.lbw_val_dataset = torch.from_numpy(lbw_val_dataset)
-        self.pw_val_dataset = torch.from_numpy(pw_val_dataset)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.lbw_train_dataset = torch.from_numpy(lbw_train_dataset).to(device)
+        self.pw_train_dataset = torch.from_numpy(pw_train_dataset).to(device)
+        self.lbw_val_dataset = torch.from_numpy(lbw_val_dataset).to(device)
+        self.pw_val_dataset = torch.from_numpy(pw_val_dataset).to(device)
 
         self.num_tasks = num_tasks
         self.mean_module = gpytorch.means.MultitaskMean(
@@ -126,6 +128,7 @@ class ExactGP(BaseLightningModule):
         return mean, std
 
     def on_train_epoch_start(self):
+        device = self.device
         self.model.train()
         self.likelihood.train()
 

@@ -8,7 +8,7 @@ model:
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
   # n_regimes = 1 is equivalent to batched linear regression
-  n_regimes: 8 # number of regimes
+  n_regimes: 4 # number of regimes
   dropout: 0.0
   input_dropout: 0.0
 
