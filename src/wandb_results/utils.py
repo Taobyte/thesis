@@ -64,6 +64,9 @@ def get_metrics(
                 for metric_dict in z:
                     for metric_name, metric_value in metric_dict.items():
                         if metric_name in metrics_to_keep:
+                            if isinstance(metric_value, str):
+                                print(f"VALUE IS STRING {metric_value}")
+                                metric_value = np.nan
                             metric_list[metric_name].append(metric_value)
 
                 mean = {

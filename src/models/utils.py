@@ -74,41 +74,9 @@ class BaseLightningModule(L.LightningModule):
 
     @property
     def has_probabilistic_forecast(self) -> bool:
-        """
-        Indicates whether the model provides probabilistic forecasts (mean and std).
-        This property should be overridden in subclasses for probabilistic models.
-        """
         return self.name in self.probabilistic_forecast_models
 
     def model_forward(self, look_back_window: Tensor) -> Union[Tensor, Any]:
-        """
-        Performs a forward pass through the model to generate predictions for the
-        prediction window.
-
-        The behavior and return type of this method depend on whether the model
-        is a point forecaster or a probabilistic forecaster.
-
-        Args:
-            look_back_window (Tensor): A tensor representing the
-                lookback window. Its shape is expected to be (B, T_lb, C_lb),
-                where B is the batch size, T_lb is the length of the lookback
-                window, and C_lb is the number of input channels.
-
-        Returns:
-            Union[Tensor, Tuple[Tensor, Tensor]]:
-                - If the model is a **point forecaster** (e.g., `self.has_probabilistic_forecast` is False):
-                  Returns a single `Tensor` of shape (B, L, C),
-                  representing the point forecast (mean prediction) for the
-                  prediction window.
-                - If the model is a **probabilistic forecaster** (e.g., `self.has_probabilistic_forecast` is True):
-                  Returns a `tuple` containing two `Tensor`s:
-                    - The first tensor is the **mean prediction** for the
-                      prediction window, of shape (B, L, C).
-                    - The second tensor is the **standard deviation** (or
-                      some other measure of uncertainty, e.g., variance or
-                      log-variance) of the predictions for the prediction window,
-                      also of shape (B, L, C).
-        """
         raise NotImplementedError
 
     def model_specific_train_step(

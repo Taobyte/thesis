@@ -6,6 +6,8 @@ METRICS = ["MSE", "MAE", "DIRACC", "MASE", "ND", "NRMSE", "SMAPE"]
 # Models
 MODELS: List[str] = [
     "linear",
+    "mole",
+    "msar",
     "kalmanfilter",
     "xgboost",
     "gp",
@@ -71,15 +73,14 @@ model_to_name = {
     "simpletm": "SimpleTM",
     "patchtst": "PatchTST",
     "timexer": "TimeXer",
+    "nbeatsx": "NBeatsX",
     "gp": "Gaussian Process",
-    "bnn": "Bayesian Neural Network",
     "kalmanfilter": "Kalman Filter",
     "linear": "Linear Regression",
-    "hmm": "Hidden Markov Model",
+    "msar": "MSAR",
+    "mole": "MoLE",
     "xgboost": "XGBoost",
     "mlp": "MLP",
-    "hlinear": "HLinear",
-    "hxgboost": "HXGBoost",
 }
 
 # Human-readable names for datasets

@@ -78,7 +78,7 @@ class DaLiADataset(HRDataset):
         mean = np.mean(combined, axis=0)
         std = np.std(combined, axis=0)
         min = np.min(combined, axis=0)
-        max = np.min(combined, axis=0)
+        max = np.max(combined, axis=0)
 
         return loaded_series, [mean, std, min, max]
 

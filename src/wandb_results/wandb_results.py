@@ -8,7 +8,7 @@ from src.wandb_results.metric_table import (
 )
 from src.wandb_results.activity_ablation import dynamic_feature_ablation
 from src.wandb_results.look_back_ablation import visualize_look_back_window_difference
-from src.wandb_results.normalization_ablation import visualize_normalization_difference
+from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.utils import create_params_file_from_optuna
 
 
@@ -187,15 +187,11 @@ def main():
             table=args.table,
         )
     elif args.type == "norm_ablation":
-        visualize_normalization_difference(
-            args.dataset,
-            args.models,
-            args.look_back_window,
-            args.prediction_window,
-            args.use_heart_rate,
-            save_html=args.save_html,
+        plot_normalization_table(
+            datasets=args.dataset,
+            prediction_window=args.prediction_window,
+            models=args.models,
         )
-
     elif args.type == "optuna":
         create_params_file_from_optuna(models=args.models, start_time="2025-6-24")
 
