@@ -36,15 +36,23 @@ class LDaliaDataset(DaLiADataset):
         self.max = np.max(timeseries, axis=0)
 
     def __len__(self) -> int:
-        return len(self.timeseries) - self.window_length + 1
+        return (
+            1
+            if self.return_whole_series
+            else len(self.timeseries) - self.window_length + 1
+        )
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
-        start = idx
-        window = self.timeseries[start : (start + self.window_length)]
-        look_back_window = torch.from_numpy(window[: self.look_back_window, :])
-        prediction_window = torch.from_numpy(window[self.look_back_window :, :])
+        if self.return_whole_series:
+            tensor_series = torch.from_numpy(self.timeseries).float()
+            return tensor_series
+        else:
+            start = idx
+            window = self.timeseries[start : (start + self.window_length)]
+            look_back_window = torch.from_numpy(window[: self.look_back_window, :])
+            prediction_window = torch.from_numpy(window[self.look_back_window :, :])
 
-        return look_back_window.float(), prediction_window.float()
+            return look_back_window.float(), prediction_window.float()
 
 
 class LDalia(DaLiADataModule):

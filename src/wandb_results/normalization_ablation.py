@@ -26,7 +26,7 @@ def plot_normalization_table(
 ):
     assert len(prediction_window) == 1
     pw = prediction_window[0]
-    metric = "MSE"
+    metric = "ND"
     if len(models) == 0:
         models = MODELS
 
@@ -89,7 +89,7 @@ def plot_normalization_table(
         header=True,
         # column_format=column_format,
         bold_rows=False,
-        float_format=lambda x: "" if pd.isna(x) else f"{x:.0f}",
+        float_format=lambda x: "-" if pd.isna(x) else f"{100 * x:.2f}",
     )
     print(latex_str)
 
