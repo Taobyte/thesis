@@ -77,12 +77,6 @@ def main():
     )
 
     parser.add_argument(
-        "--use_heart_rate",
-        required=False,
-        action="store_true",
-        help="get runs for heart rate only has an effect for datasets: dalia, ieee & wildppg",
-    )
-    parser.add_argument(
         "--experiment",
         type=str,
         required=False,
@@ -134,7 +128,7 @@ def main():
             args.dataset,
             args.look_back_window,
             args.prediction_window,
-            args.use_heart_rate,
+            True,
             args.experiment,
             start_time="2025-08-08",
         )
@@ -178,7 +172,7 @@ def main():
             models=args.models,
             look_back_window=args.look_back_window,
             prediction_window=args.prediction_window,
-            use_heart_rate=args.use_heart_rate,
+            use_heart_rate=True,
             start_time="2025-7-14",
             normalization=args.normalization,
             save_html=args.save_html,

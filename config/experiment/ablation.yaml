@@ -1,0 +1,14 @@
+experiment_name: "ablation"
+normalization: "none" # norm is set individually for each model in bash file
+
+use_heart_rate: True 
+use_dynamic_features: True
+use_static_features: False 
+
+# norms are set individually for each model in bash file
+use_norm_dl: False
+use_norm_baseline: False
+
+loss_fn: "MSE"
+
+

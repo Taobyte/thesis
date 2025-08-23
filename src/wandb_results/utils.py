@@ -133,8 +133,8 @@ def get_runs(
     runs = api.runs("c_keusch/thesis", filters=filters)
     print(f"Found {len(runs)} runs.")
 
-    assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
     assert len(runs) > 0, "No runs were found!"
+    assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
     return runs
 
 
