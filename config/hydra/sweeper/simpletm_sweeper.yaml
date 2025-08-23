@@ -6,6 +6,7 @@ params:
 
   model.model.d_model: choice(32, 64, 128, 256, 512)
   model.model.d_ff: choice(32, 64, 128, 256, 512)
+  
   model.model.dropout: interval(0.0, 0.5)
   model.model.geomattn_dropout: interval(0.0, 0.6)
   

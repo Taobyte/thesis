@@ -27,7 +27,6 @@ def adjust_learning_rate(
         lr = lr_adjust[epoch]
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
-        print("Updating learning rate to {}".format(lr))
 
 
 class PositionalEmbedding(nn.Module):
@@ -401,6 +400,7 @@ class GPT4TS(BaseLightningModule):
         )
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_epoch=True, logger=True)
+        print(f"Learning Rate adjusted to {current_lr}")
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)

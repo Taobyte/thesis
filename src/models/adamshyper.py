@@ -1439,6 +1439,7 @@ class AdaMSHyper(BaseLightningModule):
         )
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("current_lr", current_lr, on_epoch=True, logger=True)
+        print(f"Learning Rate adjusted to {current_lr}")
 
     def configure_optimizers(self):
         optimizer_1 = torch.optim.Adam(self.parameters(), lr=self.learning_rate)

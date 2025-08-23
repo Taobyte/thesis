@@ -1,0 +1,10 @@
+# @package _global_
+
+model:
+  pl_model:
+    optimizer_name: adamw
+    learning_rate: 0.1 
+    weight_decay: 0.0005
+  
+  model:
+    n_states: 2

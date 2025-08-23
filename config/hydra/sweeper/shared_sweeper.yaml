@@ -26,3 +26,5 @@ wandb_kwargs:
   reinit: True 
   dir: ${path.basedir}
 
+params:
+  model.data.batch_size: 256

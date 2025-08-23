@@ -17,7 +17,7 @@ model:
   stack_types: ["exogenous_wavenet", "identity"]
   n_blocks: [1, 1] # length must be equal to len(stack_types)
   n_layers: [2, 2] # length must be equal to len(stack_types) | number of FCNN layers in each block and stack
-  n_hidden: 50 # length must be equal to len(stack_types)
+  n_hidden: 50 # the number of hidden units in a FCN layer in each block in each stack!
   kernel_size: 5 
 
   n_polynomials: 2 # the authors observe best performance with 2 polynomials
@@ -34,7 +34,7 @@ pl_model:
   use_norm: ${use_norm_dl}
 
 trainer: 
-  max_epochs: 1000
+  max_epochs: 100
   use_early_stopping: True
   patience: 5
 

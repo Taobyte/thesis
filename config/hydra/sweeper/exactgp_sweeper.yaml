@@ -2,6 +2,7 @@ defaults:
  -  shared_sweeper
 
 params:
+
   model.pl_model.learning_rate: tag(log, interval(1e-5, 1e-2))
   model.model.kernel: choice("rbf", "matern", "rq") # "periodic"
   model.model.use_linear_trend: choice(0, 1) # 0 = False , 1 = True

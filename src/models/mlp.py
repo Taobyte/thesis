@@ -51,7 +51,6 @@ class Model(torch.nn.Module):
             self.layers.append(torch.nn.Dropout(dropout))
             prev_dim = hid_dim
 
-        # Final layer without BatchNorm or Activation
         self.layers.append(torch.nn.Linear(prev_dim, out_dim))
         self.network = torch.nn.Sequential(*self.layers)
 
