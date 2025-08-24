@@ -23,16 +23,14 @@ sbatch --job-name="$DALIA_RUNS" -o "$DALIA_RUNS" --time="$TIME" --wrap="$JOB"
 # WILDPPG
 
 WILDPPG_RUNS="lbw_wildppg_ablation"
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=kalmanfilter normalization=none use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$WILDPPG_RUNS" -o "$WILDPPG_RUNS" --time="$TIME" --wrap="$JOB"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=nbeatsx normalization=global use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
 sbatch --job-name="$WILDPPG_RUNS" -o "$WILDPPG_RUNS" --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer normalization=none use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer normalization=global use_norm_dl=True use_norm_baseline=True use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
 sbatch --job-name="$WILDPPG_RUNS" -o "$WILDPPG_RUNS" --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=linear,msar,gp,gpt4ts normalization=difference use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=linear,msar,kalmanfilter,gp,gpt4ts normalization=difference use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
 sbatch --job-name="$WILDPPG_RUNS" -o "$WILDPPG_RUNS" --time="$TIME" --wrap="$JOB"
 
 # IEEE

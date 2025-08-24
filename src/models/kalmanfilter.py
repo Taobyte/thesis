@@ -605,6 +605,7 @@ class Model(BaseKalmanFilter):
 
         current_state = prediction_dict["filtered_states"][:, -1, :]
         prediction = lookback_seq[:, -1, :].unsqueeze(1)
+
         preds: list[torch.Tensor] = []
         for _ in range(self.prediction_window):
             if self.control_dim > 0:

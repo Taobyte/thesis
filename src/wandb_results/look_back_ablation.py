@@ -30,8 +30,9 @@ def visualize_look_back_window_difference(
     use_std: bool = False,
     models: list[str] = [],
 ):
+    metrics = ["SMAPE"]  # METRICS
     num_datasets = len(datasets)
-    n_metrics = len(METRICS)
+    n_metrics = len(metrics)
 
     if len(models) == 0:
         models = MODELS
@@ -52,7 +53,7 @@ def visualize_look_back_window_difference(
             "Invalid input: either look_back_window or prediction_window must have length > 1, but not both."
         )
 
-    readable_metric_names = [metric_to_name[m] for m in METRICS]
+    readable_metric_names = [metric_to_name[m] for m in metrics]
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
     subplot_titles = readable_metric_names + [""] * ((num_datasets - 1) * n_metrics)
     row_titles: list[str] = []
@@ -61,8 +62,8 @@ def visualize_look_back_window_difference(
         row_titles.append(f"{name} Aggregated")
 
     fig = make_subplots(
-        rows=num_datasets * 2,  # we also plot the aggregated results per baseline or dl
-        cols=n_metrics,
+        rows=n_metrics + 1,  # we also plot the aggregated results per baseline or dl
+        cols=num_datasets,
         subplot_titles=subplot_titles,
         row_titles=row_titles,
         shared_xaxes=True,
@@ -82,14 +83,15 @@ def visualize_look_back_window_difference(
 
         mean_dict, std_dict = get_metrics(runs)
 
-        for j, metric in enumerate(METRICS):
+        for j, metric in enumerate(metrics):
             assert set(mean_dict.keys()) == set(models), (
                 f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
             )
+            factor = 100 if metric == "SMAPE" else 1
             baseline_means: List[float] = []
             dl_means: List[float] = []
-            row = 2 * b + 1
-            col = j + 1
+            row = j + 1
+            col = b + 1
             for m, model in enumerate(models):
                 model_name = model_to_name[model]
 
@@ -99,7 +101,8 @@ def visualize_look_back_window_difference(
                     if lbw_ablation:
                         if metric in mean_dict[model][str(ablation_x)][str(pw)]:
                             means.append(
-                                mean_dict[model][str(ablation_x)][str(pw)][metric]
+                                factor
+                                * mean_dict[model][str(ablation_x)][str(pw)][metric]
                             )
                             stds.append(
                                 std_dict[model][str(ablation_x)][str(pw)][metric]
@@ -110,7 +113,7 @@ def visualize_look_back_window_difference(
                             )
                     else:
                         means.append(
-                            mean_dict[model][str(lbw)][str(ablation_x)][metric]
+                            factor * mean_dict[model][str(lbw)][str(ablation_x)][metric]
                         )
                         stds.append(std_dict[model][str(lbw)][str(ablation_x)][metric])
 
@@ -134,7 +137,6 @@ def visualize_look_back_window_difference(
                         line=dict(color=color),
                         showlegend=(j == 0) and row == 1,
                         legendgroup=model_name,
-                        legendgrouptitle_text="Individual Perf.",
                     ),
                     row=row,
                     col=col,
@@ -154,7 +156,6 @@ def visualize_look_back_window_difference(
                             hoverinfo="skip",
                             showlegend=False,
                             name=model_name,
-                            legendgroup=model_name,
                         ),
                         row=row,
                         col=col,
@@ -184,7 +185,7 @@ def visualize_look_back_window_difference(
                         showlegend=(j == 0) and row == 1,
                         line=dict(color=color),
                         legendgroup=name,
-                        legendgrouptitle_text="Baselines vs DL",
+                        # legendgrouptitle_text="Baselines vs DL",
                     ),
                     row=row + 1,
                     col=col,
@@ -224,6 +225,16 @@ def visualize_look_back_window_difference(
         height=num_rows * 800,
         template="plotly_white",
     )
+
+    #  fig.update_xaxes(
+    #      type="category",
+    #      categoryorder="array",
+    #      categoryarray=x_labels,
+    #      tickmode="array",
+    #      tickvals=x_labels,
+    #      row=row,
+    #      col=col,
+    #  )
 
     fig.update_layout(
         legend=dict(
