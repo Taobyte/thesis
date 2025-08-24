@@ -7,7 +7,10 @@ from src.wandb_results.metric_table import (
     plot_best_lbw,
 )
 from src.wandb_results.activity_ablation import dynamic_feature_ablation
-from src.wandb_results.look_back_ablation import visualize_look_back_window_difference
+from src.wandb_results.look_back_ablation import (
+    visualize_look_back_window_difference,
+    ablation_delta_plot,
+)
 from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.utils import create_params_file_from_optuna
 
@@ -30,6 +33,7 @@ def main():
             "latex_compare",
             "best_lbw_latex",
             "viz",
+            "delta",
             "activity_ablation",
             "norm_ablation",
             "optuna",
@@ -165,6 +169,16 @@ def main():
             save_html=args.save_html,
             use_std=args.use_std,
             models=args.models,
+        )
+    elif args.type == "delta":
+        ablation_delta_plot(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            experiment=args.experiment,
+            models=args.models,
+            start_time="2025-8-23",
+            save_html=args.save_html,
         )
     elif args.type == "activity_ablation":
         dynamic_feature_ablation(
