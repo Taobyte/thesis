@@ -73,16 +73,15 @@ def visualize_look_back_window_difference(
     for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
         runs = get_runs(
             dataset,
-            models,
             look_back_window,
             prediction_window,
-            True,
-            "all",
+            models,
             start_time,
             experiment_name=experiment,
         )
 
         mean_dict, std_dict = get_metrics(runs)
+
         for j, metric in enumerate(METRICS):
             assert set(mean_dict.keys()) == set(models), (
                 f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
@@ -98,8 +97,17 @@ def visualize_look_back_window_difference(
                 stds: list[float] = []
                 for ablation_x in x:
                     if lbw_ablation:
-                        means.append(mean_dict[model][str(ablation_x)][str(pw)][metric])
-                        stds.append(std_dict[model][str(ablation_x)][str(pw)][metric])
+                        if metric in mean_dict[model][str(ablation_x)][str(pw)]:
+                            means.append(
+                                mean_dict[model][str(ablation_x)][str(pw)][metric]
+                            )
+                            stds.append(
+                                std_dict[model][str(ablation_x)][str(pw)][metric]
+                            )
+                        else:
+                            print(
+                                f"{model} {str(ablation_x)} {str(pw)} {metric} does not exist"
+                            )
                     else:
                         means.append(
                             mean_dict[model][str(lbw)][str(ablation_x)][metric]
@@ -215,6 +223,19 @@ def visualize_look_back_window_difference(
     fig.update_layout(
         height=num_rows * 800,
         template="plotly_white",
+    )
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5,
+            title_text="Model",
+            itemsizing="trace",
+        ),
+        margin=dict(b=120),
     )
 
     fig.update_layout(legend=dict(font=dict(size=16)))

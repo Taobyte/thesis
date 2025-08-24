@@ -65,7 +65,10 @@ def get_metrics(
                     for metric_name, metric_value in metric_dict.items():
                         if metric_name in metrics_to_keep:
                             if isinstance(metric_value, str):
-                                print(f"VALUE IS STRING {metric_value}")
+                                print(
+                                    f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                )
+
                                 metric_value = np.nan
                             metric_list[metric_name].append(metric_value)
 
@@ -85,41 +88,21 @@ def get_metrics(
 
 def get_runs(
     dataset: str,
-    models: list[str],
     look_back_window: list[int],
     prediction_window: list[int],
-    use_heart_rate: bool,
-    normalization: str = "global",
+    models: list[str],
     start_time: str = "2025-6-12",
     window_statistic: str = None,
     experiment_name: str = "endo_exo",
 ):
-    if normalization == "all":
-        normalizations = ["global", "local", "none"]
-    else:
-        normalizations = [normalization]
-    group_names = []
-    for lbw, pw in product(look_back_window, prediction_window):
-        for normalization in normalizations:
-            group_name, run_name, _ = create_group_run_name(
-                dataset,
-                "",  # doesn't matter
-                use_heart_rate,
-                lbw,
-                pw,
-                fold_nr=-1,  # does not matter, we only want group_name
-                fold_datasets=[],  # does not matter
-                normalization=normalization,
-                experiment_name=experiment_name,
-            )
-
-            group_names.append(group_name)
-
     conditions = [
-        {"group": {"$in": group_names}},
+        {"config.experiment.experiment_name": {"$in": [experiment_name]}},
+        {"config.dataset.name": {"$in": [dataset]}},
+        {"config.look_back_window": {"$in": look_back_window}},
+        {"config.prediction_window": {"$in": prediction_window}},
+        {"config.model.name": {"$in": models}},
         {"state": "finished"},
         {"created_at": {"$gte": start_time}},
-        {"config.model.name": {"$in": models}},
     ]
 
     if window_statistic:

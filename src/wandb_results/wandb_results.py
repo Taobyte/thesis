@@ -161,7 +161,7 @@ def main():
             args.look_back_window,
             args.prediction_window,
             experiment=args.experiment,
-            start_time="2025-8-08",
+            start_time="2025-8-23",
             save_html=args.save_html,
             use_std=args.use_std,
             models=args.models,

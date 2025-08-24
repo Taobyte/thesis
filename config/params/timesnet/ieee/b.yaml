@@ -1,7 +1,5 @@
 # @package _global_
 
-look_back_window: 31
-
 model:
   pl_model:
     learning_rate: 0.0019
