@@ -8,6 +8,24 @@ conda activate thesis
 TIME=24:00:00
 LBW=d # d = 30 
 
-NAME="local_runs"
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=ldalia,lwildppg,lieee lbw=lbw pw=a model=linear,mole,msar,kalmanfilter,gp,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx normalization=difference use_wandb=True tune=False experiment=endo_exo folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$NAME" -o "$NAME_%j.out" --time="$TIME" --wrap="$JOB"
+# ---- Deep models (local CV) ----
+DNAME="LOCAL_RUNS_DL"
+JOB="python main.py --multirun \
+  hydra/launcher=submitit_slurm \
+  dataset=ldalia,lwildppg,lieee \
+  lbw=${LBW} pw=a \
+  model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
+  normalization=global use_wandb=True tune=False experiment=endo_exo"
+
+sbatch --job-name="$DNAME" -o "${DNAME}_%j.out" --time="$TIME" --wrap="$JOB"
+
+# ---- Baselines (local CV) ----
+BNAME="LOCAL_RUNS_BASELINES"
+JOB="python main.py --multirun \
+  hydra/launcher=submitit_slurm \
+  dataset=ldalia,lwildppg,lieee \
+  lbw=${LBW} pw=a \
+  model=linear,mole,msar,kalmanfilter,gp,xgboost,mlp \
+  normalization=difference use_wandb=True tune=False experiment=endo_exo"
+
+sbatch --job-name="$BNAME" -o "${BNAME}_%j.out" --time="$TIME" --wrap="$JOB"
