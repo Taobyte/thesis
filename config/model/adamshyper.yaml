@@ -30,7 +30,7 @@ pl_model:
   use_amp: False
 
 trainer:
-  max_epochs: 1000
+  max_epochs: 20
   use_early_stopping: True
   patience: 5
 

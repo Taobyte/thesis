@@ -29,7 +29,7 @@ pl_model:
   loss_fn: ${loss_fn}
 
 trainer: 
-  max_epochs: 1000
+  max_epochs: 20 # we use 20 as the paper uses epochs=20 for the short-range PEMS dataset
   use_early_stopping: True
   patience: 5
   pct_start: 0.2
