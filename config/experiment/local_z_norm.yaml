@@ -1,5 +1,5 @@
 experiment_name: "local_z_norm"
-normalization: "none"
+normalization: "global"
 
 loss_fn: "MSE"
 

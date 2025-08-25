@@ -126,10 +126,17 @@ def ablation_delta_plot(
         factor = 100 if metric in ["SMAPE", "ND", "NRMSE"] else 1
         diffs: list[float] = []
         for ablation_x in x:
-            best_baseline, bb_value = find_best_model(
-                baseline_means, ablation_x, pw, metric
-            )
-            best_dl, bdl_value = find_best_model(dl_means, ablation_x, pw, metric)
+            if lbw_ablation:
+                best_baseline, bb_value = find_best_model(
+                    baseline_means, ablation_x, pw, metric
+                )
+                best_dl, bdl_value = find_best_model(dl_means, ablation_x, pw, metric)
+            else:
+                best_baseline, bb_value = find_best_model(
+                    baseline_means, lbw, ablation_x, metric
+                )
+                best_dl, bdl_value = find_best_model(dl_means, lbw, ablation_x, metric)
+
             diff = (bdl_value - bb_value) * factor
             diffs.append(diff)
         dataset_perf[dataset] = diffs

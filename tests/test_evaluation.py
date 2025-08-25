@@ -38,7 +38,7 @@ def _test_specific_dataset(
 
     _, g_res_l = train_test_global(cfg, wandb_logger, "")
 
-    overrides = [f"dataset=f{dataset_name}", f"experiment={experiment}", "model=dummy"]
+    overrides = [f"dataset=l{dataset_name}", f"experiment={experiment}", "model=dummy"]
     overrides += [
         "look_back_window=5",
         "prediction_window=3",
@@ -52,6 +52,10 @@ def _test_specific_dataset(
 
     g_values = g_res_l[["MSE", "MAE", "abs_target_mean", "naive_mae"]].values
     l_values = l_res_g[["MSE", "MAE", "abs_target_mean", "naive_mae"]].values
+
+    import pdb
+
+    pdb.set_trace()
 
     assert np.linalg.norm(g_values - l_values) <= 0.01
 

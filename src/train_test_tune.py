@@ -140,7 +140,7 @@ def train_test_local(
         trainer.fit(pl_model, datamodule=datamodule)
         print(f"End Training {participant}")
 
-        print("Start Evaluation.")
+        print(f"Start Evaluation {participant}")
         if config.model.name not in config.special_models:
             test_trainer = trainer
             if test_trainer.is_global_zero:
@@ -159,17 +159,17 @@ def train_test_local(
 
         delete_checkpoint(test_trainer, checkpoint_callback)
 
-        print("End Evaluation.")
+        print(f"End Evaluation {participant}")
 
     # Local results
     df = pd.DataFrame(results)
-    means = df.mean()
-    stds = df.std()
+    means = df.mean().to_frame().T
+    stds = df.std().to_frame().T
 
     wandb_logger.experiment.log(
         {
-            "mean_metrics": wandb.Table(dataframe=means.to_frame(name="mean")),
-            "std_metrics": wandb.Table(dataframe=stds.to_frame(name="std")),
+            "mean_metrics": wandb.Table(dataframe=means),
+            "std_metrics": wandb.Table(dataframe=stds),
         }
     )
 
@@ -187,15 +187,12 @@ def train_test_local(
         for metric_name, metric_values in global_averaged.items()
     }
 
-    means = pd.Series(global_averaged_means)
+    means = pd.Series(global_averaged_means).to_frame().T
 
     wandb_logger.experiment.log(
         {
-            "global_mean_metrics": wandb.Table(dataframe=means.to_frame(name="mean")),
-            "global_std_metrics": wandb.Table(dataframe=stds.to_frame(name="std")),
+            "global_mean_metrics": wandb.Table(dataframe=means),
         }
     )
 
-    global_df = pd.DataFrame([means])
-
-    return global_df, df
+    return means, df
