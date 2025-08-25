@@ -97,13 +97,14 @@ def create_group_run_name(
     fold_datasets: list[str] = ["dalia", "wildppg", "ieee"],
     normalization: str = "global",
     experiment_name: str = "endo_only",
+    seed: int = 0,
 ) -> Tuple[str, str, list[str]]:
     fold = ""
     if dataset_name in fold_datasets:
         fold = f"fold_{fold_nr}_"
 
-    group_name = f"{normalization}_{dataset_name}_{experiment_name}_{look_back_window}_{prediction_window}"
-    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}"
+    group_name = f"{normalization}_{dataset_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
+    run_name = f"{normalization}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
 
     tags = [dataset_name, model_name, normalization, experiment_name]
     if dataset_name in fold_datasets:
@@ -153,6 +154,7 @@ def setup_wandb_logger(
         config.fold_datasets,
         config.normalization,
         config.experiment.experiment_name,
+        seed=config.seed,
     )
 
     # print(config_dict)
