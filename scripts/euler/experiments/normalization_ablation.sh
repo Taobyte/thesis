@@ -16,8 +16,7 @@ JOB="python main.py --multirun \
     tune=False \
     experiment=global_z_norm,local_z_norm,min_max_norm,no_norm,difference \
     folds=fold_0,fold_1,fold_2 \ 
-    seed=0,1,2
-    "
+    seed=0,1,2"
 
 sbatch --job-name="$BLNNAME" \
        --output="$BLNNAME".out \
