@@ -35,16 +35,16 @@ def get_metrics(
     """
     Preprocess the run metrics for the wandb training runs in the runs list.
     Returns two dataframes, the first storing the mean and the second the standard deviation for
-    each metric MSE, MAE, Cross Correlation and Directional Accuracy.
+    each metric in the METRICS list defined in src/constants.py
     """
 
     metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     model_run_counts = defaultdict(int)
     for run in tqdm(runs):
-        name_splitted = run.name.split("_")
-        model_name = name_splitted[4]
-        look_back_window = name_splitted[-2]
-        prediction_window = name_splitted[-1]
+        config = run.config
+        model_name = config["model"]["name"]
+        look_back_window = config["look_back_window"]
+        prediction_window = config["prediction_window"]
         summary = run.summary._json_dict
         filtered_summary = {k: summary[k] for k in summary if k in METRICS}
         metrics[model_name][look_back_window][prediction_window].append(
@@ -68,9 +68,17 @@ def get_metrics(
                                 print(
                                     f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw}"
                                 )
-
-                                metric_value = np.nan
-                            metric_list[metric_name].append(metric_value)
+                                # metric_value = np.nan
+                            elif np.isinf(metric_value):
+                                print(
+                                    f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                )
+                            elif np.isnan(metric_value):
+                                print(
+                                    f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                )
+                            else:
+                                metric_list[metric_name].append(metric_value)
 
                 mean = {
                     metric_name: float(np.mean(v))
@@ -82,7 +90,6 @@ def get_metrics(
                 }
                 processed_metrics_mean[model][lbw][pw] = mean
                 processed_metrics_std[model][lbw][pw] = std
-
     return processed_metrics_mean, processed_metrics_std
 
 

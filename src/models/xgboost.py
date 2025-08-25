@@ -31,6 +31,7 @@ class XGBoostModel(torch.nn.Module):
         colsample_bytree: float = 0.8,
         use_early_stopping: bool = False,
         patience: int = 2,
+        seed: int = 123,
     ):
         super().__init__()
 
@@ -70,6 +71,7 @@ class XGBoostModel(torch.nn.Module):
             # tree_method="gpu_hist",
             # predictor="gpu_predictor",
             callbacks=callbacks,
+            random_state=seed,
         )
 
 

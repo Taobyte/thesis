@@ -41,7 +41,13 @@ class WildPPGDataset(HRDataset):
             hr = data_all["data_bpm_values"][participant][0].astype(float)
             activity = data_all["data_imu_wrist"][participant][0]
 
+            # print(f"hr contains NaNs: {np.isnan(hr).any()}")
+            # print(f"hr is below 30 {np.sum(hr < 30)}")
+            # print(f"activity contains NaNs: {np.isnan(activity).any()}")
+            # print(f"Activity is Inf: {np.isinf(activity).any()}")
+
             # impute the values for hr and activity
+
             hr[hr < 30] = np.nan
             nans, x = nan_helper(hr)
             hr[nans] = np.interp(x(nans), x(~nans), hr[~nans])
@@ -49,7 +55,7 @@ class WildPPGDataset(HRDataset):
             mask_activity = np.isnan(activity) | np.isinf(activity)
             activity[mask_activity] = np.nan
             nans, x = nan_helper(activity)
-            activity[nans] = np.interp(x(nans), x(~nans), hr[~nans])
+            activity[nans] = np.interp(x(nans), x(~nans), activity[~nans])
 
             mask_ppg = ~np.isnan(ppg).any(axis=1) & ~np.isinf(ppg).any(axis=1)
             ppg = ppg[mask_ppg]

@@ -17,6 +17,9 @@ from src.constants import (
     METRICS,
 )
 
+# TODO: Implement automatic worst & best performance per dataset & normalization
+# TODO: Add in standard deviation to table
+
 
 def plot_normalization_table(
     datasets: list[str],
@@ -70,9 +73,16 @@ def plot_normalization_table(
                 if len(runs) % 3 == 0 and len(runs) > 0:
                     mean_dict, _ = get_metrics(runs)
                     lbw = list(mean_dict[model_name].keys())[0]
-                    if metric in mean_dict[model_name][lbw][str(pw)]:
-                        mean = mean_dict[model_name][lbw][str(pw)][metric]
+
+                    if metric in mean_dict[model_name][lbw][pw]:
+                        mean = mean_dict[model_name][lbw][pw][metric]
                     else:
+                        print(
+                            f"Metric {metric} not in mean_dict[{model_name}][{lbw}][{pw}]"
+                        )
+                        print(
+                            f"Setting mean = NaN for {model_name} {experiment} {dataset}"
+                        )
                         mean = np.nan
 
                 else:

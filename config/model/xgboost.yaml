@@ -13,6 +13,7 @@ model:
   colsample_bytree: 0.8 
   use_early_stopping: ${model.trainer.use_early_stopping}
   patience: ${model.trainer.patience}
+  seed: ${seed}
 
 pl_model:
   _target_: src.models.xgboost.XGBoost
