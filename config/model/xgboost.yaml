@@ -26,5 +26,8 @@ trainer:
   use_early_stopping: True
   patience: 2
 
+  gpu_mem: 0 
+  n_gpus: 0
+
 data:
   batch_size: 256

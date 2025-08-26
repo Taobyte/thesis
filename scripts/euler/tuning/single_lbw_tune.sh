@@ -1,16 +1,41 @@
 #!/bin/bash -l
 
-#SBATCH --gpus=1
-#SBATCH --gres=gpumem:24g
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=24:00:00
-#SBATCH --cpus-per-task=1
-#SBATCH --job-name=tune_job
-#SBATCH --output=/cluster/project/holz/ckeusch/tune_logs/%x_%j.out
+# Static resources
+GPUS=1
+N_CPUS=1
+CPU_MEM="4G"
+TIME="24:00:00"
 
-source ~/.bashrc
-conda activate thesis
+# Parameters
+MODEL="$1"
+NORMALIZATION="$2"
+N_TRIALS="$3"
+LBW="$4"
+PW="$5"
+DATASET="$6"
+GPU_MEM="$7"    
 
-module load eth_proxy
+NAME="optuna_${MODEL}_${DATASET}_${NORMALIZATION}_${LBW}_${PW}"
+LOGDIR="/cluster/project/holz/ckeusch/tune_logs"
 
-nvidia-smi;python main.py --multirun hydra/sweeper=${1}_sweeper model=${1} normalization=${2} experiment=endo_exo n_trials=${3} lbw=${4} pw=${5} dataset=${6} tune=True overfit=False
+JOB="python main.py --multirun \
+  hydra/sweeper=${MODEL}_sweeper \
+  model=${MODEL} \
+  normalization=${NORMALIZATION} \
+  experiment=endo_exo \
+  n_trials=${N_TRIALS} \
+  lbw=${LBW} \
+  pw=${PW} \
+  dataset=${DATASET} \
+  tune=True \
+  overfit=False"
+
+sbatch \
+  --job-name "$NAME" \
+  --output "${LOGDIR}/${NAME}_%j.out" \
+  --cpus-per-task "$N_CPUS" \
+  --mem-per-cpu "$CPU_MEM" \
+  --time "$TIME" \
+  --gpus "$GPUS" \
+  --gres "gpumem:${GPU_MEM}G" \
+  --wrap "bash -lc 'source ~/.bashrc; conda activate thesis; module load eth_proxy; nvidia-smi; $JOB'"

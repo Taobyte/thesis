@@ -25,8 +25,8 @@ normalization: ${experiment.normalization} # can be either "global", "difference
 train_frac: 0.7
 val_frac: 0.1
 
-numpy_models: ["linear","xgboost", "hlinear", "hxgboost", "exactgp"] # these models get passed the windowed training & val datasets 
-special_models: ["linear","xgboost", "hlinear", "hxgboost", "exactgp", "dummy"] # these models are not trained with Lightning 
+numpy_models: ["linear","xgboost","exactgp"] # these models get passed the windowed training & val datasets 
+special_models: ["linear","xgboost", "exactgp", "dummy"] # these models are not trained with Lightning 
 probabilistic_models: ["gp", "dklgp", "exactgp"] # these models output the mean & std as the prediction
 return_series_models: ["msar"]
 
@@ -54,6 +54,7 @@ wandb:
 
 # training 
 min_delta: 0.001
+use_efficiency_callback: False
 
 # tuner flag
 tune: False

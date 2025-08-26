@@ -34,6 +34,9 @@ trainer:
   max_epochs: 100
   use_early_stopping: True 
   patience: 5
+    
+  gpu_mem: 24 
+  n_gpus: 1
 
 data:
   batch_size: 256 # 128

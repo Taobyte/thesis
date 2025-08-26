@@ -10,9 +10,10 @@ from lightning.pytorch.callbacks import ModelCheckpoint, Callback
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
 from lightning import LightningDataModule, Trainer, LightningModule
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 from src.models.utils import get_model_kwargs
+from src.callbacks import EfficiencyCallback
 
 
 def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
@@ -53,7 +54,7 @@ def setup(
         return_whole_series=return_whole_series,
     )
 
-    callbacks: list[Callback] = []
+    callbacks: List[Union[Callback, EarlyStopping, ModelCheckpoint]] = []
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
@@ -71,6 +72,10 @@ def setup(
                 min_delta=config.min_delta,  # stop if no substantial improvement is being made. Important for models with LR schedulers
             )
         )
+
+    if config.use_efficiency_callback:
+        efficiency_callback = EfficiencyCallback()
+        callbacks.append(efficiency_callback)
 
     trainer = L.Trainer(
         logger=wandb_logger,
