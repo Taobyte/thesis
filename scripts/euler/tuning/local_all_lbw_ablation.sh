@@ -1,6 +1,6 @@
 
 N_TRIALS=50
-BASELINES=(linear xgboost mole msar kalmanfilter gp mlp)
+BASELINES=(linear xgboost mole msar kalmanfilter exactgp mlp)
 DL=(timesnet simpletm adamshyper patchtst timexer gpt4ts nbeatsx)
 DATASETS=(ldalia lwildppg lieee)
 for DATASET in "${DATASETS[@]}"

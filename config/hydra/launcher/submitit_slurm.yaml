@@ -3,7 +3,7 @@ submitit_folder: ${hydra.sweep.dir}/.submitit/%j
 timeout_min: 240 # 60min * 4 = 4h 
 cpus_per_task: 1
 gpus_per_node: 1
-mem_per_cpu: 24G
+mem_per_cpu: 4G
 gres: "gpumem:24g"
 name: ${dataset.name}_${model.name}_${look_back_window}_${prediction_window}_${experiment}
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
