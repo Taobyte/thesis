@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    colsample_bytree: 0.735
+    learning_rate: 0.002
+    max_depth: 7
+    n_estimators: 712
+    reg_alpha: 0.0009
+    reg_lambda: 0.0599
+    subsample: 0.9766

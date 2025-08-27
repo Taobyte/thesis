@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    activation: tanh
+    dropout: 0.1
+    hid_dim: 128
+    n_hid_layers: 1
+  pl_model:
+    learning_rate: 0.003
+    weight_decay: 0.0

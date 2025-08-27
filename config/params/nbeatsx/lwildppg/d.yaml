@@ -1,0 +1,14 @@
+# @package _global_
+
+model:
+  model:
+    dropout_prob_exogenous: 0.2495
+    dropout_prob_theta: 0.1011
+    kernel_size: 4
+    n_hidden: 250
+    stack_types:
+    - identity
+    - exogenous_wavenet
+  pl_model:
+    learning_rate: 0.0059
+    weight_decay: 0.0081

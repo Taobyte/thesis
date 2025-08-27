@@ -2,16 +2,15 @@ import pandas as pd
 import numpy as np
 import wandb
 import os
-import plotly.graph_objects as go
 import ast
+import plotly.graph_objects as go
 
 
 from matplotlib import colors
 from tqdm import tqdm
 from collections import defaultdict
-from itertools import product
 from typing import Tuple
-
+from pathlib import Path
 
 from src.utils import create_group_run_name
 from src.constants import (
@@ -231,73 +230,70 @@ def add_model_mean_std_to_fig(
             )
 
 
+def unflatten(d, sep="."):
+    out = {}
+    for k, v in d.items():
+        parts = k.split(sep)
+        cur = out
+        for p in parts[:-1]:
+            cur = cur.setdefault(p, {})
+        processed_value = v
+        if isinstance(v, float):
+            processed_value = round(v, ndigits=4)
+        elif isinstance(v, str) and v.startswith("[") and v.endswith("]"):
+            processed_value = ast.literal_eval(v)
+        cur[parts[-1]] = processed_value
+    return out
+
+
 def create_params_file_from_optuna(models: list[str], start_time: str):
     import yaml
 
-    assert len(models) == 1
-    model = models[0]
-    filters = {"$and": [{"created_at": {"$gte": start_time}}]}
+    lbw_to_name = {"3": "f", "5": "a", "10": "b", "20": "c", "30": "d", "60": "e"}
+    params_dir = Path("C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config/params")
+
+    filters = {
+        "$and": [
+            {"created_at": {"$gte": start_time}},
+        ]
+    }
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters=filters)
     print(f"Found {len(runs)} runs.")
+    for model in models:
+        print(50 * "-")
+        print(f"{model}")
+        print(50 * "-")
+        filtered_runs = [
+            run for run in runs if run.name and run.name.startswith(f"optuna_{model}")
+        ]
+        print(f"Found {len(filtered_runs)} runs.")
 
-    filtered_runs = [
-        run for run in runs if run.name and run.name.startswith(f"optuna_{model}")
-    ]
-
-    final_dict = defaultdict(lambda: defaultdict(dict))
-    for run in filtered_runs:
-        for file in run.files():
-            if file.name == "output.log":
-                path = file.download(replace=True).name
-                with open(path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-
-                last_two_lines = [line.strip() for line in lines if line.strip()][-2:]
-
-                name_splitted = run.name.split("_")
-                dynamic_info = str("df" in name_splitted)
-                lbw = name_splitted[-2]
-                pw = name_splitted[-1]
-
-                parameter_line = last_two_lines[0]
-                keyword = "Best parameters: "
-                start = parameter_line.find(keyword) + len(keyword)
-
-                try:
-                    param_dict = ast.literal_eval(parameter_line[start:])
-                except (ValueError, SyntaxError) as e:
-                    print(
-                        f"[WARN] Skipping run {run.name}: Failed to parse parameters → {e}"
-                    )
-                    os.remove(path)
-                    continue  # Skip this run and go to the next one
-
-                param_dict = {
-                    key.split(".")[-1]: value for key, value in param_dict.items()
+        for run in filtered_runs:
+            run_name = run.name
+            state = run.state
+            crashed = state in {"crashed", "failed", "killed"}
+            splitted = run_name.split("_")
+            dataset = splitted[3]
+            lbw_name = lbw_to_name[splitted[-4]]
+            summary = run.summary._json_dict
+            processed_summary = unflatten(summary)
+            if "model" in processed_summary and not crashed:
+                filtered = {
+                    k: v
+                    for k, v in processed_summary.items()
+                    if k in ["model", "pl_model"]
                 }
+                p = params_dir / model / dataset
+                p.mkdir(parents=True, exist_ok=True)
+                out_path = (p / lbw_name).with_suffix(".yaml")
+                with open(out_path, "w", encoding="utf-8") as f:
+                    f.write("# @package _global_\n")
+                    f.write("\n")
+                    yaml.safe_dump(filtered, f, sort_keys=False)
 
-                final_dict[dynamic_info][lbw][pw] = param_dict
+                print(f"Successfully written {model} {dataset} {lbw_name}")
 
-                print(param_dict)
-                print(type(param_dict))
-
-                os.remove(path)
-
-    def to_regular_dict(d):
-        if isinstance(d, defaultdict):
-            d = {k: to_regular_dict(v) for k, v in d.items()}
-        elif isinstance(d, dict):
-            d = {k: to_regular_dict(v) for k, v in d.items()}
-        return d
-
-    clean_dict = to_regular_dict(final_dict)
-    sorted_dict = dict(
-        sorted(
-            clean_dict.items(),
-            key=lambda item: int(item[0]) if item[0].isdigit() else item[0],
-        )
-    )
-
-    yaml_str = yaml.dump(sorted_dict, sort_keys=False)
-    print(yaml_str)
+            else:
+                print(f"Run for {model} {dataset} {lbw_name} did not finish.")
+                print(processed_summary)

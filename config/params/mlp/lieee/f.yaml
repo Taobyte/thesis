@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    activation: relu
+    dropout: 0.0582
+    hid_dim: 32
+    n_hid_layers: 1
+  pl_model:
+    learning_rate: 0.001
+    weight_decay: 0.0001

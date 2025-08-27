@@ -1,0 +1,8 @@
+# @package _global_
+
+model:
+  model:
+    d_model: 128
+    gamma: 4.8071
+  pl_model:
+    learning_rate: 0.0099

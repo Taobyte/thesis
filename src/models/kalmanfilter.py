@@ -399,38 +399,21 @@ class Model(BaseKalmanFilter):
         """
         device = prior_covariance.device
 
-        P = prior_covariance
-        H = observation_matrix
-        R = observation_noise
-
-        HP = torch.bmm(H, P)  # (B, m, n)
-        S = torch.bmm(HP, H.transpose(1, 2)) + R  # (B, m, m)
-
-        # jitter for stability
-        jitter = 1e-6
-        eye_m = torch.eye(S.size(1), device=S.device, dtype=S.dtype).expand_as(S)
-        S = S + jitter * eye_m
-
-        # Add small diagonal for numerical stability
-        L = torch.linalg.cholesky(S)  # (B, m, m)
-        X = torch.cholesky_solve(HP, L)  # (B, m, n)  solves S X = HP
-        K = X.transpose(1, 2)
-
         # Compute innovation covariance
-        # S = (
-        #     torch.bmm(
-        #         torch.bmm(observation_matrix, prior_covariance),
-        #         observation_matrix.transpose(1, 2),
-        #     )
-        #     + observation_noise
-        # )
+        S = (
+            torch.bmm(
+                torch.bmm(observation_matrix, prior_covariance),
+                observation_matrix.transpose(1, 2),
+            )
+            + observation_noise
+        )
 
-        # S = S + torch.eye(S.size(1), device=device) * 1e-6
-        # # Compute Kalman gain
-        # K = torch.bmm(
-        #     torch.bmm(prior_covariance, observation_matrix.transpose(1, 2)),
-        #     torch.inverse(S),
-        # )
+        S = S + torch.eye(S.size(1), device=device) * 1e-6
+        # Compute Kalman gain
+        K = torch.bmm(
+            torch.bmm(prior_covariance, observation_matrix.transpose(1, 2)),
+            torch.inverse(S),
+        )
 
         return K
 

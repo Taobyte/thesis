@@ -1,0 +1,8 @@
+# @package _global_
+
+model:
+  model:
+    state_dim: 16
+  pl_model:
+    learning_rate: 0.0055
+    weight_decay: 0.0
