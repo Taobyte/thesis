@@ -1,0 +1,14 @@
+# @package _global_
+
+model:
+  data:
+    batch_size: 512
+  model:
+    dropout: 0
+    input_dropout: 0
+    n_regimes: 1
+    use_last: false
+  pl_model:
+    learning_rate: 0.0073
+    optimizer_name: adamw
+    weight_decay: 0

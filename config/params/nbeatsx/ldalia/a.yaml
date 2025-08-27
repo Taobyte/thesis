@@ -2,13 +2,13 @@
 
 model:
   model:
-    dropout_prob_exogenous: 0.2143
-    dropout_prob_theta: 0.1032
+    dropout_prob_exogenous: 0.4393
+    dropout_prob_theta: 0.2748
     kernel_size: 3
-    n_hidden: 500
+    n_hidden: 100
     stack_types:
-    - identity
     - exogenous_tcn
+    - identity
   pl_model:
-    learning_rate: 0.0037
-    weight_decay: 0.0004
+    learning_rate: 0.0075
+    weight_decay: 0.0013

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import wandb
+import gc
 
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf
@@ -53,6 +54,8 @@ def tune(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> float:
         delete_checkpoint(trainer, checkpoint_callback)
 
         del datamodule, pl_model, trainer, callbacks
+        gc.collect()
+        torch.cuda.empty_cache()
 
     avg_val_loss = float(np.mean(val_losses))
     print(f"Average validation loss across folds: {avg_val_loss:.4f}")
@@ -73,6 +76,8 @@ def tune_local(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> 
         results.append(val_results[0]["val_loss_epoch"])
         delete_checkpoint(trainer, checkpoint_callback)
         del datamodule, pl_model, trainer, callbacks
+        gc.collect()
+        torch.cuda.empty_cache()
 
     averaged_results = float(np.mean(results))
     return averaged_results

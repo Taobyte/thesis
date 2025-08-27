@@ -1,14 +1,14 @@
 # @package _global_
 
 model:
-  pl_model:
-    learning_rate: 0.0066
-    weight_decay: 0.00008
   model:
-    stack_types: ["exogenous_tcn", "identity"]
-    
-    n_hidden: 250
-    kernel_size: 4
-
-    dropout_prob_theta: 0.053
-    dropout_prob_exogenous: 0.490
+    dropout_prob_exogenous: 0.2239
+    dropout_prob_theta: 0.2793
+    kernel_size: 5
+    n_hidden: 100
+    stack_types:
+    - identity
+    - exogenous_wavenet
+  pl_model:
+    learning_rate: 0.0009
+    weight_decay: 0.0
