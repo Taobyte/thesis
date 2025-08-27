@@ -522,7 +522,11 @@ class Model(nn.Module):
         self.n_x_t = 1  # hard coded, we either pass in zeros for endo_only or the activity info for endo_exo experiments
 
         self.kernel_size = kernel_size
-        assert kernel_size <= input_size
+        if kernel_size > input_size:
+            print(
+                "Attention! kernel_size > input_size. \n Setting kernel_size = input_size"
+            )
+            kernel_size = input_size
 
         block_list = self.create_stack()
         block_module_list = nn.ModuleList(block_list)
@@ -715,11 +719,15 @@ class NBeatsX(BaseLightningModule):
 
         if self.use_norm:
             prediction = prediction * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+                stdev[:, 0, : self.target_channel_dim]
+                .unsqueeze(1)
+                .repeat(1, self.prediction_window, 1)
             )
 
             prediction = prediction + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
+                means[:, 0, : self.target_channel_dim]
+                .unsqueeze(1)
+                .repeat(1, self.prediction_window, 1)
             )
 
         return prediction
