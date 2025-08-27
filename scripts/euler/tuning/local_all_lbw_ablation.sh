@@ -11,11 +11,11 @@ for DATASET in "${DATASETS[@]}"
 do
     for MODEL in "${BASELINES[@]}"
     do
-        bash scripts/euler/tuning/local_lbw_ablation_tune.sh "$MODEL" difference "$N_TRIALS" "$DATASET" "$GPU_MEM_BASELINE" "$TIME"
+        bash scripts/euler/tuning/local_lbw_ablation.sh "$MODEL" difference "$N_TRIALS" "$DATASET" "$GPU_MEM_BASELINE" "$TIME"
     done
 
     for MODEL in "${DL[@]}"
     do
-        bash scripts/euler/tuning/local_lbw_ablation_tune.sh "$MODEL" global "$N_TRIALS" "$DATASET" "$GPU_MEM_DL" "$TIME"
+        bash scripts/euler/tuning/local_lbw_ablation.sh "$MODEL" global "$N_TRIALS" "$DATASET" "$GPU_MEM_DL" "$TIME"
     done
 done
