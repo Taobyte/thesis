@@ -202,10 +202,13 @@ class BaseDataModule(L.LightningDataModule):
             assert self.test_dataset is not None, "Train dataset is not initialized."
         dataset = self.train_dataset if mode == "train" else self.test_dataset
         dataset_length = len(dataset)
+        if dataset_length < num_inducing:
+            print(
+                f"Number of inducing points {num_inducing} are larger than dataset length {dataset_length}"
+            )
+            print("Setting num_inducing = dataset_length")
+            num_inducing = dataset_length
 
-        assert dataset_length >= num_inducing, (
-            f"Cannot sample {num_inducing} inducing points from dataset of size {dataset_length}"
-        )
         if strategy == "random":
             indices = random.sample(range(dataset_length), num_inducing)
             inducing_points = [dataset[i][0] for i in indices]
