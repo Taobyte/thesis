@@ -4,7 +4,6 @@
 GPUS=1
 N_CPUS=1
 CPU_MEM="4G"
-TIME="24:00:00"
 
 # Parameters
 MODEL="$1"
@@ -14,6 +13,7 @@ LBW="$4"
 PW="$5"
 DATASET="$6"
 GPU_MEM="$7"    
+TIME="$8"
 
 NAME="optuna_${MODEL}_${DATASET}_${NORMALIZATION}_${LBW}_${PW}"
 LOGDIR="/cluster/project/holz/ckeusch/tune_logs"
