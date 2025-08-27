@@ -142,7 +142,7 @@ class ExactGP(BaseLightningModule):
     def on_validation_epoch_start(self):
         val_preds = self.model(self.model.lbw_val_dataset)
         val_loss = -self.mll(val_preds, self.model.pw_val_dataset)
-        self.log("val_loss", val_loss, on_step=False, on_epoch=True, logger=True)
+        self.log("val_loss_epoch", val_loss, on_step=False, on_epoch=True, logger=True)
 
     def model_specific_train_step(
         self, look_back_window: Tensor, prediction_window: Tensor
