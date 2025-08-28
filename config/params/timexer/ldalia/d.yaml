@@ -1,0 +1,11 @@
+# @package _global_
+
+model:
+  model:
+    d_ff: 512
+    d_model: 256
+    dropout: 0.2975
+    e_layers: 1
+    patch_len: 5
+  pl_model:
+    learning_rate: 0.0001

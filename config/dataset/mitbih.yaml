@@ -1,0 +1,20 @@
+defaults:
+  - datamodule
+
+name: "mitbih"
+
+datamodule:
+  _target_: src.datasets.mitbih.MITBIHDatamodule
+  data_dir: "${path.datadir}/MITBIH/"
+
+  train_participants: null 
+  val_participants: null 
+  test_participants: [T4] # arbitrary, we do not use this at all
+
+  freq: 2
+
+  target_channel_dim: 1 
+  dynamic_exogenous_variables: 0 
+  static_exogenous_variables: 0 
+
+

@@ -3,6 +3,6 @@
 model:
   model:
     d_model: 256
-    gamma: 6.189
+    gamma: 7.2062
   pl_model:
-    learning_rate: 0.0076
+    learning_rate: 0.0048

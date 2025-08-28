@@ -2,7 +2,9 @@
 
 model:
   model:
-    d_model: 256
-    gamma: 6.189
+    kernel: rq
+    num_latents: 1
+    use_linear_trend: 1
+  n_points: 300
   pl_model:
     learning_rate: 0.0076

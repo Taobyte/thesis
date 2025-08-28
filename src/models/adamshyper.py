@@ -1298,11 +1298,21 @@ class multi_adaptive_hypergraoh(nn.Module):
             s1, t1 = adj.topk(min(adj.size(1), self.k), 1)
             mask.scatter_(1, t1, s1.fill_(1))
             adj = adj * mask
-            adj = torch.where(
+
+            adj_bin = torch.where(
                 adj > self.beta,
                 torch.tensor(1).to(x.device),
                 torch.tensor(0).to(x.device),
             )
+
+            if adj_bin.sum() == 0:
+                print("ATTENTION! ADJACENCY MATRIX WAS COMPLETELY ZEROED OUT!")
+                top1 = adj.argmax(dim=1, keepdim=True)
+                adj_bin = torch.zeros_like(adj, dtype=torch.int32)
+                adj_bin.scatter_(1, top1, 1)
+
+            adj = adj_bin
+
             adj = adj[:, (adj != 0).any(dim=0)]
             matrix_array = adj.clone().detach().to(dtype=torch.int)
             result_list = [

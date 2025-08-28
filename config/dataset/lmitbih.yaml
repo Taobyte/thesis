@@ -1,0 +1,9 @@
+defaults:
+  - mitbih
+
+name: "lmitbih"
+participants: [T1,T2,T3,T4]
+
+datamodule:
+  _target_: src.datasets.lmitbih.LMITBIHDatamodule
+  participant: T1

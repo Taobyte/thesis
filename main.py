@@ -44,10 +44,8 @@ def main(config: DictConfig) -> Optional[float]:
         return avg_val_loss
     else:
         if config.dataset.name in config.global_datasets:
-            assert config.dataset.name in ["ieee", "dalia", "wildppg"]
             train_test_global(config, wandb_logger, run_name)
         elif config.dataset.name in config.local_datasets:
-            assert config.dataset.name in ["lieee", "ldalia", "lwildppg"]
             train_test_local(config, wandb_logger, run_name)
         else:
             raise NotImplementedError()

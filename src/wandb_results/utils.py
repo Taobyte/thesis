@@ -265,7 +265,7 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
         print(f"{model}")
         print(50 * "-")
         filtered_runs = [
-            run for run in runs if run.name and run.name.startswith(f"optuna_{model}")
+            run for run in runs if run.name and run.name.startswith(f"optuna_{model}_")
         ]
         print(f"Found {len(filtered_runs)} runs.")
 
@@ -273,12 +273,13 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
             run_name = run.name
             state = run.state
             crashed = state in {"crashed", "failed", "killed"}
+            running = state == "running"
             splitted = run_name.split("_")
             dataset = splitted[3]
             lbw_name = lbw_to_name[splitted[-4]]
             summary = run.summary._json_dict
             processed_summary = unflatten(summary)
-            if "model" in processed_summary and not crashed:
+            if "model" in processed_summary and not crashed and not running:
                 filtered = {
                     k: v
                     for k, v in processed_summary.items()
@@ -295,5 +296,8 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
                 print(f"Successfully written {model} {dataset} {lbw_name}")
 
             else:
-                print(f"Run for {model} {dataset} {lbw_name} did not finish.")
-                print(processed_summary)
+                if crashed:
+                    print(f"Run for {model} {dataset} {lbw_name} did not finish.")
+                    print(processed_summary)
+                elif running:
+                    print("This job is still running.")
