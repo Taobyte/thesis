@@ -300,4 +300,6 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
                     print(f"Run for {model} {dataset} {lbw_name} did not finish.")
                     print(processed_summary)
                 elif running:
-                    print("This job is still running.")
+                    print(
+                        f"This job for {model} {dataset} {lbw_name} is still running."
+                    )

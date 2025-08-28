@@ -116,39 +116,79 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         return inputs
 
+    # def get_gaussian_log_likelihood(self, emissions: Tensor, is_series: bool = False):
+    #     """
+    #     Compute log likelihood of emissions under multivariate Gaussian for each state
+    #     emissions.shape == (B, L, C)
+    #     Returns: (B, L, n_states)
+    #     """
+
+    #     B, L, C = emissions.shape
+
+    #     inputs = self.get_inputs(emissions, is_series=is_series)
+    #     targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
+
+    #     log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
+
+    #     covars = self.get_covariance_matrices()
+
+    #     for state in range(self.n_states):
+    #         hidden_state_mean = (
+    #             self.means[state].unsqueeze(0).expand(B * L, -1)
+    #         )  # (B,C)
+    #         covar = covars[state]  # (C, C)
+    #         covar_reg = covar + self.jitter * torch.eye(
+    #             C, device=covar.device
+    #         ).unsqueeze(0).expand(B * L, -1, -1)
+
+    #         # add linear autoregressive compontent b=B*L d=C
+    #         ar_component = self.W[state](inputs)  # (B*L, C)
+    #         mean = hidden_state_mean + ar_component
+
+    #         dist = torch.distributions.MultivariateNormal(mean, covar_reg)
+    #         log_prob = dist.log_prob(targets)  # (B*L, )
+    #         log_prob = rearrange(log_prob, "(B L) -> B L", L=L)
+    #         log_probs[:, :, state] = log_prob
+
+    #     return log_probs
     def get_gaussian_log_likelihood(self, emissions: Tensor, is_series: bool = False):
         """
-        Compute log likelihood of emissions under multivariate Gaussian for each state
-        emissions.shape == (B, L, C)
-        Returns: (B, L, n_states)
+        emissions: (B, L, C)
+        returns: log_probs: (B, L, K)
         """
-
         B, L, C = emissions.shape
+        device = emissions.device
 
-        inputs = self.get_inputs(emissions, is_series=is_series)
+        # Inputs X_{t-1:t-L} flattened
+        inputs = self.get_inputs(emissions, is_series=is_series)  # (B*L, L*C)
         targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
 
-        log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
+        # Stack per-state params
+        means = torch.stack(list(self.means), dim=0)  # (K, C)
+        sigmas = (
+            F.softplus(torch.stack(list(getattr(self, "covar_chol")))) + self.sigma_min
+        )  # (K, C)
 
-        covars = self.get_covariance_matrices()
+        # Stack Linear weights into one tensor: W_weight[k] is (LC, C)
+        W_weight = torch.stack([w.weight.T for w in self.W], dim=0)  # (K, L*C, C)
 
-        for state in range(self.n_states):
-            hidden_state_mean = (
-                self.means[state].unsqueeze(0).expand(B * L, -1)
-            )  # (B,C)
-            covar = covars[state]  # (C, C)
-            covar_reg = covar + self.jitter * torch.eye(
-                C, device=covar.device
-            ).unsqueeze(0).expand(B * L, -1, -1)
+        # AR outputs for ALL states at once: (B*L, K, C)
+        # einsum: (b l_c) x (k l_c c) -> (b k c)
+        ar_all = torch.einsum("bf,kfc->bkc", inputs, W_weight)
 
-            # add linear autoregressive compontent b=B*L d=C
-            ar_component = self.W[state](inputs)  # (B*L, C)
-            mean = hidden_state_mean + ar_component
+        # Full per-state means for ALL states: (B*L, K, C)
+        means_all = means.unsqueeze(0) + ar_all
 
-            dist = torch.distributions.MultivariateNormal(mean, covar_reg)
-            log_prob = dist.log_prob(targets)  # (B*L, )
-            log_prob = rearrange(log_prob, "(B L) -> B L", L=L)
-            log_probs[:, :, state] = log_prob
+        # Diagonal Gaussian log prob, vectorized
+        diff = targets.unsqueeze(1) - means_all  # (B*L, K, C)
+        z = (diff / sigmas.unsqueeze(0)) ** 2  # (B*L, K, C)
+
+        log_det = 2.0 * torch.log(sigmas).sum(dim=-1)  # (K,)
+        const = C * torch.log(torch.tensor(2.0 * torch.pi, device=device))
+
+        log_prob = -0.5 * (z.sum(dim=-1) + log_det.unsqueeze(0) + const)  # (B*L, K)
+
+        log_probs = log_prob.view(B, L, self.n_states)  # (B, L, K)
 
         return log_probs
 

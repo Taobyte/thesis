@@ -4,4 +4,4 @@ model:
   model:
     d_model: 128
   pl_model:
-    learning_rate: 0.0
+    learning_rate: 0.0011
