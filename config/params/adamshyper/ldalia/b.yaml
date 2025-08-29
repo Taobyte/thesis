@@ -2,6 +2,6 @@
 
 model:
   model:
-    d_model: 64
+    d_model: 512
   pl_model:
-    learning_rate: 0.0023
+    learning_rate: 0.0069

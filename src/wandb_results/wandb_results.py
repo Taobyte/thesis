@@ -1,12 +1,14 @@
 import argparse
 
+from src.constants import MODELS
+
 from src.wandb_results.metric_table import (
     plot_tables,
     latex_metric_table,
     compare_endo_exo_latex_tables,
     plot_best_lbw,
 )
-from src.wandb_results.activity_ablation import dynamic_feature_ablation
+from src.wandb_results.activity_ablation import visualize_exo_difference
 from src.wandb_results.look_back_ablation import (
     visualize_look_back_window_difference,
     ablation_delta_plot,
@@ -91,7 +93,7 @@ def main():
     parser.add_argument(
         "--models",
         required=False,
-        default=[],
+        default=MODELS,
         type=list_of_strings,
         help="Pass in the models you want to visualize the prediction and look back window. Must be separated by commas , without spaces between the model names! (Correct Example: timesnet,xgboost| Wrong Example: gpt4ts, timellm )",
     )
@@ -181,18 +183,12 @@ def main():
             save_html=args.save_html,
         )
     elif args.type == "activity_ablation":
-        dynamic_feature_ablation(
-            datasets=args.dataset,
-            models=args.models,
-            look_back_window=args.look_back_window,
-            prediction_window=args.prediction_window,
-            use_heart_rate=True,
-            start_time="2025-7-14",
-            normalization=args.normalization,
-            save_html=args.save_html,
-            window_statistic=args.window_statistic,
-            use_std=args.use_std,
-            table=args.table,
+        visualize_exo_difference(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            start_time="2025-08-28",
         )
     elif args.type == "norm_ablation":
         plot_normalization_table(

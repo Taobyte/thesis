@@ -5,14 +5,13 @@ import os
 import ast
 import plotly.graph_objects as go
 
-
+from src.utils import create_group_run_name
 from matplotlib import colors
 from tqdm import tqdm
 from collections import defaultdict
 from typing import Tuple
 from pathlib import Path
 
-from src.utils import create_group_run_name
 from src.constants import (
     METRICS,
     dataset_to_name,
