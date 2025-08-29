@@ -6,6 +6,17 @@ from src.wandb_results.utils import get_metrics, get_runs
 import matplotlib.pyplot as plt
 
 
+def activity_latex_table(
+    datasets: list[str],
+    models: list[str],
+    look_back_window: list[int] = [30],
+    prediction_window: list[int] = [3],
+    metric: str = "MSE",
+    start_time: str = "2025-8-28",
+):
+    pass
+
+
 def visualize_exo_difference(
     datasets: list[str],
     models: list[str],

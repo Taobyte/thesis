@@ -24,13 +24,13 @@ sbatch --export=ALL --job-name="${DALIA_RUNS}_difference" -o "${DALIA_RUNS}_diff
 # ------------------- WILDPPG -------------------
 WILDPPG_RUNS="exo_wildppg"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=nbeatsx normalization=global use_norm_dl=False use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=nbeatsx normalization=global use_norm_dl=False use_wandb=True tune=False experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_global"     -o "${WILDPPG_RUNS}_global_%j.out"     --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer normalization=global use_norm_dl=True use_norm_baseline=True use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer normalization=global use_norm_dl=True use_norm_baseline=True use_wandb=True tune=False experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_local"      -o "${WILDPPG_RUNS}_local_%j.out"      --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=linear,msar,kalmanfilter,gp,gpt4ts normalization=difference use_norm_dl=False use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=$LBW pw=$PW model=linear,msar,kalmanfilter,gp,gpt4ts normalization=difference use_norm_dl=False use_wandb=True tune=False experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_difference" -o "${WILDPPG_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
 
 # ------------------- IEEE -------------------
