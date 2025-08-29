@@ -81,6 +81,7 @@ def tune_local(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> 
         torch.cuda.empty_cache()
 
     averaged_results = float(np.mean(results))
+    print(f"Average validation loss across folds: {averaged_results:.4f}")
     return averaged_results
 
 
@@ -176,6 +177,7 @@ def train_test_local(
         {
             "mean_metrics": wandb.Table(dataframe=means),
             "std_metrics": wandb.Table(dataframe=stds),
+            "raw_metrics": wandb.Table(dataframe=df),
         }
     )
 

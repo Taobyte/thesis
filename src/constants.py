@@ -76,8 +76,6 @@ model_to_name = {
     "timesnet": "TimesNet",
     "gpt4ts": "GPT4TS",
     "adamshyper": "AdaMSHyper",
-    "timellm": "TimeLLM",
-    "pattn": "PAttn",
     "simpletm": "SimpleTM",
     "patchtst": "PatchTST",
     "timexer": "TimeXer",
@@ -88,6 +86,23 @@ model_to_name = {
     "msar": "MSAR",
     "mole": "MoLE",
     "xgboost": "XGBoost",
+    "mlp": "MLP",
+}
+
+model_to_abbr = {
+    "timesnet": "TNET",
+    "gpt4ts": "GPT4TS",
+    "adamshyper": "AMSH",
+    "simpletm": "STM",
+    "patchtst": "PTST",
+    "timexer": "TXER",
+    "nbeatsx": "NBX",
+    "gp": "GP",
+    "kalmanfilter": "KF",
+    "linear": "LR",
+    "msar": "MSAR",
+    "mole": "MoLE",
+    "xgboost": "XGB",
     "mlp": "MLP",
 }
 

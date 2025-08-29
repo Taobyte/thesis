@@ -1,7 +1,5 @@
-import pandas as pd
 import numpy as np
 import wandb
-import os
 import ast
 import plotly.graph_objects as go
 
@@ -12,10 +10,7 @@ from collections import defaultdict
 from typing import Tuple
 from pathlib import Path
 
-from src.constants import (
-    METRICS,
-    dataset_to_name,
-)
+from src.constants import METRICS, dataset_to_name, model_colors
 
 
 def get_metrics(
@@ -29,25 +24,36 @@ def get_metrics(
         "NRMSE",
         "SMAPE",
     ],
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[dict, dict, dict]:
     """
     Preprocess the run metrics for the wandb training runs in the runs list.
     Returns two dataframes, the first storing the mean and the second the standard deviation for
     each metric in the METRICS list defined in src/constants.py
+
+    returns: - raw metric dictionary with keys 'model' -> 'look_back_window' -> 'prediction_window' -> 'fold_nr' -> 'seed'
+             - mean dict, taking mean over folds and seeds  keys = 'model' -> 'look_back_window' -> 'prediction_window'
+             - std dict, taking std over folds and seeds keys = 'model' -> 'look_back_window' -> 'prediction_window'
     """
 
-    metrics = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    metrics = defaultdict(
+        lambda: defaultdict(
+            lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        )
+    )
     model_run_counts = defaultdict(int)
     for run in tqdm(runs):
         config = run.config
         model_name = config["model"]["name"]
         look_back_window = config["look_back_window"]
         prediction_window = config["prediction_window"]
+        fold = config["folds"]["fold_nr"]
+        seed = config["seed"]
         summary = run.summary._json_dict
         filtered_summary = {k: summary[k] for k in summary if k in METRICS}
-        metrics[model_name][look_back_window][prediction_window].append(
+        metrics[model_name][look_back_window][prediction_window][fold][seed] = (
             filtered_summary
         )
+
         model_run_counts[model_name] += 1
 
     for k, v in model_run_counts.items():
@@ -57,26 +63,26 @@ def get_metrics(
     processed_metrics_std = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     for model, v in metrics.items():
         for lbw, w in v.items():
-            for pw, z in w.items():
+            for pw, fold_dict in w.items():
                 metric_list = defaultdict(list)
-                for metric_dict in z:
-                    for metric_name, metric_value in metric_dict.items():
-                        if metric_name in metrics_to_keep:
-                            if isinstance(metric_value, str):
-                                print(
-                                    f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw}"
-                                )
-                                # metric_value = np.nan
-                            elif np.isinf(metric_value):
-                                print(
-                                    f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw}"
-                                )
-                            elif np.isnan(metric_value):
-                                print(
-                                    f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw}"
-                                )
-                            else:
-                                metric_list[metric_name].append(metric_value)
+                for fold_nr, seed_dict in fold_dict.items():
+                    for seed, metric_dict in seed_dict.items():
+                        for metric_name, metric_value in metric_dict.items():
+                            if metric_name in metrics_to_keep:
+                                if isinstance(metric_value, str):
+                                    print(
+                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                    )
+                                elif np.isinf(metric_value):
+                                    print(
+                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                    )
+                                elif np.isnan(metric_value):
+                                    print(
+                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                    )
+                                else:
+                                    metric_list[metric_name].append(metric_value)
 
                 mean = {
                     metric_name: float(np.mean(v))
@@ -88,7 +94,7 @@ def get_metrics(
                 }
                 processed_metrics_mean[model][lbw][pw] = mean
                 processed_metrics_std[model][lbw][pw] = std
-    return processed_metrics_mean, processed_metrics_std
+    return metrics, processed_metrics_mean, processed_metrics_std
 
 
 def get_runs(
