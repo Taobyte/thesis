@@ -5,6 +5,7 @@ import wandb
 import gc
 
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers.logger import DummyLogger
 from omegaconf import OmegaConf
 from omegaconf import DictConfig
 from hydra.utils import get_original_cwd
@@ -107,17 +108,19 @@ def train_test_global(
         )
 
     del datamodule
-    local_datamodule, _, _, _ = setup(config, wandb_logger, run_name)
+    ckpt_path = checkpoint_callback.best_model_path or None
+    dummy_logger = DummyLogger()
+    local_datamodule, _, local_trainer, _ = setup(config, dummy_logger, run_name)
     local_datamodule.test_local = True
     local_datamodule.setup("fit")  # initialize train_dataset for normalization
 
-    if config.model.name not in config.special_models:
-        local_test_results = trainer.test(
-            pl_model, datamodule=local_datamodule, ckpt_path="best"
+    if ckpt_path and (config.model.name not in config.special_models):
+        local_test_results = local_trainer.test(
+            pl_model, datamodule=local_datamodule, ckpt_path=ckpt_path
         )
     else:
         print("Best checkpoint not found, testing with current model.")
-        local_test_results = trainer.test(
+        local_test_results = local_trainer.test(
             pl_model, datamodule=local_datamodule, ckpt_path=None
         )
 
@@ -127,6 +130,13 @@ def train_test_global(
 
     global_results = pd.DataFrame(global_test_results)
     local_results = pd.DataFrame(local_test_results)
+
+    wandb_logger.experiment.log(
+        {
+            "local_results": wandb.Table(dataframe=local_results),
+        }
+    )
+
     return global_results, local_results
 
 

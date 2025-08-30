@@ -638,17 +638,17 @@ class KalmanFilter(BaseLightningModule):
 
         return preds[:, :, : self.model.target_channel_dim]
 
-    def _shared_step(self, series: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        heartrate = series[:, :, : self.target_channel_dim]
-        if self.model.control_dim > 0:
-            activity = series[:, :, self.target_channel_dim :]
-        else:
-            activity = None
+    # def _shared_step(self, series: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     heartrate = series[:, :, : self.target_channel_dim]
+    #     if self.model.control_dim > 0:
+    #         activity = series[:, :, self.target_channel_dim :]
+    #     else:
+    #         activity = None
 
-        losses = self.model.compute_losses(heartrate, activity)
-        loss = losses["total"]
-        mae_loss = losses["mae_loss"]
-        return loss, mae_loss
+    #     losses = self.model.compute_losses(heartrate, activity)
+    #     loss = losses["total"]
+    #     mae_loss = losses["mae_loss"]
+    #     return loss, mae_loss
 
     # def model_specific_train_step(self, series: torch.Tensor):
     #     loss, _ = self._shared_step(series)

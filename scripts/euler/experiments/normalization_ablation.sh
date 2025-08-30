@@ -8,8 +8,8 @@ BLNNAME="norm_experiments"
 
 JOB="python main.py --multirun \
     hydra/launcher=submitit_slurm \
-    dataset=dalia,wildppg,ieee \
-    lbw=lbw \
+    dataset=dalia,wildppg,ieee,ldalia,lwildppg,lieee \
+    lbw=d \
     pw=a \
     model=linear,mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
     use_wandb=True \

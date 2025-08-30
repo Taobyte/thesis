@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 import wandb
 import ast
@@ -10,7 +11,14 @@ from collections import defaultdict
 from typing import Tuple
 from pathlib import Path
 
-from src.constants import METRICS, dataset_to_name, model_colors
+from src.constants import METRICS, dataset_to_name
+
+
+def local_vs_global_metrics(
+    dataset: str, look_back_window: List[int], prediction_window: List[int]
+):
+    # global_mean_metrics
+    pass
 
 
 def get_metrics(
@@ -44,15 +52,36 @@ def get_metrics(
     for run in tqdm(runs):
         config = run.config
         model_name = config["model"]["name"]
+        dataset_name = config["dataset"]["name"]
+        is_global = dataset_name in ["dalia", "wildppg", "ieee"]
         look_back_window = config["look_back_window"]
         prediction_window = config["prediction_window"]
-        fold = config["folds"]["fold_nr"]
         seed = config["seed"]
-        summary = run.summary._json_dict
-        filtered_summary = {k: summary[k] for k in summary if k in METRICS}
-        metrics[model_name][look_back_window][prediction_window][fold][seed] = (
-            filtered_summary
-        )
+        if is_global:
+            fold = config["folds"]["fold_nr"]
+            summary = run.summary._json_dict
+            filtered_summary = {k: summary[k] for k in summary if k in METRICS}
+            metrics[model_name][look_back_window][prediction_window][fold][seed] = (
+                filtered_summary
+            )
+        else:
+            artifacts = run.logged_artifacts()
+
+            raw_artifact = None
+            for artifact in artifacts:
+                if "raw_metrics" in artifact.name:
+                    raw_artifact = artifact
+                    break
+
+            if raw_artifact is None:
+                print(f"No raw_metrics table found in run {run.name}")
+                continue
+
+            table = raw_artifact.get("raw_metrics")
+            df = pd.DataFrame(table.data, columns=table.columns)
+            for fold, row in df.iterrows():
+                d = row.to_dict()
+                metrics[model_name][look_back_window][prediction_window][fold][seed] = d
 
         model_run_counts[model_name] += 1
 
