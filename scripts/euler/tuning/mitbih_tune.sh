@@ -9,7 +9,7 @@ DLS=(timesnet simpletm adamshyper patchtst timexer gpt4ts nbeatsx)
 
 # Parameters
 N_TRIALS=100
-PW=30
+PW=f # f = 30 
 GPU_MEM=24
 TIME=24:00:00
 
