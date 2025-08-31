@@ -195,7 +195,7 @@ def main():
             datasets=args.dataset,
             prediction_window=args.prediction_window,
             models=args.models,
-            start_time="2025-08-25",
+            start_time="2025-08-30",
         )
     elif args.type == "optuna":
         create_params_file_from_optuna(models=args.models, start_time="2025-8-26")

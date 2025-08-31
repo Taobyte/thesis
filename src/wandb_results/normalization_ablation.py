@@ -64,9 +64,13 @@ def plot_normalization_table(
 
                 if len(runs) % 3 == 0 and len(runs) > 0:
                     _, mean_dict, std_dict = get_metrics(runs)
-                    lbw = list(mean_dict[model_name].keys())[0]
 
-                    if metric in mean_dict[model_name][lbw][pw]:
+                    if list(mean_dict[model_name].keys()):
+                        lbw = list(mean_dict[model_name].keys())[0]
+                    else:
+                        lbw = None
+
+                    if lbw and metric in mean_dict[model_name][lbw][pw]:
                         mean = factor * mean_dict[model_name][lbw][pw][metric]
                         std = factor * std_dict[model_name][lbw][pw][metric]
                     else:

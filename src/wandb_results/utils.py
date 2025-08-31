@@ -8,7 +8,7 @@ from src.utils import create_group_run_name
 from matplotlib import colors
 from tqdm import tqdm
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, List
 from pathlib import Path
 
 from src.constants import METRICS, dataset_to_name
@@ -100,15 +100,15 @@ def get_metrics(
                             if metric_name in metrics_to_keep:
                                 if isinstance(metric_value, str):
                                     print(
-                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
                                     )
                                 elif np.isinf(metric_value):
                                     print(
-                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
                                     )
                                 elif np.isnan(metric_value):
                                     print(
-                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw}"
+                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
                                     )
                                 else:
                                     metric_list[metric_name].append(metric_value)
