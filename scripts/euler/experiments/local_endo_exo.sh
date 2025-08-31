@@ -22,7 +22,7 @@ sbatch --export=ALL --job-name="${DALIA_RUNS}_difference" -o "${DALIA_RUNS}_diff
 WILDPPG_RUNS="exo_lwildppg"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lwildppg lbw=$LBW pw=$PW model=gp normalization=minmax use_wandb=True experiment=endo_exo,endo_only seed=0,1,2"
-sbatch --export=ALL --job-name="${WILDPPG_RUNS}_local"      -o "${WILDPPG_RUNS}_local_%j.out"      --time="$TIME" --wrap="$JOB"
+sbatch --export=ALL --job-name="${WILDPPG_RUNS}_minmax"      -o "${WILDPPG_RUNS}_minmax_%j.out"      --time="$TIME" --wrap="$JOB"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lwildppg lbw=$LBW pw=$PW model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,nbeatsx normalization=global use_norm_dl=True use_norm_baseline=True use_wandb=True experiment=endo_exo,endo_only seed=0,1,2"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_local"      -o "${WILDPPG_RUNS}_local_%j.out"      --time="$TIME" --wrap="$JOB"
@@ -35,7 +35,7 @@ IEEE_RUNS="exo_lieee"
 
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lieee lbw=$LBW pw=$PW model=linear normalization=global use_norm_baseline=True use_wandb=True experiment=endo_exo,endo_only seed=0,1,2"
-sbatch --export=ALL --job-name="${IEEE_RUNS}_difference" -o "${IEEE_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
+sbatch --export=ALL --job-name="${IEEE_RUNS}_local" -o "${IEEE_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lieee lbw=$LBW pw=$PW model=mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx normalization=difference use_norm_dl=False use_wandb=True experiment=endo_exo,endo_only seed=0,1,2"
 sbatch --export=ALL --job-name="${IEEE_RUNS}_difference" -o "${IEEE_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
