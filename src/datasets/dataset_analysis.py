@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import antropy as ant
 import pycatch22
+import math
 
 
 from lightning import LightningDataModule
@@ -21,7 +22,7 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from sklearn.feature_selection import mutual_info_regression
-from typing import List
+from typing import Optional, Tuple, List, Dict, Any
 from numpy.typing import NDArray
 from collections import defaultdict
 from src.normalization import local_z_norm_numpy, min_max_norm_numpy
@@ -33,6 +34,498 @@ from src.utils import (
     compute_input_channel_dims,
     get_optuna_name,
 )
+
+
+def main():
+    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
+    OmegaConf.register_new_resolver("eval", eval)
+    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
+    OmegaConf.register_new_resolver(
+        "compute_input_channel_dims", compute_input_channel_dims
+    )
+
+    parser = argparse.ArgumentParser(description="WandB Results")
+
+    def list_of_strings(arg):
+        return arg.split(",")
+
+    parser.add_argument(
+        "--datasets",
+        type=list_of_strings,
+        required=False,
+        default=["dalia", "wildppg", "ieee"],
+        help="Dataset to plot. Must be one or more (separated by,) of 'ieee', 'dalia', 'wildppg' ",
+    )
+
+    parser.add_argument(
+        "--type",
+        choices=[
+            "viz",
+            "infos",
+            "scatter",
+            "granger",
+            "pearson",
+            "mutual",
+            "test",
+            "acf",
+            "window_stats",
+            "difference",
+            "pacf",
+            "bds",
+            "forecastibility",
+            "pca",
+            "catch22",
+            "norm_viz",
+            "beliefppg",
+            "adfuller",
+            "chaos",
+        ],
+        required=True,
+    )
+
+    args = parser.parse_args()
+    datamodules: List[LightningDataModule] = []
+    for dataset in args.datasets:
+        with initialize(version_base=None, config_path="../../config/"):
+            cfg = compose(
+                config_name="config",
+                overrides=[
+                    f"dataset={dataset}",
+                    "folds=all",
+                    "use_dynamic_features=True",
+                    "use_heart_rate=True",
+                ],
+            )
+
+        datamodule = instantiate(cfg.dataset.datamodule)
+        datamodule.setup("fit")
+        datamodules.append(datamodule)
+    if args.type == "adfuller":
+        adfuller_test(datamodules)
+    elif args.type == "beliefppg":
+        visualize_histogram(datamodules)
+    elif args.type == "norm_viz":
+        visualize_norm(datamodules)
+    if args.type == "catch22":
+        compute_catch22_correlation(datamodules)
+    elif args.type == "pca":
+        pca_plot(datamodules)
+    elif args.type == "viz":
+        visualize_timeseries(datamodules)
+    elif args.type == "infos":
+        print_infos(datamodules)
+    elif args.type == "forecastibility":
+        forecastibility(datamodules)
+    elif args.type == "granger":
+        granger_test(datamodules)
+    elif args.type == "pearson":
+        max_pearson(datamodules)
+    elif args.type == "pacf":
+        partial_correlation(datamodules)
+    elif args.type == "bds":
+        bds_test(datamodules)
+    elif args.type == "chaos":
+        chaos_script(datamodules)
+
+
+# -----------------------------------------------------------------------------------------------------------------------
+# BERKEN SCRIPT
+def resample_uniform_from_time(
+    time: np.ndarray, x: np.ndarray, fs_target: float
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Linear interpolate onto a uniform grid at fs_target Hz. Returns (t_uniform, x_uniform)."""
+    if time.ndim != 1 or x.ndim != 1 or len(time) != len(x):
+        raise ValueError("time and x must be 1D arrays of equal length")
+    if len(time) < 4:
+        raise ValueError("need at least 4 samples to resample")
+    t = np.asarray(time, dtype=float)
+    x = np.asarray(x, dtype=float)
+    order = np.argsort(t)
+    t = t[order]
+    x = x[order]
+    t_uniform = np.arange(t[0], t[-1], 1.0 / fs_target)
+    xu = np.interp(t_uniform, t, x)
+    return t_uniform, xu
+
+
+def resample_uniform_from_fs(
+    x: np.ndarray, fs: float, fs_target: float
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Uniform resample given constant sampling rate fs (Hz)."""
+    n = len(x)
+    t = np.arange(n, dtype=float) / float(fs)
+    return resample_uniform_from_time(t, x, fs_target)
+
+
+def standardize(x: np.ndarray) -> np.ndarray:
+    mu = np.nanmean(x)
+    sd = np.nanstd(x)
+    if sd == 0 or not np.isfinite(sd):
+        return x - mu
+    return (x - mu) / sd
+
+
+def average_mutual_information(
+    x: np.ndarray, max_lag: int, bins: int = 32
+) -> np.ndarray:
+    """Histogram-based AMI for lags 1..max_lag. Returns array length max_lag."""
+    x = np.asarray(x, dtype=float)
+    x = (x - np.nanmean(x)) / (np.nanstd(x) + 1e-12)
+    hist, bin_edges = np.histogram(x, bins=bins, density=True)
+
+    def bin_index(vals):
+        return np.clip(np.digitize(vals, bin_edges) - 1, 0, bins - 1)
+
+    idx = bin_index(x)
+    ami = np.zeros(max_lag, dtype=float)
+    for tau in range(1, max_lag + 1):
+        a = idx[:-tau]
+        b = idx[tau:]
+        joint = np.zeros((bins, bins), dtype=float)
+        for i, j in zip(a, b):
+            joint[i, j] += 1.0
+        joint /= joint.sum()
+        px = joint.sum(axis=1)
+        py = joint.sum(axis=0)
+        joint = np.where(joint > 0, joint, 1e-12)
+        px = np.where(px > 0, px, 1e-12)
+        py = np.where(py > 0, py, 1e-12)
+        ami[tau - 1] = np.sum(joint * np.log(joint / (px[:, None] * py[None, :])))
+    return ami
+
+
+def first_local_min(arr: np.ndarray, min_index: int = 1) -> Optional[int]:
+    """First index (1-based) of a strict local minimum. Returns None if none found."""
+    for i in range(min_index, len(arr) - 1):
+        if arr[i] < arr[i - 1] and arr[i] < arr[i + 1]:
+            return i + 1
+    return None
+
+
+def autocorr_based_tau(x: np.ndarray, max_lag: int) -> int:
+    """Fallback tau: first lag where autocorr drops below 1/e, else first zero crossing, else max_lag//4."""
+    xz = x - np.mean(x)
+    n = len(xz)
+    ac = np.correlate(xz, xz, mode="full")[n - 1 : n - 1 + max_lag + 1]
+    ac = ac / (ac[0] + 1e-12)
+    for k in range(1, len(ac)):
+        if ac[k] < 1.0 / math.e:
+            return k
+    for k in range(1, len(ac)):
+        if ac[k] <= 0:
+            return k
+    return max(1, max_lag // 4)
+
+
+def embed(x: np.ndarray, m: int, tau: int) -> np.ndarray:
+    """Delay embedding matrix (N_eff, m)."""
+    n = len(x)
+    N = n - (m - 1) * tau
+    if N <= 2 * m:
+        raise ValueError("time series too short for embedding with chosen m,tau")
+    Y = np.zeros((N, m), dtype=float)
+    for i in range(m):
+        Y[:, i] = x[i * tau : i * tau + N]
+    return Y
+
+
+def false_nearest_neighbors(
+    x: np.ndarray,
+    tau: int,
+    m_max: int = 10,
+    Rtol: float = 15.0,
+    Atol: float = 2.0,
+    theiler: int = 10,
+) -> Tuple[int, List[float]]:
+    """
+    Return (chosen m, list of %false for m=1..m_max) using Kennel et al. criteria.
+    Fix: ensure the subsampled indices are valid for BOTH m and m+1 embeddings.
+    """
+    rng = np.random.default_rng(0)
+    ratios = []
+    m_chosen = m_max
+
+    for m in range(1, m_max + 1):
+        Y = embed(x, m, tau)
+        N = len(Y)
+
+        # candidate indices in the m-embedding
+        idx = np.arange(N)
+        if N > 4000:
+            idx = rng.choice(N, size=4000, replace=False)
+
+        # nearest neighbors in the m-embedding (on the subsample)
+        Y_sub = Y[idx]
+        D = np.sqrt(((Y_sub[:, None, :] - Y_sub[None, :, :]) ** 2).sum(axis=2))
+
+        # Theiler window: mask near-diagonal (temporal neighbors)
+        for i in range(len(idx)):
+            lo = max(0, i - theiler)
+            hi = min(len(idx), i + theiler + 1)
+            D[i, lo:hi] = np.inf
+
+        nn = np.argmin(D, axis=1)
+        dist_m = D[np.arange(len(idx)), nn]
+
+        if m < m_max:
+            # Build (m+1)-embedding and restrict to rows valid in BOTH spaces
+            Yp = embed(x, m + 1, tau)
+            Np = len(Yp)
+
+            # keep only those subsampled indices that are < Np
+            valid_rows = np.where(idx < Np)[0]
+            if len(valid_rows) < 2:
+                # not enough points to evaluate false neighbors at this m; fall back
+                ratios.append(ratios[-1] if ratios else 100.0)
+                continue
+
+            # restrict everything to valid_rows so we can index Yp consistently
+            idx_v = idx[valid_rows]
+            Yp_sub = Yp[idx_v]
+
+            # also restrict the nn mapping to the same valid rows/cols
+            # map from original subsample positions -> compact valid positions
+            pos_map = -np.ones(len(idx), dtype=int)
+            pos_map[valid_rows] = np.arange(len(valid_rows))
+            nn_v = pos_map[nn[valid_rows]]
+            dist_m_v = dist_m[valid_rows]
+
+            # if any mapped neighbor is invalid (e.g., pointed to a dropped row), drop those rows
+            good = nn_v >= 0
+            if np.count_nonzero(good) < 2:
+                ratios.append(ratios[-1] if ratios else 100.0)
+                continue
+
+            Yp_a = Yp_sub[good]
+            Yp_b = Yp_sub[nn_v[good]]
+            dist_m_good = dist_m_v[good]
+
+            # distance growth in (m+1)-space
+            Dp = np.sqrt(((Yp_a - Yp_b) ** 2).sum(axis=1))
+            Ra = (Dp - dist_m_good) / (dist_m_good + 1e-12)
+
+            false = (Ra > Rtol) | (Dp > Atol * np.std(x))
+            ratio = 100.0 * np.mean(false)
+        else:
+            # for the last m, just repeat previous ratio
+            ratio = ratios[-1] if ratios else 100.0
+
+        ratios.append(ratio)
+        if ratio < 2.0 and m_chosen == m_max:
+            m_chosen = m
+
+    return m_chosen, ratios
+
+
+# --------- three metrics ---------
+
+
+def rosenstein_lyapunov(
+    x: np.ndarray,
+    m: int,
+    tau: int,
+    theiler: int = 20,
+    kmax: int = 50,
+    fit_start: int = 1,
+    fit_end: Optional[int] = None,
+) -> Tuple[float, Tuple[int, int]]:
+    """Largest Lyapunov exponent via Rosenstein method. Returns (lambda, (k0,k1))."""
+    Y = embed(x, m, tau)
+    N = len(Y)
+    D = np.sqrt(((Y[:, None, :] - Y[None, :, :]) ** 2).sum(axis=2))
+    for i in range(N):
+        lo = max(0, i - theiler)
+        hi = min(N, i + theiler + 1)
+        D[i, lo:hi] = np.inf
+    nn = np.argmin(D, axis=1)
+    kmax = min(kmax, N - 10)
+    div = []
+    for k in range(1, kmax + 1):
+        valid = np.where((np.arange(N) + k < N) & (nn + k < N))[0]
+        if len(valid) == 0:
+            break
+        d = np.linalg.norm(Y[valid + k] - Y[nn[valid] + k], axis=1)
+        d = d[d > 1e-12]
+        if len(d) == 0:
+            break
+        div.append(np.mean(np.log(d)))
+    if not div:
+        return float("nan"), (0, 0)
+    div = np.array(div)
+    if fit_end is None:
+        fit_end = max(3, len(div) // 3)
+    k0 = max(1, fit_start)
+    k1 = min(len(div), fit_end)
+    xk = np.arange(1, len(div) + 1, dtype=float)[k0 - 1 : k1]
+    yk = div[k0 - 1 : k1]
+    A = np.polyfit(xk, yk, 1)
+    return float(A[0]), (k0, k1)
+
+
+def zero_one_test(x: np.ndarray, n_c: int = 100, random_state: int = 0) -> float:
+    """0–1 test for chaos (Gottwald–Melbourne). Returns median K over random c in (0, π)."""
+    rng = np.random.default_rng(random_state)
+    x = np.asarray(x, dtype=float)
+    x = x - np.mean(x)
+    N = len(x)
+    if N < 200:
+        return float("nan")
+    ns = np.arange(1, N + 1)
+    Ks = []
+    for _ in range(n_c):
+        c = rng.uniform(0, np.pi)
+        pc = np.cumsum(x * np.cos(c * ns))
+        qc = np.cumsum(x * np.sin(c * ns))
+        M = (pc - np.mean(pc)) ** 2 + (qc - np.mean(qc)) ** 2
+        nvec = (ns - ns.mean()) / (ns.std() + 1e-12)
+        Mz = (M - M.mean()) / (M.std() + 1e-12)
+        Ks.append(np.mean(nvec * Mz))
+    return float(np.median(Ks))
+
+
+def correlation_dimension(
+    x: np.ndarray,
+    m: int,
+    tau: int,
+    theiler: int = 20,
+    n_samples: int = 4000,
+    n_eps: int = 20,
+) -> float:
+    """Grassberger–Procaccia correlation dimension D2 from scaling of C(eps)."""
+    Y = embed(x, m, tau)
+    N = len(Y)
+    if N > n_samples:
+        idx = np.random.default_rng(0).choice(N, size=n_samples, replace=False)
+        Y = Y[idx]
+        N = len(Y)
+    D = np.sqrt(((Y[:, None, :] - Y[None, :, :]) ** 2).sum(axis=2))
+    for i in range(N):
+        lo = max(0, i - theiler)
+        hi = min(N, i + theiler + 1)
+        D[i, lo:hi] = np.inf
+    finite = D[np.isfinite(D)]
+    finite = finite[finite > 0]
+    if len(finite) < 10:
+        return float("nan")
+    eps = np.quantile(finite, np.linspace(0.02, 0.4, n_eps))
+    C = [np.mean((D < e) & np.isfinite(D)) for e in eps]
+    C = np.array(C, dtype=float)
+    mask = (C > 0.02) & (C < 0.2)
+    if mask.sum() < 4:
+        return float("nan")
+    xe = np.log(eps[mask])
+    ye = np.log(C[mask])
+    return float(np.polyfit(xe, ye, 1)[0])
+
+
+# --------- main API ---------
+
+
+def analyze_hr_array(
+    hr: np.ndarray,
+    time: Optional[np.ndarray] = None,
+    fs: Optional[float] = None,
+    fs_target: float = 1.0,
+    window_sec: int = 600,
+    step_frac: float = 0.5,
+    random_state: int = 0,
+) -> Dict[str, Any]:
+    """
+    Compute the three metrics from an HR array.
+    Returns dict with: tau, m, LLE, zero_one_K, D2 and housekeeping.
+    """
+    hr = np.asarray(hr, dtype=float)
+    if time is not None:
+        tu, hru = resample_uniform_from_time(
+            np.asarray(time, dtype=float), hr, fs_target
+        )
+    else:
+        if fs is None:
+            raise ValueError("Provide either 'time' or 'fs'.")
+        tu, hru = resample_uniform_from_fs(hr, fs, fs_target)
+
+    # Convert HR (BPM) to IBI (seconds) proxy and standardize
+    hru = np.clip(hru, 20.0, 220.0)
+    ibi = 60.0 / hru
+    x = standardize(ibi)
+
+    # Sliding windows aggregate by median
+    win_len = int(window_sec * fs_target)
+    step = max(1, int(win_len * step_frac))
+    if len(x) < win_len:
+        windows = [(0, len(x))]
+    else:
+        windows = [(i, i + win_len) for i in range(0, len(x) - win_len + 1, step)]
+
+    rows = []
+    for a, b in windows:
+        xs = x[a:b]
+        if len(xs) < 500:
+            continue
+
+        max_lag = min(60, len(xs) // 10)
+        ami = average_mutual_information(xs, max_lag=max_lag, bins=32)
+        tau = first_local_min(ami) or autocorr_based_tau(xs, max_lag=max_lag)
+        tau = int(max(1, min(tau, 30)))
+
+        m, _ = false_nearest_neighbors(xs, tau=tau, m_max=10, theiler=int(2 * tau))
+
+        lle, (k0, k1) = rosenstein_lyapunov(
+            xs, m=m, tau=tau, theiler=int(2 * tau), kmax=80
+        )
+
+        K01 = zero_one_test(xs, n_c=120, random_state=random_state)
+
+        D2 = correlation_dimension(
+            xs, m=m, tau=tau, theiler=int(2 * tau), n_samples=3000, n_eps=18
+        )
+
+        rows.append((tau, m, lle, k0, k1, K01, D2))
+
+    if not rows:
+        raise ValueError("Series too short after preprocessing to compute metrics.")
+
+    A = np.array(rows, dtype=float)
+    out = {
+        "n_points_in": int(len(hr)),
+        "n_points_resampled": int(len(hru)),
+        "fs_target": float(fs_target),
+        "tau": int(np.median(A[:, 0])),
+        "m": int(np.median(A[:, 1])),
+        "lle": float(np.median(A[:, 2])),
+        "lle_fit_k0": int(np.median(A[:, 3])),
+        "lle_fit_k1": int(np.median(A[:, 4])),
+        "zero_one_K": float(np.median(A[:, 5])),
+        "D2": float(np.nanmedian(A[:, 6])),
+    }
+    return out
+
+
+def chaos_script(datamodules: List[LightningDataModule]):
+    fs = 0.5
+    for datamodule in datamodules:
+        print(f"DATASET: {datamodule.name}")
+        data = datamodule.train_dataset.data
+        cols = defaultdict(list)
+        for i, series in enumerate(data):
+            print(f"Participant {i}")
+            hr = 60.0 / series[:, 0]  # HR Shape (T, )
+            if np.isinf(hr).any() or np.isnan(hr).any():
+                print("ERROR in HR, either nan or inf")
+                continue
+            metrics = analyze_hr_array(hr, fs=fs, fs_target=1.0, window_sec=600)
+            for k in ["tau", "m", "lle", "zero_one_K", "D2"]:
+                print(k, ":", metrics[k])
+                cols[k].append(metrics[k])
+
+        df = pd.DataFrame.from_dict(cols)
+        print("Raw Results:")
+        print(df)
+        print("Mean Results:")
+        print(df.mean())
+
+
+# ----------------------------------------------------------------------------------------------------
 
 
 def adfuller_test(datamodules: List[LightningDataModule]):
@@ -479,10 +972,6 @@ def bds_test(datamodules: List[LightningDataModule]):
     fig.show()
 
 
-def arch_test(datamodules: List[LightningDataModule]):
-    pass
-
-
 def compute_catch22_correlation(datamodules: List[LightningDataModule]):
     for datamodule in datamodules:
         data = datamodule.train_dataset.data
@@ -501,308 +990,173 @@ def compute_catch22_correlation(datamodules: List[LightningDataModule]):
         print(f"Dataset {datamodule.name} has cor = {final_cor}")
 
 
-if __name__ == "__main__":
-    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
-    OmegaConf.register_new_resolver("eval", eval)
-    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
-    OmegaConf.register_new_resolver(
-        "compute_input_channel_dims", compute_input_channel_dims
-    )
+def pca_plot(datamodules: List[LightningDataModule]) -> None:
+    point_size = 16
 
-    parser = argparse.ArgumentParser(description="WandB Results")
+    def series_to_stats(series: NDArray[np.float32], nperseg: int = 256):
+        LAG = 10
+        heartrate = series[:, 0]
+        activity = series[:, 1]
+        mean = np.mean(heartrate)
+        std = np.std(heartrate)
+        minimum = np.min(heartrate)
+        maximum = np.max(heartrate)
+        median = np.median(heartrate)
+        pacf_stat: List[float] = pacf(heartrate, nlags=3)
+        pacf1 = pacf_stat[1]
+        pacf2 = pacf_stat[2]
+        pacf3 = pacf_stat[3]
+        max_r, lag = max_pearson_corr(heartrate, activity)
+        result = adfuller(heartrate, regression="ctt")
+        granger = grangercausalitytests(series, [LAG])[LAG][0]["ssr_ftest"][0]
+        mi = mutual_info_regression(activity.reshape(-1, 1), heartrate)
 
-    def list_of_strings(arg):
-        return arg.split(",")
+        sf = 0.5
+        H = ant.spectral_entropy(
+            heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
+        )
+        res = 1 - H
+        # TODO
+        # return dict(mean=mean, std=std, minimum=minimum, maximum=maximum, median=median,pacf1=pacf1, pacf2=pacf2, pacf3=pacf3)
 
-    parser.add_argument(
-        "--datasets",
-        type=list_of_strings,
-        required=False,
-        default=["dalia", "wildppg", "ieee"],
-        help="Dataset to plot. Must be one or more (separated by,) of 'ieee', 'dalia', 'wildppg' ",
-    )
-
-    parser.add_argument(
-        "--type",
-        choices=[
-            "viz",
-            "infos",
-            "scatter",
-            "granger",
-            "pearson",
-            "mutual",
-            "test",
-            "acf",
-            "window_stats",
-            "difference",
-            "pacf",
-            "bds",
-            "forecastibility",
-            "pca",
-            "catch22",
-            "norm_viz",
-            "beliefppg",
-            "adfuller",
-        ],
-        required=True,
-    )
-
-    args = parser.parse_args()
-    datamodules: List[LightningDataModule] = []
-    for dataset in args.datasets:
-        with initialize(version_base=None, config_path="../../config/"):
-            cfg = compose(
-                config_name="config",
-                overrides=[
-                    f"dataset={dataset}",
-                    "folds=all",
-                    "use_dynamic_features=True",
-                    "use_heart_rate=True",
-                ],
-            )
-
-        datamodule = instantiate(cfg.dataset.datamodule)
-        datamodule.setup("fit")
-        datamodules.append(datamodule)
-    if args.type == "adfuller":
-        adfuller_test(datamodules)
-    elif args.type == "beliefppg":
-        visualize_histogram(datamodules)
-    elif args.type == "norm_viz":
-        visualize_norm(datamodules)
-    if args.type == "catch22":
-        compute_catch22_correlation(datamodules)
-    elif args.type == "pca":
-        point_size = 16
-
-        def series_to_stats(series: NDArray[np.float32], nperseg: int = 256):
-            LAG = 10
-            heartrate = series[:, 0]
-            activity = series[:, 1]
-            mean = np.mean(heartrate)
-            std = np.std(heartrate)
-            minimum = np.min(heartrate)
-            maximum = np.max(heartrate)
-            median = np.median(heartrate)
-            pacf_stat: List[float] = pacf(heartrate, nlags=3)
-            pacf1 = pacf_stat[1]
-            pacf2 = pacf_stat[2]
-            pacf3 = pacf_stat[3]
-            max_r, lag = max_pearson_corr(heartrate, activity)
-            result = adfuller(heartrate, regression="ctt")
-            granger = grangercausalitytests(series, [LAG])[LAG][0]["ssr_ftest"][0]
-            mi = mutual_info_regression(activity.reshape(-1, 1), heartrate)
-
-            sf = 0.5
-            H = ant.spectral_entropy(
-                heartrate, sf=sf, method="welch", normalize=True, nperseg=nperseg
-            )
-            res = 1 - H
-            # TODO
-            # return dict(mean=mean, std=std, minimum=minimum, maximum=maximum, median=median,pacf1=pacf1, pacf2=pacf2, pacf3=pacf3)
-
-            return [
-                mean,
-                std,
-                minimum,
-                maximum,
-                median,
-                max_r,
-                lag,
-                pacf1,
-                pacf2,
-                pacf3,
-                result[0],
-                granger,
-                mi,
-                res,
-            ]
-
-        columns = [
-            "mean",
-            "std",
-            "min",
-            "max",
-            "median",
-            "max_r",
-            "lag",
-            "pacf1",
-            "pacf2",
-            "pacf3",
-            "adf",
-            "granger",
-            "mi",
-            "forecastibility",
-            "Dataset",
+        return [
+            mean,
+            std,
+            minimum,
+            maximum,
+            median,
+            max_r,
+            lag,
+            pacf1,
+            pacf2,
+            pacf3,
+            result[0],
+            granger,
+            mi,
+            res,
         ]
-        rows: List[float] = []
-        for i, datamodule in enumerate(datamodules):
-            data = datamodule.train_dataset.data
-            dataset_name = dataset_to_name[datamodule.name]
-            nperseg = 32 if datamodule.name == "ieee" else 256
-            for series in data:
-                series_stats = series_to_stats(series, nperseg=nperseg)
-                series_stats += [dataset_name]  # dataset indicator
-                rows.append(series_stats)
 
-        df = pd.DataFrame(rows, columns=columns)
+    columns = [
+        "mean",
+        "std",
+        "min",
+        "max",
+        "median",
+        "max_r",
+        "lag",
+        "pacf1",
+        "pacf2",
+        "pacf3",
+        "adf",
+        "granger",
+        "mi",
+        "forecastibility",
+        "Dataset",
+    ]
+    rows: List[float] = []
+    for i, datamodule in enumerate(datamodules):
+        data = datamodule.train_dataset.data
+        dataset_name = dataset_to_name[datamodule.name]
+        nperseg = 32 if datamodule.name == "ieee" else 256
+        for series in data:
+            series_stats = series_to_stats(series, nperseg=nperseg)
+            series_stats += [dataset_name]  # dataset indicator
+            rows.append(series_stats)
 
-        color_col = "Dataset"  # column to color points by
-        n_components = 2
+    df = pd.DataFrame(rows, columns=columns)
 
-        X = df.values[:, :-1]
-        X_scaled = StandardScaler().fit_transform(X)
-        pca = PCA(n_components=n_components, random_state=0)
-        Z = pca.fit_transform(X_scaled)
+    color_col = "Dataset"  # column to color points by
+    n_components = 2
 
-        pca_df = pd.DataFrame(
-            {"PC1": Z[:, 0], "PC2": Z[:, 1], color_col: df[color_col]}
-        )
+    X = df.values[:, :-1]
+    X_scaled = StandardScaler().fit_transform(X)
+    pca = PCA(n_components=n_components, random_state=0)
+    Z = pca.fit_transform(X_scaled)
 
-        fig = px.scatter(
-            pca_df,
-            x="PC1",
-            y="PC2",
-            color="Dataset",  # Now legend will show the dataset name
-            symbol=color_col,  # This keeps your 3-color grouping separate
-            opacity=0.85,
-            labels={
-                "PC1": f"PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)",
-                "PC2": f"PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)",
-            },
-            # title="PCA projection",
-            color_discrete_sequence=px.colors.qualitative.Set1,
-        )
+    pca_df = pd.DataFrame({"PC1": Z[:, 0], "PC2": Z[:, 1], color_col: df[color_col]})
 
-        fig.update_traces(marker=dict(size=point_size))  # points in the plot
-        fig.update_layout(coloraxis_showscale=False)
+    fig = px.scatter(
+        pca_df,
+        x="PC1",
+        y="PC2",
+        color="Dataset",  # Now legend will show the dataset name
+        symbol=color_col,  # This keeps your 3-color grouping separate
+        opacity=0.85,
+        labels={
+            "PC1": f"PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)",
+            "PC2": f"PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)",
+        },
+        # title="PCA projection",
+        color_discrete_sequence=px.colors.qualitative.Set1,
+    )
 
-        fig.update_layout(
-            xaxis_title=dict(
-                text=f"<b>PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)</b>",
-                font=dict(size=18),
-            ),
-            yaxis_title=dict(
-                text=f"<b>PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)</b>",
-                font=dict(size=18),
-            ),
-        )
+    fig.update_traces(marker=dict(size=point_size))  # points in the plot
+    fig.update_layout(coloraxis_showscale=False)
 
-        fig.update_layout(
-            legend=dict(font=dict(size=24), itemsizing="constant"),
-        )
+    fig.update_layout(
+        xaxis_title=dict(
+            text=f"<b>PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}%)</b>",
+            font=dict(size=18),
+        ),
+        yaxis_title=dict(
+            text=f"<b>PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}%)</b>",
+            font=dict(size=18),
+        ),
+    )
 
-        fig.show()
+    fig.update_layout(
+        legend=dict(font=dict(size=24), itemsizing="constant"),
+    )
 
-        n = X_scaled.shape[0]
-        perplexity = int(min(30, max(5, (n - 1) // 3))) if n > 10 else max(2, n // 2)
+    fig.show()
 
-        tsne = TSNE(
-            n_components=2,
-            perplexity=perplexity,
-            init="pca",
-            learning_rate="auto",
-            n_iter=1000,
-            random_state=42,
-            verbose=0,
-        )
-        Z_tsne = tsne.fit_transform(X_scaled)
+    n = X_scaled.shape[0]
+    perplexity = int(min(30, max(5, (n - 1) // 3))) if n > 10 else max(2, n // 2)
 
-        tsne_df = pd.DataFrame(
-            {
-                "TSNE1": Z_tsne[:, 0],
-                "TSNE2": Z_tsne[:, 1],
-                color_col: pca_df[color_col],
-            }
-        )
+    tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity,
+        init="pca",
+        learning_rate="auto",
+        n_iter=1000,
+        random_state=42,
+        verbose=0,
+    )
+    Z_tsne = tsne.fit_transform(X_scaled)
 
-        fig_tsne = px.scatter(
-            tsne_df,
-            x="TSNE1",
-            y="TSNE2",
-            color="Dataset",
-            symbol=color_col,
-            opacity=0.85,
-            color_discrete_sequence=px.colors.qualitative.Set1,
-        )
-        fig_tsne.update_traces(marker=dict(size=point_size))
-        fig_tsne.show()
+    tsne_df = pd.DataFrame(
+        {
+            "TSNE1": Z_tsne[:, 0],
+            "TSNE2": Z_tsne[:, 1],
+            color_col: pca_df[color_col],
+        }
+    )
 
-    elif args.type == "viz":
-        visualize_timeseries(datamodules)
-    elif args.type == "infos":
-        print_infos(datamodules)
-    elif args.type == "forecastibility":
-        forecastibility(datamodules)
-    elif args.type == "granger":
-        granger_test(datamodules)
+    fig_tsne = px.scatter(
+        tsne_df,
+        x="TSNE1",
+        y="TSNE2",
+        color="Dataset",
+        symbol=color_col,
+        opacity=0.85,
+        color_discrete_sequence=px.colors.qualitative.Set1,
+    )
+    fig_tsne.update_traces(marker=dict(size=point_size))
+    fig_tsne.show()
 
-    elif args.type == "pearson":
-        max_pearson(datamodules)
 
-    elif args.type == "pacf":
-        partial_correlation(datamodules)
-    elif args.type == "window_stats":
-        window_length = 20
-        fig = make_subplots(
-            rows=len(dataset),
-            cols=4,
-            column_titles=["HR Mean", "HR Std", "ACT Mean", "ACT Std"],
-        )
-        for i, series in enumerate(dataset):
-            heartrate = series[:, 0]
-            activity = series[:, 1]
-            hr_df = pd.DataFrame(heartrate)
-            ac_df = pd.DataFrame(activity)
+if __name__ == "__main__":
+    fs = 1.0
+    t = np.arange(3 * 60 * 60)
+    rng = np.random.default_rng(0)
+    hr = (
+        70
+        + 5 * np.sin(2 * np.pi * t / 3600.0)
+        + 3 * np.sin(2 * np.pi * t / 5.5)
+        + 0.5 * rng.normal(size=len(t))
+    )
 
-            hr_mean = hr_df.rolling(window=window_length).mean().dropna()[0].to_numpy()
-            hr_std = hr_df.rolling(window=window_length).std().dropna()[0].to_numpy()
-
-            ac_mean = ac_df.rolling(window=window_length).mean().dropna()[0].to_numpy()
-            ac_std = ac_df.rolling(window=window_length).std().dropna()[0].to_numpy()
-
-            x = list(range(len(hr_mean)))
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=hr_mean,
-                    mode="lines",
-                ),
-                row=i + 1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=hr_std,
-                    mode="lines",
-                ),
-                row=i + 1,
-                col=2,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=ac_mean,
-                    mode="lines",
-                ),
-                row=i + 1,
-                col=3,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=ac_std,
-                    mode="lines",
-                ),
-                row=i + 1,
-                col=4,
-            )
-
-        fig.show()
-    elif args.type == "bds":
-        bds_test(datamodules)
-
-    elif args.type == "arch":
-        arch_test(datamodules)
+    metrics = analyze_hr_array(hr, fs=fs, fs_target=1.0, window_sec=600)
+    for k in ["tau", "m", "lle", "zero_one_K", "D2"]:
+        print(k, ":", metrics[k])
+    main()

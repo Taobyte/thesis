@@ -32,11 +32,11 @@ class Evaluator:
             "MAE": mae(targets, preds),
             "DIRACC": dir_acc_improved_single_step(preds, targets, look_back_window),
             "SMAPE": smape(targets, preds),
+            "MAPE": mape(targets, preds),  # including MAPE for MIT-BIH study
             "abs_target_mean": abs_target_mean(targets),
             "naive_mae": naive_mae(targets, look_back_window),
             # "abs_error": abs_error(targets, preds),
             # "abs_target_sum": abs_target_sum(targets),
-            # "MAPE": mape(targets, preds),
             # "cross_correlation": correlation(preds, targets),
             # "dir_acc_full": dir_acc_full_horizon(preds, targets, look_back_window),
         }

@@ -7,7 +7,7 @@ conda activate thesis
 TIME=24:00:00
 
 LBW=d  # d = 30
-PW=a   # a = 3
+PW=${1}   # a = 3
 
 # ------------------- DALIA -------------------
 DALIA_RUNS="exo_dalia"

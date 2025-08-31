@@ -16,6 +16,250 @@ from src.constants import (
 )
 
 
+def process_diff(
+    dataset: str,
+    models: list[str],
+    look_back_window: list[int],
+    prediction_window: list[int],
+    start_time: str,
+    metric: str = "MSE",
+):
+    assert len(look_back_window) == 1
+    lbw = look_back_window[0]
+
+    runs_exo = get_runs(
+        dataset,
+        look_back_window,
+        prediction_window,
+        models,
+        experiment_name="endo_exo",
+        start_time=start_time,
+    )
+    exo_metrics, _, _ = get_metrics(runs_exo)
+
+    runs_endo = get_runs(
+        dataset,
+        look_back_window,
+        prediction_window,
+        models,
+        experiment_name="endo_only",
+        start_time=start_time,
+    )
+    endo_metrics, _, _ = get_metrics(runs_endo)
+    cols = defaultdict(list)
+    for pw in prediction_window:
+        for m in models:
+            diffs: List[float] = []
+            imprv: List[float] = []
+            for fold_nr, seed_dict in exo_metrics[m][lbw][pw].items():
+                for seed, metrics_dict in seed_dict.items():
+                    if metric not in endo_metrics[m][lbw][pw][fold_nr][seed]:
+                        print(
+                            f"metric {metric} not in endo_metric {m} {fold_nr} {seed}"
+                        )
+                        continue
+                    if metric not in metrics_dict:
+                        print(
+                            f"metric {metric} not in metric_dict for {m} {fold_nr} {seed}"
+                        )
+                        continue
+                    endo_val = endo_metrics[m][lbw][pw][fold_nr][seed][metric]
+                    exo_val = metrics_dict[metric]
+                    if not isinstance(endo_val, float) or not isinstance(
+                        exo_val, float
+                    ):
+                        print(f"NOT FLOAT for {m} fold {fold_nr} seed {seed}")
+                        continue
+                    diffs.append(endo_val - exo_val)
+                    imprv.append(100 * (endo_val - exo_val) / (endo_val + 1e-8))
+
+            cols[pw].append(float(np.mean(imprv)))
+
+    return pd.DataFrame.from_dict(cols)
+
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+def _rgba(color_rgb: str, alpha: float = 0.18) -> str:
+    # "rgb(r,g,b)" -> "rgba(r,g,b,alpha)"
+    return color_rgb.replace("rgb", "rgba").rstrip(")") + f",{alpha})"
+
+
+def _add_band(fig, x, ql, qu, color, name, row, col, showlegend):
+    # IQR band (fill between q25 and q75)
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=ql,
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=row,
+        col=col,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=qu,
+            mode="lines",
+            line=dict(width=0),
+            fill="tonexty",
+            fillcolor=_rgba(color, 0.18),
+            name=f"{name} IQR",
+            showlegend=showlegend,
+        ),
+        row=row,
+        col=col,
+    )
+
+
+def _add_median(fig, x, median, color, name, row, col, showlegend):
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=median,
+            mode="lines+markers",
+            line=dict(width=2.5, color=color),
+            marker=dict(size=6),
+            name=f"{name} median",
+            showlegend=showlegend,
+        ),
+        row=row,
+        col=col,
+    )
+
+
+def horizon_exo_difference(
+    datasets: list[str],
+    models: list[str] = MODELS,
+    look_back_window: list[int] = [30],
+    prediction_window: list[int] = [1, 3, 5, 10, 20],
+    metric: str = "MSE",
+    start_time: str = "2025-08-28",
+    use_std: bool = False,
+):
+    assert len(models) % 2 == 0
+    N_BASELINES = len(models) // 2
+
+    BASELINE_COLOR = "rgb(31,119,180)"  # blue
+    DL_COLOR = "rgb(214,39,40)"  # red
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(datasets),
+        shared_yaxes=True,
+        subplot_titles=datasets,
+        horizontal_spacing=0.08,
+    )
+
+    # categorical, equally spaced x-ticks
+    x_labels = [str(h) for h in prediction_window]
+
+    for j, dataset in enumerate(datasets, start=1):
+        df = process_diff(
+            dataset=dataset,
+            models=models,
+            look_back_window=look_back_window,
+            prediction_window=prediction_window,
+            start_time=start_time,
+            metric=metric,
+        )
+
+        # ensure column order matches desired horizons
+        df = df.reindex(columns=prediction_window)
+
+        baseline_df = df.iloc[:N_BASELINES, :]
+        dl_df = df.iloc[N_BASELINES:, :]
+
+        # robust summaries across models (per horizon)
+        baseline_median = (
+            baseline_df.median(axis=0, skipna=True).reindex(prediction_window).values
+        )
+        baseline_q25 = (
+            baseline_df.quantile(0.25, axis=0, interpolation="linear")
+            .reindex(prediction_window)
+            .values
+        )
+        baseline_q75 = (
+            baseline_df.quantile(0.75, axis=0, interpolation="linear")
+            .reindex(prediction_window)
+            .values
+        )
+
+        dl_median = dl_df.median(axis=0, skipna=True).reindex(prediction_window).values
+        dl_q25 = (
+            dl_df.quantile(0.25, axis=0, interpolation="linear")
+            .reindex(prediction_window)
+            .values
+        )
+        dl_q75 = (
+            dl_df.quantile(0.75, axis=0, interpolation="linear")
+            .reindex(prediction_window)
+            .values
+        )
+
+        # Only show legend once
+        showlegend = j == 1
+
+        # Baselines band + median
+        _add_band(
+            fig,
+            x_labels,
+            baseline_q25,
+            baseline_q75,
+            BASELINE_COLOR,
+            "Baselines",
+            1,
+            j,
+            showlegend,
+        )
+        _add_median(
+            fig,
+            x_labels,
+            baseline_median,
+            BASELINE_COLOR,
+            "Baselines",
+            1,
+            j,
+            showlegend,
+        )
+
+        # DL band + median
+        _add_band(fig, x_labels, dl_q25, dl_q75, DL_COLOR, "DL", 1, j, showlegend)
+        _add_median(fig, x_labels, dl_median, DL_COLOR, "DL", 1, j, showlegend)
+
+        # make x-axis categorical so ticks are equally spaced (1,3,5,10,20)
+        fig.update_xaxes(
+            type="category",
+            categoryorder="array",
+            categoryarray=x_labels,
+            title_text="Horizon (steps)",
+            row=1,
+            col=j,
+        )
+
+        if j == 1:
+            fig.update_yaxes(
+                title_text="Δ% = 100·(MAE$_{endo}$ − MAE$_{exo}$)/MAE$_{endo}$",
+                row=1,
+                col=j,
+            )
+        fig.show()
+
+    fig.update_layout(
+        title="IMU Effect vs. Horizon — Median and IQR across Models (Baselines vs DL)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.0),
+        margin=dict(l=60, r=20, t=70, b=50),
+    )
+    fig.show()
+
+
 def visualize_exo_difference(
     datasets: list[str],
     models: list[str] = MODELS,
@@ -68,61 +312,76 @@ def visualize_exo_difference(
 
         diff_mean: List[float] = []
         diff_std: List[float] = []
+        imprv_mean: List[float] = []
+        imprv_std: List[float] = []
         labels: List[str] = []
         colors: List[str] = []
 
         for m in models:
             abbr_name = model_to_abbr[m]
-            try:
-                diffs: List[float] = []
-                imprv: List[float] = []
-                for fold_nr, seed_dict in exo_metrics[m][lbw][pw].items():
-                    for seed, metrics_dict in seed_dict.items():
-                        endo_val = endo_metrics[m][lbw][pw][fold_nr][seed][metric]
-                        exo_val = metrics_dict[metric]
-                        diffs.append(endo_val - exo_val)
-                        imprv.append((endo_val - exo_val) / (endo_val + 1e-8))
+            diffs: List[float] = []
+            imprv: List[float] = []
+            for fold_nr, seed_dict in exo_metrics[m][lbw][pw].items():
+                for seed, metrics_dict in seed_dict.items():
+                    if metric not in endo_metrics[m][lbw][pw][fold_nr][seed]:
+                        print(
+                            f"metric {metric} not in endo_metric {m} {fold_nr} {seed}"
+                        )
+                        continue
+                    if metric not in metrics_dict:
+                        print(
+                            f"metric {metric} not in metric_dict for {m} {fold_nr} {seed}"
+                        )
+                        continue
+                    endo_val = endo_metrics[m][lbw][pw][fold_nr][seed][metric]
+                    exo_val = metrics_dict[metric]
+                    if not isinstance(endo_val, float) or not isinstance(
+                        exo_val, float
+                    ):
+                        print(f"NOT FLOAT for {m} fold {fold_nr} seed {seed}")
+                        continue
+                    diffs.append(endo_val - exo_val)
+                    imprv.append(100 * (endo_val - exo_val) / (endo_val + 1e-8))
 
-                if not diffs:
-                    continue
+            if not diffs:
+                continue
 
-                diff_mean.append(float(np.mean(diffs)))
-                diff_std.append(float(np.std(diffs, ddof=1)))
-                labels.append(model_to_name.get(m, m))
-                colors.append(model_colors.get(m, "#444"))  # fallback if missing
+            diff_mean.append(float(np.mean(diffs)))
+            diff_std.append(float(np.std(diffs, ddof=1)))
+            imprv_mean.append(float(np.mean(imprv)))
+            imprv_std.append(float(np.std(imprv)))
+            labels.append(model_to_name.get(m, m))
+            colors.append(model_colors.get(m, "#444"))  # fallback if missing
 
-                # add values to col for table
-                model_endo_mean = endo_mean[m][lbw][pw][metric]
-                model_endo_std = endo_std[m][lbw][pw][metric]
-                model_exo_mean = exo_mean[m][lbw][pw][metric]
-                model_exo_std = exo_std[m][lbw][pw][metric]
-                mean_diff = np.mean(diffs)
-                std_diff = np.std(diffs)
-                mean_imprv = np.mean(imprv)
-                std_imprv = np.std(imprv)
-                if use_std:
-                    values = [
-                        f"{model_endo_mean:.2f} $\\pm$ {model_endo_std:.2f}",
-                        f"{model_exo_mean:.2f} $\\pm$ {model_exo_std:.2f}",
-                        f"{mean_diff:.2f} $\\pm$ {std_diff:.2f}",
-                        f"{mean_imprv:.2f} $\\pm$ {std_imprv:.2f}",
-                    ]
-                else:
-                    values = [
-                        f"{model_endo_mean:.2f}",
-                        f"{model_exo_mean:.2f}",
-                        f"{mean_diff:.2f}",
-                        f"{mean_imprv:.2f}",
-                    ]
+            # add values to col for table
+            model_endo_mean = endo_mean[m][lbw][pw][metric]
+            model_endo_std = endo_std[m][lbw][pw][metric]
+            model_exo_mean = exo_mean[m][lbw][pw][metric]
+            model_exo_std = exo_std[m][lbw][pw][metric]
+            mean_diff = np.mean(diffs)
+            std_diff = np.std(diffs)
+            mean_imprv = np.mean(imprv)
+            std_imprv = np.std(imprv)
+            if use_std:
+                values = [
+                    f"{model_endo_mean:.2f} $\\pm$ {model_endo_std:.2f}",
+                    f"{model_exo_mean:.2f} $\\pm$ {model_exo_std:.2f}",
+                    f"{mean_diff:.2f} $\\pm$ {std_diff:.2f}",
+                    f"{mean_imprv:.2f} $\\pm$ {std_imprv:.2f}",
+                ]
+            else:
+                values = [
+                    f"{model_endo_mean:.2f}",
+                    f"{model_exo_mean:.2f}",
+                    f"{mean_diff:.2f}",
+                    f"{mean_imprv:.2f}",
+                ]
 
-                cols[abbr_name].extend(values)
-
-            except KeyError as e:
-                print(f"[{dataset}] skipped {m} due to missing keys: {e}")
+            cols[abbr_name].extend(values)
 
         fig = go.Figure()
 
-        for x, y, err, c in zip(labels, diff_mean, diff_std, colors):
+        for x, y, err, c in zip(labels, imprv_mean, imprv_std, colors):
             fig.add_trace(
                 go.Scatter(
                     x=[x],

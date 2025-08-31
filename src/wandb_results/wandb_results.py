@@ -8,7 +8,10 @@ from src.wandb_results.metric_table import (
     compare_endo_exo_latex_tables,
     plot_best_lbw,
 )
-from src.wandb_results.activity_ablation import visualize_exo_difference
+from src.wandb_results.activity_ablation import (
+    visualize_exo_difference,
+    horizon_exo_difference,
+)
 from src.wandb_results.look_back_ablation import (
     visualize_look_back_window_difference,
     ablation_delta_plot,
@@ -38,6 +41,7 @@ def main():
             "delta",
             "activity_ablation",
             "norm_ablation",
+            "horizon_exo_diff",
             "optuna",
         ],
         required=True,
@@ -188,7 +192,11 @@ def main():
             args.models,
             args.look_back_window,
             args.prediction_window,
-            start_time="2025-08-28",
+            start_time="2025-08-31",
+        )
+    elif args.type == "horizon_exo_diff":
+        horizon_exo_difference(
+            args.dataset, args.models, args.look_back_window, args.prediction_window
         )
     elif args.type == "norm_ablation":
         plot_normalization_table(

@@ -178,6 +178,10 @@ def train_test_local(
 
         print(f"End Evaluation {participant}")
 
+        del datamodule, pl_model, trainer, callbacks
+        gc.collect()
+        torch.cuda.empty_cache()
+
     # Local results
     df = pd.DataFrame(results)
     means = df.mean().to_frame().T
