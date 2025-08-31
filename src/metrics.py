@@ -304,7 +304,7 @@ def mape(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
 
     See [HA21]_ for more details.
     """
-    return np.mean(np.abs(target - forecast) / np.abs(target))
+    return np.mean(np.abs(target - forecast) / (np.abs(target) + 1e-6))
 
 
 def smape(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:
