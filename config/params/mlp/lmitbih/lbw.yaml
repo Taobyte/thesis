@@ -1,0 +1,12 @@
+# @package _global_
+
+look_back_window: 20
+model:
+  model:
+    activation: gelu
+    dropout: 0.052
+    hid_dim: 32
+    n_hid_layers: 4
+  pl_model:
+    learning_rate: 0.003
+    weight_decay: 0.0001

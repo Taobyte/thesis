@@ -1,0 +1,11 @@
+# @package _global_
+
+look_back_window: 60
+model:
+  model:
+    kernel: rbf
+    num_latents: 7
+    use_linear_trend: 1
+  n_points: 200
+  pl_model:
+    learning_rate: 0.0003

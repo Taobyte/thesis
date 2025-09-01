@@ -1,0 +1,10 @@
+# @package _global_
+
+look_back_window: 30
+model:
+  model:
+    n_states: 8
+  pl_model:
+    learning_rate: 0.1
+    optimizer_name: adam
+    weight_decay: 0.0001

@@ -206,7 +206,9 @@ def main():
             start_time="2025-08-30",
         )
     elif args.type == "optuna":
-        create_params_file_from_optuna(models=args.models, start_time="2025-8-26")
+        create_params_file_from_optuna(
+            models=args.models, start_time="2025-8-31T21:30:00+02:00"
+        )
 
 
 if __name__ == "__main__":

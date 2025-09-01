@@ -310,14 +310,17 @@ def create_params_file_from_optuna(models: list[str], start_time: str):
             running = state == "running"
             splitted = run_name.split("_")
             dataset = splitted[3]
-            lbw_name = lbw_to_name[splitted[-4]]
+            if "lmitbih" in run_name:
+                lbw_name = "lbw"
+            else:
+                lbw_name = lbw_to_name[splitted[-4]]
             summary = run.summary._json_dict
             processed_summary = unflatten(summary)
             if "model" in processed_summary and not crashed and not running:
                 filtered = {
                     k: v
                     for k, v in processed_summary.items()
-                    if k in ["model", "pl_model"]
+                    if k in ["model", "pl_model", "look_back_window"]
                 }
                 p = params_dir / model / dataset
                 p.mkdir(parents=True, exist_ok=True)
