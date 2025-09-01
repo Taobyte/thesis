@@ -17,6 +17,7 @@ from src.wandb_results.look_back_ablation import (
     ablation_delta_plot,
 )
 from src.wandb_results.normalization_ablation import plot_normalization_table
+from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
 
 
@@ -204,6 +205,13 @@ def main():
             prediction_window=args.prediction_window,
             models=args.models,
             start_time="2025-08-30",
+        )
+    elif args.type == "efficiency":
+        plot_efficiency_table(
+            dataset=args.dataset,
+            look_back_window=args.look_back_window,
+            prediction_window=args.prediction_window,
+            models=args.models,
         )
     elif args.type == "optuna":
         create_params_file_from_optuna(

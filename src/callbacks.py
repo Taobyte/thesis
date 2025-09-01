@@ -47,15 +47,9 @@ class EfficiencyCallback(Callback):
             logger=True,
         )
 
-    # track best epoch by val metric (expects 'val_mae' or similar)
     def on_validation_epoch_end(self, trainer, pl_module):
-        # prefer val_mae, else any metric that starts with 'val_'
         cm = trainer.callback_metrics
-        val_keys = [k for k in cm.keys() if k.startswith("val_")]
-        if not val_keys:
-            return
-        # pick primary (first) metric
-        key = "val_loss_epoch" if "val_mae" in cm else val_keys[0]
+        key = "val_loss_epoch"
         val = float(cm[key])
         if val < self.best_val:
             self.best_val = val
