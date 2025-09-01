@@ -9,5 +9,5 @@ name: ${dataset.name}_${model.name}_${look_back_window}_${prediction_window}_${e
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
 setup:
   - module load eth_proxy
-srun_args:
-  - "--gpus=rtx_3090:1"
+additional_parameters:
+  gpus: "rtx_3090"
