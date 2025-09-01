@@ -10,4 +10,4 @@ _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
 setup:
   - module load eth_proxy
 additional_parameters:
-  gpus: "rtx_3090"
+  gpus: "rtx_3090:1"
