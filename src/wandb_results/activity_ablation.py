@@ -78,12 +78,6 @@ def process_diff(
     return pd.DataFrame.from_dict(cols)
 
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
-
 def _rgba(color_rgb: str, alpha: float = 0.18) -> str:
     # "rgb(r,g,b)" -> "rgba(r,g,b,alpha)"
     return color_rgb.replace("rgb", "rgba").rstrip(")") + f",{alpha})"
@@ -150,11 +144,13 @@ def horizon_exo_difference(
     BASELINE_COLOR = "rgb(31,119,180)"  # blue
     DL_COLOR = "rgb(214,39,40)"  # red
 
+    dataset_names = [dataset_to_name[d] for d in datasets]
+
     fig = make_subplots(
         rows=1,
         cols=len(datasets),
-        shared_yaxes=True,
-        subplot_titles=datasets,
+        shared_yaxes=False,
+        subplot_titles=dataset_names,
         horizontal_spacing=0.08,
     )
 
@@ -253,9 +249,7 @@ def horizon_exo_difference(
         fig.show()
 
     fig.update_layout(
-        title="IMU Effect vs. Horizon — Median and IQR across Models (Baselines vs DL)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.0),
-        margin=dict(l=60, r=20, t=70, b=50),
     )
     fig.show()
 
@@ -405,18 +399,6 @@ def visualize_exo_difference(
                     name="",
                 )
             )
-
-        # zero line (single color for the whole figure)
-        fig.add_hline(y=0, line_dash="dash", line_width=2.5)
-
-        fig.update_layout(
-            template="plotly_white",
-            title=None,
-            font=dict(size=18),
-            yaxis_title=f"Δ{metric} = {metric}(endo_only) − {metric}(endo+exo)",
-        )
-        fig.update_xaxes(title=None, tickangle=-30, tickfont=dict(size=18))
-        fig.update_yaxes(tickfont=dict(size=18))
 
         fig.add_hline(y=0, line_dash="dash", line_width=2.5)
 
