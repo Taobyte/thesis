@@ -109,3 +109,13 @@ def plot_efficiency_table(
     import pdb
 
     pdb.set_trace()
+
+    latex_str = df.to_latex(
+        index=False,
+        escape=False,
+        header=True,
+        # column_format=column_format,
+        bold_rows=False,
+        float_format="%.3f",
+    )
+    print(latex_str)

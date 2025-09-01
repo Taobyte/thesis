@@ -19,6 +19,7 @@ from src.wandb_results.look_back_ablation import (
 from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
+from src.wandb_results.mitbih_results import plot_mitbih_metric_table
 
 
 def main():
@@ -44,6 +45,7 @@ def main():
             "norm_ablation",
             "horizon_exo_diff",
             "efficiency",
+            "mitbih",
             "optuna",
         ],
         required=True,
@@ -214,6 +216,8 @@ def main():
             prediction_window=args.prediction_window,
             models=args.models,
         )
+    elif args.type == "mitbih":
+        plot_mitbih_metric_table()
     elif args.type == "optuna":
         create_params_file_from_optuna(
             models=args.models, start_time="2025-8-31T21:30:00+02:00"

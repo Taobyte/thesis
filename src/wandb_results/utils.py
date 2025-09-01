@@ -11,7 +11,7 @@ from collections import defaultdict
 from typing import Tuple, List
 from pathlib import Path
 
-from src.constants import METRICS, dataset_to_name
+from src.constants import dataset_to_name
 
 
 def local_vs_global_metrics(
@@ -53,14 +53,16 @@ def get_metrics(
         config = run.config
         model_name = config["model"]["name"]
         dataset_name = config["dataset"]["name"]
-        is_global = dataset_name in ["dalia", "wildppg", "ieee"]
+        is_global = (
+            dataset_name in ["dalia", "wildppg", "ieee"]
+        ) or dataset_name == "lmitbih"
         look_back_window = config["look_back_window"]
         prediction_window = config["prediction_window"]
         seed = config["seed"]
         if is_global:
             fold = config["folds"]["fold_nr"]
             summary = run.summary._json_dict
-            filtered_summary = {k: summary[k] for k in summary if k in METRICS}
+            filtered_summary = {k: summary[k] for k in summary if k in metrics_to_keep}
             metrics[model_name][look_back_window][prediction_window][fold][seed] = (
                 filtered_summary
             )
