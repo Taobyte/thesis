@@ -5,6 +5,8 @@ import wandb
 from tqdm import tqdm
 from collections import defaultdict
 
+from src.constants import model_to_name
+
 
 def plot_efficiency_table(
     dataset: list[str] = ["dalia"],
@@ -25,6 +27,17 @@ def plot_efficiency_table(
         "time_to_best_min",
         "total_fit_minutes",
         "inference_ms_per_window",
+    ]
+
+    eff_metric_names = [
+        "Params",
+        "PVRAMT",
+        "PVRAMI",
+        "....",
+        "Epoch-To-Best",
+        "Time-To-Best",
+        "Total",
+        "Inference",
     ]
 
     conditions = [
@@ -77,15 +90,15 @@ def plot_efficiency_table(
                             if metric_name in eff_metrics:
                                 if isinstance(metric_value, str):
                                     print(
-                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} {metric_name}"
                                     )
                                 elif np.isinf(metric_value):
                                     print(
-                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} {metric_name}"
                                     )
                                 elif np.isnan(metric_value):
                                     print(
-                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} {metric_name}"
                                     )
                                 else:
                                     metric_list[metric_name].append(metric_value)
@@ -103,8 +116,14 @@ def plot_efficiency_table(
 
     df = pd.DataFrame.from_dict(processed_metrics_mean, orient="columns")
 
-    df.index.name = "metric"
-    df.columns.name = "model"
+    df = df.reindex(index=eff_metrics)
+    df = df.reindex(columns=models)
+
+    row_name_map = dict(zip(eff_metrics, eff_metric_names))
+    df = df.rename(index=row_name_map)
+    df = df.rename(columns=lambda c: model_to_name.get(c, c))
+
+    df = df.reset_index().rename(columns={"index": "Metric"})
 
     import pdb
 
@@ -116,6 +135,6 @@ def plot_efficiency_table(
         header=True,
         # column_format=column_format,
         bold_rows=False,
-        float_format="%.3f",
+        # float_format="%.3f",
     )
     print(latex_str)

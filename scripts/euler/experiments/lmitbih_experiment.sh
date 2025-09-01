@@ -4,7 +4,7 @@
 source ~/.bashrc
 conda activate thesis
 
-PW=f #  f = 30 for lmitbih = 15s
+PW=${1} #  f = 30 for lmitbih = 15s
 
 # ressource specs
 TIME=24:00:00

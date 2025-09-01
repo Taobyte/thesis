@@ -68,8 +68,9 @@ class EfficiencyCallback(Callback):
         # ---- inference latency (single-window) ----
         latency_ms = float("nan")
         if hasattr(trainer, "datamodule") and trainer.datamodule is not None:
+            trainer.datamodule.setup("test")
             try:
-                dl = trainer.datamodule.val_dataloader()
+                dl = trainer.datamodule.test_dataloader()
                 batch = next(iter(dl))
                 _, x, _ = batch
                 device = pl_module.device

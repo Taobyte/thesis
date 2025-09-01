@@ -167,7 +167,7 @@ def horizon_exo_difference(
     start_time: str = "2025-08-28",
     use_std: bool = False,
 ):
-    assert len(models) % 2 == 0
+    models.remove("msar")  # we remove msar due to bad performance
     N_BASELINES = len(models) // 2
 
     BASELINE_COLOR = "rgb(31,119,180)"  # blue
