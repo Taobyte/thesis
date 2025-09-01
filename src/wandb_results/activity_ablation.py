@@ -75,7 +75,36 @@ def process_diff(
 
             cols[pw].append(float(np.mean(imprv)))
 
-    return pd.DataFrame.from_dict(cols)
+    df = pd.DataFrame(
+        cols, index=models
+    )  # keys in cols become columns; rows align to models
+    df.index.name = "model"
+    return df
+
+
+# --- style knobs (tweak here) ---
+SUBPLOT_TITLE_SIZE = 18  # larger subplot titles
+LINE_WIDTH = 4.0  # thicker median lines
+MARKER_SIZE = 9  # larger point markers
+LEGEND_Y = -0.18  # how far below the plot the legend sits
+
+
+def _add_models(fig, x, df: pd.DataFrame, col: int, showlegend: bool):
+    for m, row in df.iterrows():
+        color = model_colors[m]
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=row.values,
+                mode="lines+markers",
+                line=dict(width=LINE_WIDTH, color=color),
+                marker=dict(size=MARKER_SIZE),
+                name=m,
+                showlegend=showlegend,
+            ),
+            row=2,
+            col=col,
+        )
 
 
 def _rgba(color_rgb: str, alpha: float = 0.18) -> str:
@@ -119,8 +148,8 @@ def _add_median(fig, x, median, color, name, row, col, showlegend):
             x=x,
             y=median,
             mode="lines+markers",
-            line=dict(width=2.5, color=color),
-            marker=dict(size=6),
+            line=dict(width=LINE_WIDTH, color=color),
+            marker=dict(size=MARKER_SIZE),
             name=f"{name} median",
             showlegend=showlegend,
         ),
@@ -144,10 +173,11 @@ def horizon_exo_difference(
     BASELINE_COLOR = "rgb(31,119,180)"  # blue
     DL_COLOR = "rgb(214,39,40)"  # red
 
-    dataset_names = [dataset_to_name[d] for d in datasets]
+    # make subplot titles bold
+    dataset_names = [f"<b>{dataset_to_name[d]}</b>" for d in datasets]
 
     fig = make_subplots(
-        rows=1,
+        rows=2,
         cols=len(datasets),
         shared_yaxes=False,
         subplot_titles=dataset_names,
@@ -230,7 +260,10 @@ def horizon_exo_difference(
         _add_band(fig, x_labels, dl_q25, dl_q75, DL_COLOR, "DL", 1, j, showlegend)
         _add_median(fig, x_labels, dl_median, DL_COLOR, "DL", 1, j, showlegend)
 
-        # make x-axis categorical so ticks are equally spaced (1,3,5,10,20)
+        # add all models two second row
+        _add_models(fig, x_labels, df, j, showlegend)
+
+        # equally spaced categorical x
         fig.update_xaxes(
             type="category",
             categoryorder="array",
@@ -240,17 +273,30 @@ def horizon_exo_difference(
             col=j,
         )
 
-        if j == 1:
-            fig.update_yaxes(
-                title_text="Δ% = 100·(MAE$_{endo}$ − MAE$_{exo}$)/MAE$_{endo}$",
-                row=1,
-                col=j,
-            )
-        fig.show()
+        fig.update_yaxes(
+            title_text="Relative Improvement",
+            row=1,
+            col=j,
+        )
 
+    # --- layout: bold & larger titles, legend bottom center ---
+    fig.update_annotations(
+        font=dict(size=SUBPLOT_TITLE_SIZE)
+    )  # boost subplot title size
     fig.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.0),
+        legend=dict(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=LEGEND_Y,
+            yanchor="top",
+        ),
+        margin=dict(b=120),
     )
+
+    fig.update_xaxes(title_font=dict(size=14))
+    fig.update_yaxes(title_font=dict(size=14))
+
     fig.show()
 
 

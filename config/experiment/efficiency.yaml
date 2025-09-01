@@ -1,5 +1,5 @@
 experiment_name: "efficiency"
-normalization: "none" # norm is set individually for each model in bash file
+normalization: "global" # norm is set individually for each model in bash file
 
 use_heart_rate: True 
 use_dynamic_features: True # use exogenous variables

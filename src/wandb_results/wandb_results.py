@@ -43,6 +43,7 @@ def main():
             "activity_ablation",
             "norm_ablation",
             "horizon_exo_diff",
+            "efficiency",
             "optuna",
         ],
         required=True,
