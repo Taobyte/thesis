@@ -571,14 +571,6 @@ class Model(BaseKalmanFilter):
         return losses
 
     def forward(self, lookback_seq: torch.Tensor) -> torch.Tensor:
-        if self.use_norm:
-            means = lookback_seq.mean(1, keepdim=True).detach()
-            look_back_window = lookback_seq - means
-            stdev = torch.sqrt(
-                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            lookback_seq /= stdev
-
         if self.control_dim > 0:
             controls = lookback_seq[:, :, self.target_channel_dim :]
         else:
@@ -600,14 +592,7 @@ class Model(BaseKalmanFilter):
             preds.append(prediction)
 
         concat_preds = torch.concat(preds, dim=1)
-        if self.use_norm:
-            concat_preds = concat_preds * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
 
-            concat_preds = concat_preds + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
         return concat_preds
 
 
@@ -630,7 +615,7 @@ class KalmanFilter(BaseLightningModule):
 
         self.optimizer_name = optimizer_name
 
-    def model_forward(self, look_back_window: torch.Tensor):
+    def model_specific_forward(self, look_back_window: torch.Tensor):
         assert len(look_back_window.shape) == 3
 
         # look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
@@ -666,7 +651,7 @@ class KalmanFilter(BaseLightningModule):
     def model_specific_train_step(
         self, look_back_window: torch.Tensor, prediction_window: torch.Tensor
     ):
-        preds = self.model(look_back_window)
+        preds = self.model_forward(look_back_window)
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)

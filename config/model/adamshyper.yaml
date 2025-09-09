@@ -1,3 +1,5 @@
+defaults:
+  - base_module
 
 name: "adamshyper"
 

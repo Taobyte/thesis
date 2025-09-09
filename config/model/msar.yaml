@@ -1,3 +1,6 @@
+defaults:
+  - base_module
+
 name: "msar"
 
 model:
@@ -13,7 +16,6 @@ model:
   jitter: 1e-4
   sigma_min: 1e-2
 
-  use_norm: ${use_norm_baseline}
 
 pl_model: 
   _target_: src.models.msar.HMM

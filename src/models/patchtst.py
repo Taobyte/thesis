@@ -1075,14 +1075,14 @@ class PatchTST(BaseLightningModule):
         self.learning_rate = learning_rate
         self.pct_start = pct_start
 
-    def model_forward(self, look_back_window: Tensor) -> Tensor:
+    def model_specific_forward(self, look_back_window: Tensor) -> Tensor:
         return self.model(look_back_window)
 
     def _shared_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
-
         assert preds.shape == prediction_window.shape
+
         mae_criterion = torch.nn.L1Loss()
         mae_loss = mae_criterion(preds, prediction_window)
         loss = self.criterion(preds, prediction_window)

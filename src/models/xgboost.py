@@ -5,22 +5,15 @@ import xgboost as xgb
 
 from xgboost import XGBRegressor
 from einops import rearrange
-from numpy.typing import NDArray
 from typing import Any, Tuple
 
 from src.models.utils import BaseLightningModule
 from src.losses import get_loss_fn
 
-from src.normalization import local_z_norm_numpy
-
 
 class XGBoostModel(torch.nn.Module):
     def __init__(
         self,
-        lbw_train_dataset: NDArray[np.float32],
-        pw_train_dataset: NDArray[np.float32],
-        lbw_val_dataset: NDArray[np.float32],
-        pw_val_dataset: NDArray[np.float32],
         learning_rate: float = 0.001,
         loss: str = "MSE",
         n_estimators: int = 300,
@@ -34,11 +27,6 @@ class XGBoostModel(torch.nn.Module):
         seed: int = 123,
     ):
         super().__init__()
-
-        self.lbw_train_dataset = lbw_train_dataset
-        self.pw_train_dataset = pw_train_dataset
-        self.lbw_val_dataset = lbw_val_dataset
-        self.pw_val_dataset = pw_val_dataset
 
         if loss == "MSE":
             objective = "reg:squarederror"
@@ -81,41 +69,17 @@ class XGBoost(BaseLightningModule):
         model: XGBoostModel,
         loss: str = "MSE",
         verbose: bool = False,
-        use_norm: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
-        self.use_norm = use_norm
-
         self.model = model.model
-        lbw_train = model.lbw_train_dataset
-        pw_train = model.pw_train_dataset
-        lbw_val = model.lbw_val_dataset
-        pw_val = model.pw_val_dataset
-        if use_norm:
-            lbw_train, mean, std = local_z_norm_numpy(lbw_train)
-            pw_train, _, _ = local_z_norm_numpy(pw_train, mean, std)
-            lbw_val, mean, std = local_z_norm_numpy(lbw_val)
-            pw_val, _, _ = local_z_norm_numpy(pw_val, mean, std)
-        self.X_train = rearrange(lbw_train, "B T C -> B (T C)")
-        self.y_train = rearrange(pw_train, "B T C -> B (T C)")
-        self.X_val = rearrange(lbw_val, "B T C -> B (T C)")
-        self.y_val = rearrange(pw_val, "B T C -> B (T C)")
+        self.verbose = verbose
 
         self.criterion = get_loss_fn(loss)
         self.automatic_optimization = False
 
-        self.verbose = verbose
-
-    def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
-        if self.use_norm:
-            means = look_back_window.mean(1, keepdim=True).detach()
-            look_back_window = look_back_window - means
-            stdev = torch.sqrt(
-                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            look_back_window /= stdev
+    def model_specific_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         look_back_window = look_back_window.detach().cpu().numpy()
         preds = self.model.predict(look_back_window)
@@ -124,14 +88,6 @@ class XGBoost(BaseLightningModule):
         preds = rearrange(preds, "B (T C) -> B T C", C=self.target_channel_dim)
         # we need to have a pytorch tensor for evaluation
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
-        if self.use_norm:
-            preds = preds * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
-
-            preds = preds + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
         return preds
 
     def log_feature_importance(self):
@@ -158,18 +114,24 @@ class XGBoost(BaseLightningModule):
 
     # we use this hack!
     def on_train_epoch_start(self):
+        datamodule = self.trainer.datamodule
+        lbw_train, pw_train, lbw_val, pw_val = datamodule.get_numpy_dataset()
+        X_train = rearrange(lbw_train, "B T C -> B (T C)")
+        y_train = rearrange(pw_train, "B T C -> B (T C)")
+        X_val = rearrange(lbw_val, "B T C -> B (T C)")
+        y_val = rearrange(pw_val, "B T C -> B (T C)")
         self.model.fit(
-            self.X_train,
-            self.y_train,
-            eval_set=[(self.X_val, self.y_val)],
+            X_train,
+            y_train,
+            eval_set=[(X_val, y_val)],
             verbose=self.verbose,
         )
         # we need this for the optuna tuner
-        preds = self.model.predict(self.X_val)
+        preds = self.model.predict(X_val)
         preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
         if preds.ndim == 1:
             preds = preds.unsqueeze(-1)
-        targets = torch.tensor(self.y_val, dtype=torch.float32, device=self.device)
+        targets = torch.tensor(y_val, dtype=torch.float32, device=self.device)
 
         if self.tune:
             mae_criterion = torch.nn.L1Loss()

@@ -13,7 +13,7 @@ from torch_geometric.utils import degree, softmax
 from torch.nn import Linear
 from lightning.pytorch.core.optimizer import LightningOptimizer
 
-from src.models.utils import BaseLightningModule
+from src.models.utils import BaseLightningModule, ModelOutput
 from src.losses import get_loss_fn
 
 
@@ -1385,9 +1385,9 @@ class AdaMSHyper(BaseLightningModule):
         self.lradj = lradj
         self.automatic_optimization = False
 
-    def model_forward(self, look_back_window):
-        preds, _ = self.model(look_back_window)
-        return preds
+    def model_specific_forward(self, look_back_window):
+        preds, constraint_loss = self.model(look_back_window)
+        return ModelOutput(preds=preds, aux={"constraint_loss": constraint_loss})
 
     def model_specific_train_step(self, look_back_window, prediction_window):
         # opt_1, opt_2 = self.configure_optimizers()
@@ -1396,10 +1396,9 @@ class AdaMSHyper(BaseLightningModule):
 
         opt_1.zero_grad()
         opt_2.zero_grad()
-        preds, constraint_loss = self.model(look_back_window)
-
+        preds, aux = self.model_forward(look_back_window, with_aux=True)
+        constraint_loss = aux["constraint_loss"]
         preds = preds[:, :, : prediction_window.shape[-1]]
-
         assert preds.shape == prediction_window.shape
 
         mse_loss = self.criterion(preds, prediction_window)
@@ -1421,7 +1420,8 @@ class AdaMSHyper(BaseLightningModule):
         return mse_loss
 
     def model_specific_val_step(self, look_back_window, prediction_window):
-        preds, constraint_loss = self.model(look_back_window)
+        preds, aux = self.model_forward(look_back_window, with_aux=True)
+        constraint_loss = aux["constraint_loss"]
         preds = preds[:, :, : prediction_window.shape[-1]]
         mse_loss = self.criterion(preds, prediction_window)
         if self.tune:

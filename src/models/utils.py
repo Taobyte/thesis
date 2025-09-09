@@ -10,6 +10,7 @@
 # ---------------------------------------------------------------
 
 
+import torch
 import lightning as L
 import numpy as np
 
@@ -18,11 +19,18 @@ from torch.utils.data import Dataset
 from omegaconf import DictConfig
 from typing import Dict, Tuple, Union, Any
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 from src.metrics import Evaluator
-from src.normalization import global_z_denorm, undo_differencing, min_max_denorm
+from src.normalization import global_z_denorm, min_max_denorm
 from src.datasets.utils import BaseDataModule
 from src.plotting import plot_max_min_median_predictions
+
+
+@dataclass
+class ModelOutput:
+    preds: Tensor
+    aux: Dict[str, Any] = field(default_factory=dict)
 
 
 def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str, Any]:
@@ -32,13 +40,6 @@ def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str
             config.model.n_points, config.model.strategy
         )
         model_kwargs["train_dataset_length"] = datamodule.get_train_dataset_length()
-    elif config.model.name in config.numpy_models:
-        lbw_train_dataset, pw_train_dataset = datamodule.get_train_dataset()
-        lbw_val_dataset, pw_val_dataset = datamodule.get_val_dataset()
-        model_kwargs["lbw_train_dataset"] = lbw_train_dataset
-        model_kwargs["pw_train_dataset"] = pw_train_dataset
-        model_kwargs["lbw_val_dataset"] = lbw_val_dataset
-        model_kwargs["pw_val_dataset"] = pw_val_dataset
 
     return model_kwargs
 
@@ -46,25 +47,27 @@ def get_model_kwargs(config: DictConfig, datamodule: BaseDataModule) -> dict[str
 class BaseLightningModule(L.LightningModule):
     def __init__(
         self,
-        wandb_project: str = "c_keusch/thesis",
-        n_trials: int = 10,
-        name: str = "timesnet",
-        use_plots: bool = False,
-        normalization: str = "local",
-        tune: bool = False,
-        probabilistic_models: list[str] = [],
-        experiment_name: str = "endo_only",
-        seed: int = 0,
-        return_whole_series: bool = False,
+        name: str,
+        local_norm: str,
+        n_trials: int,
+        use_plots: bool,
+        normalization: str,
+        local_norm_endo_only: bool,
+        tune: bool,
+        probabilistic_models: list[str],
+        experiment_name: str,
+        seed: int,
+        return_whole_series: bool,
     ):
         super().__init__()
 
         self.n_trials = n_trials
-        self.wandb_project = wandb_project
         self.name = name
         self.tune = tune
         self.use_plots = use_plots
         self.normalization = normalization
+        self.local_norm = local_norm
+        self.local_norm_endo_only = local_norm_endo_only
         self.probabilistic_forecast_models = probabilistic_models
         self.experiment_name = experiment_name
         self.seed = seed
@@ -76,7 +79,67 @@ class BaseLightningModule(L.LightningModule):
     def has_probabilistic_forecast(self) -> bool:
         return self.name in self.probabilistic_forecast_models
 
-    def model_forward(self, look_back_window: Tensor) -> Union[Tensor, Any]:
+    def _call_model(self, x: Tensor) -> ModelOutput:
+        out = self.model_specific_forward(x)
+
+        if isinstance(out, ModelOutput):
+            return out
+
+        if isinstance(out, tuple):
+            preds = out[0]
+            aux = {} if len(out) < 2 else out[1]
+            if not isinstance(aux, dict):
+                aux = {"aux": aux}
+            return ModelOutput(preds=preds, aux=aux)
+
+        return ModelOutput(preds=out)
+
+    def model_forward(
+        self,
+        lbw: Tensor,
+        with_aux: bool = False,
+    ) -> Union[Tensor, Dict[str, Tensor]]:
+        _, _, C = lbw.shape
+
+        x = lbw.clone()
+
+        min_channels = self.target_channel_dim if self.local_norm_endo_only else C
+
+        means = stdev = last_value = None
+
+        if self.local_norm == "local_z":
+            means = x.mean(1, keepdim=True).detach()
+            var = x.var(1, keepdim=True, unbiased=False).detach()
+            stdev = torch.sqrt(var) + 1e-5
+            x[:, :, :min_channels] = (
+                x[:, :, :min_channels] - means[:, :, :min_channels]
+            ) / stdev[:, :, :min_channels]
+
+        elif self.local_norm == "difference":
+            last_value = x[:, -1:, :min_channels].detach().clone()
+            x[:, :, :min_channels] = torch.diff(
+                x[:, :, :min_channels], dim=1, prepend=x[:, :1, :min_channels]
+            )
+
+        out = self._call_model(x)
+        pred = out.preds
+
+        if self.local_norm == "local_z":
+            pred[:, :, : self.target_channel_dim] = (
+                pred[:, :, : self.target_channel_dim]
+                * stdev[:, :1, : self.target_channel_dim]
+                + means[:, :1, : self.target_channel_dim]
+            )
+
+        elif self.local_norm == "difference":
+            pred[:, :, : self.target_channel_dim] = (
+                torch.cumsum(pred[:, :, : self.target_channel_dim], dim=1)
+                + last_value[:, :, : self.target_channel_dim]
+            )
+
+        return (pred, out.aux) if with_aux else pred
+
+    def model_specific_forward(self, look_back_window: Tensor) -> Tensor:
         raise NotImplementedError
 
     def model_specific_train_step(
@@ -100,36 +163,35 @@ class BaseLightningModule(L.LightningModule):
         self.static_exogenous_variables: int = datamodule.static_exogenous_variables
         self.dynamic_exogenous_variables: int = datamodule.dynamic_exogenous_variables
 
-        self.local_norm_channels: int = datamodule.local_norm_channels
+        self.local_norm = datamodule.local_norm
+        self.local_norm_endo_only = datamodule.local_norm_endo_only
 
-    def training_step(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
-    ) -> Tensor:
+    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         if self.return_whole_series:
             series, lengths = batch
             loss = self.model_specific_train_step(series, lengths)
         else:
-            _, look_back_window_norm, prediction_window_norm = batch
+            look_back_window_norm, prediction_window_norm = batch
             loss = self.model_specific_train_step(
                 look_back_window_norm, prediction_window_norm
             )
         return loss
 
     def validation_step(
-        self, batch: Union[Tensor, Tuple[Tensor, Tensor, Tensor]], batch_idx: int
+        self, batch: Union[Tensor, Tuple[Tensor, Tensor]], batch_idx: int
     ) -> Tensor:
         if self.return_whole_series:
             series, lengths = batch
             loss = self.model_specific_val_step(series, lengths)
         else:
-            _, look_back_window_norm, prediction_window_norm = batch
+            look_back_window_norm, prediction_window_norm = batch
             loss = self.model_specific_val_step(
                 look_back_window_norm, prediction_window_norm
             )
         return loss
 
     def test_step(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+        self, batch: Tuple[Tensor, Tensor], batch_idx: int
     ) -> dict[str, float]:
         metrics, current_metrics = self.evaluate(batch, batch_idx)
 
@@ -159,14 +221,10 @@ class BaseLightningModule(L.LightningModule):
             plot_max_min_median_predictions(self)
 
     def evaluate(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+        self, batch: Tuple[Tensor, Tensor], batch_idx: int
     ) -> Tuple[dict[str, float], dict[str, list[float]]]:
-        (
-            look_back_window,
-            look_back_window_norm,
-            prediction_window_norm,
-        ) = batch
-        batch_size: int = look_back_window.shape[0]
+        look_back_window_norm, prediction_window_norm = batch
+        batch_size = look_back_window_norm.size(0)
         self.batch_size.append(batch_size)
         # Prediction
         if self.has_probabilistic_forecast:
@@ -177,6 +235,7 @@ class BaseLightningModule(L.LightningModule):
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window_norm.shape
 
+        # denormalize preds and prediction_window
         if self.normalization == "global":
             device = look_back_window_norm.device
             train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
@@ -184,11 +243,9 @@ class BaseLightningModule(L.LightningModule):
             std = train_dataset.std
             mean = Tensor(mean).reshape(1, 1, -1).to(device).float()
             std = Tensor(std).reshape(1, 1, -1).to(device).float()
-            preds = global_z_denorm(preds, self.local_norm_channels, mean, std)
-            prediction_window = global_z_denorm(
-                prediction_window_norm, self.local_norm_channels, mean, std
-            )
-
+            preds = global_z_denorm(preds, mean, std)
+            prediction_window = global_z_denorm(prediction_window_norm, mean, std)
+            look_back_window = global_z_denorm(look_back_window_norm, mean, std)
         elif self.normalization == "minmax":
             device = look_back_window_norm.device
             train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
@@ -197,18 +254,12 @@ class BaseLightningModule(L.LightningModule):
             min = Tensor(min).reshape(1, 1, -1).to(device).float()
             max = Tensor(max).reshape(1, 1, -1).to(device).float()
 
-            preds = min_max_denorm(preds, self.local_norm_channels, min, max)
-            prediction_window = min_max_denorm(
-                prediction_window_norm, self.local_norm_channels, min, max
-            )
-
-        elif self.normalization == "difference":
-            preds = undo_differencing(look_back_window, preds)
-            prediction_window = undo_differencing(
-                look_back_window, prediction_window_norm
-            )
+            preds = min_max_denorm(preds, min, max)
+            prediction_window = min_max_denorm(prediction_window_norm, min, max)
+            look_back_window = min_max_denorm(look_back_window_norm, min, max)
         else:
             prediction_window = prediction_window_norm
+            look_back_window = look_back_window_norm
 
         # Metric Calculation
         metrics, current_metrics = self.evaluator(

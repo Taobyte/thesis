@@ -327,7 +327,8 @@ class Model(nn.Module):
         embed_type: str = "fixed",
         freq: str = "h",
         dropout: float = 0.0,
-        use_norm: bool = True,
+        local_norm: str = "local_z",
+        local_norm_c: int = 2,
     ) -> None:
         super(Model, self).__init__()
         self.look_back_window = look_back_window
@@ -359,22 +360,10 @@ class Model(nn.Module):
         )
         self.projection = nn.Linear(d_model, c_out, bias=True)
 
-        self.use_norm = use_norm
+        self.local_norm = local_norm
+        self.local_norm_c = local_norm_c
 
     def forecast(self, x_enc: torch.Tensor, x_mark_enc: torch.Tensor) -> torch.Tensor:
-        B, _, C = x_enc.shape
-        means: Tensor = torch.zeros(B, 1, C, device=x_enc.device, dtype=x_enc.dtype)
-        stdev: Tensor = torch.ones(B, 1, C, device=x_enc.device, dtype=x_enc.dtype)
-
-        # Normalization from Non-stationary Transformer
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
         enc_out = self.predict_linear(enc_out.permute(0, 2, 1)).permute(
@@ -387,19 +376,6 @@ class Model(nn.Module):
 
         dec_out = self.projection(enc_out)
 
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out = dec_out * (
-                stdev[:, 0, :]
-                .unsqueeze(1)
-                .repeat(1, self.prediction_window + self.look_back_window, 1)
-            )
-
-            dec_out = dec_out + (
-                means[:, 0, :]
-                .unsqueeze(1)
-                .repeat(1, self.prediction_window + self.look_back_window, 1)
-            )
         return dec_out
 
     def forward(self, x_enc: Tensor, x_mark_enc: Tensor) -> Tensor:
@@ -426,12 +402,9 @@ class TimesNet(BaseLightningModule):
         self.criterion = get_loss_fn(loss_fn)
         self.learning_rate = learning_rate
 
-    def _generate_time_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        B, T, _ = x.shape
-        return torch.zeros((B, T, 5), device=x.device).float()
-
-    def model_forward(self, look_back_window: Tensor):
-        time = self._generate_time_tensor(look_back_window)
+    def model_specific_forward(self, look_back_window: Tensor):
+        B, T, _ = look_back_window.shape
+        time = torch.zeros((B, T, 5), device=look_back_window.device).float()
         preds = self.model(look_back_window, time)
         return preds
 

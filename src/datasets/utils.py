@@ -5,12 +5,12 @@ import lightning as L
 
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from numpy.typing import NDArray
 from einops import rearrange
 from typing import Tuple, List
 
-from src.normalization import global_z_norm, min_max_norm
+from src.normalization import global_z_norm, min_max_norm, local_z_norm_numpy
 
 
 class BaseDataModule(L.LightningDataModule):
@@ -20,7 +20,6 @@ class BaseDataModule(L.LightningDataModule):
     use_dynamic_features: bool
     static_exogenous_variables: int
     dynamic_exogenous_variables: int
-    local_norm_channels: int
 
     def __init__(
         self,
@@ -42,6 +41,8 @@ class BaseDataModule(L.LightningDataModule):
         train_frac: float = 0.7,
         val_frac: float = 0.1,
         return_whole_series: bool = False,
+        local_norm: str = "none",
+        local_norm_endo_only: bool = False,
     ):
         super().__init__()
 
@@ -67,53 +68,40 @@ class BaseDataModule(L.LightningDataModule):
 
         self.return_whole_series = return_whole_series
 
-        self.local_norm_channels = (
-            target_channel_dim + dynamic_exogenous_variables
-            if use_dynamic_features
-            else target_channel_dim
-        )
-
         self.normalization = normalization
+        self.local_norm = local_norm
+        self.local_norm_endo_only = local_norm_endo_only
+
         self.test_local = test_local
         self.train_frac = train_frac
         self.val_frac = val_frac
 
-        self.train_dataset: Dataset[NDArray[np.float32]] = None
+        self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
 
     def postprocess_batch(
         self, look_back_window: Tensor, prediction_window: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        B, _, C = look_back_window.shape
+    ) -> Tuple[Tensor, Tensor]:
         device = look_back_window.device
         if self.normalization == "global":
             mean, std = self.train_dataset.mean, self.train_dataset.std
             mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
             std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
-            input = global_z_norm(look_back_window, self.local_norm_channels, mean, std)
-            output = global_z_norm(
-                prediction_window, self.local_norm_channels, mean, std
-            )
+            input = global_z_norm(look_back_window, mean, std)
+            output = global_z_norm(prediction_window, mean, std)
         elif self.normalization == "minmax":
             min, max = self.train_dataset.min, self.train_dataset.max
             min = torch.tensor(min).reshape(1, 1, -1).to(device).float()
             max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
-            input = min_max_norm(look_back_window, self.local_norm_channels, min, max)
-            output = min_max_norm(prediction_window, self.local_norm_channels, min, max)
-        elif self.normalization == "difference":
-            pad = torch.zeros(B, 1, C)
-            input = torch.cat([pad, torch.diff(look_back_window, dim=1)], dim=1)
-            last_value = look_back_window[:, -1:, :]
-            output = torch.diff(
-                torch.cat([last_value, prediction_window], dim=1), dim=1
-            )
+            input = min_max_norm(look_back_window, min, max)
+            output = min_max_norm(prediction_window, min, max)
         else:
             input = look_back_window
             output = prediction_window
 
         output = output[:, :, : self.target_channel_dim]
-        return look_back_window, input, output
+        return input, output
 
     def postprocess_series(self, series: Tensor) -> Tensor:
         B, _, C = series.shape
@@ -122,41 +110,46 @@ class BaseDataModule(L.LightningDataModule):
             mean, std = self.train_dataset.mean, self.train_dataset.std
             mean = torch.tensor(mean).reshape(1, 1, -1).to(device).float()
             std = torch.tensor(std).reshape(1, 1, -1).to(device).float()
-            input = global_z_norm(series, self.local_norm_channels, mean, std)
+            input = global_z_norm(series, mean, std)
         elif self.normalization == "minmax":
             min, max = self.train_dataset.min, self.train_dataset.max
             min = torch.tensor(min).reshape(1, 1, -1).to(device).float()
             max = torch.tensor(max).reshape(1, 1, -1).to(device).float()
-            input = min_max_norm(series, self.local_norm_channels, min, max)
-        elif self.normalization == "difference":
-            pad = torch.zeros(B, 1, C, device=device)
-            input = torch.cat([pad, torch.diff(series, dim=1)], dim=1)
+            input = min_max_norm(series, min, max)
         else:
             input = series
 
-        return input
+        x = input.clone()
+        min_channels = self.target_channel_dim if self.local_norm_endo_only else C
+        means = stdev = None
+
+        if self.local_norm == "local_z":
+            means = x.mean(1, keepdim=True).detach()
+            var = x.var(1, keepdim=True, unbiased=False).detach()
+            stdev = torch.sqrt(var) + 1e-5
+            x[:, :, :min_channels] = (
+                x[:, :, :min_channels] - means[:, :, :min_channels]
+            ) / stdev[:, :, :min_channels]
+
+        elif self.local_norm == "difference":
+            x[:, :, :min_channels] = torch.diff(
+                x[:, :, :min_channels], dim=1, prepend=x[:, :1, :min_channels]
+            )
+
+        return x
 
     def collate_fn_with_postprocessing(
         self, batch: Tuple[Tensor, Tensor]
-    ) -> Tuple[Tensor, Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         look_back, prediction = zip(*batch)
         look_back = torch.stack(look_back)
         prediction = torch.stack(prediction)
         return self.postprocess_batch(look_back, prediction)
 
     def collate_fn_series(self, series: List[Tensor]):
-        # lengths before padding
         lengths = torch.tensor([s.size(0) for s in series], dtype=torch.long)
-
-        # pad all series to max length
-        # pad_sequence pads with 0s by default, batch_first=True -> (B, L, C)
         padded = pad_sequence(series, batch_first=True, padding_value=0.0)
-
         return self.postprocess_series(padded), lengths
-        # assumes that we have batch size = 1!
-        # max_length = max([len(s) for s in series])
-        # train_series = (series[0]).unsqueeze(0)
-        # return self.postprocess_series(train_series)
 
     def train_dataloader(self) -> DataLoader[tuple[Tensor, Tensor, Tensor]]:
         return DataLoader(
@@ -241,9 +234,7 @@ class BaseDataModule(L.LightningDataModule):
 
         assert self.train_dataset is not None, "Train dataset is not initialized."
 
-        print(
-            f"Length of train dataset for Gaussian Process: {len(self.train_dataset)}"
-        )
+        print(f"Length of train dataset: {len(self.train_dataset)}")
 
         return len(self.train_dataset)
 
@@ -263,7 +254,7 @@ class BaseDataModule(L.LightningDataModule):
 
         lbws = []
         pws = []
-        for _, look_back_window_norm, prediction_window_norm in dataloader:
+        for look_back_window_norm, prediction_window_norm in dataloader:
             look_back_window_norm = look_back_window_norm.detach().cpu().numpy()
             prediction_window_norm = prediction_window_norm.detach().cpu().numpy()
             lbws.append(look_back_window_norm)
@@ -290,3 +281,44 @@ class BaseDataModule(L.LightningDataModule):
 
     def get_test_dataset(self) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
         return self._get_dataset("test")
+
+    def get_numpy_dataset(
+        self,
+    ) -> Tuple[
+        NDArray[np.float32],
+        NDArray[np.float32],
+        NDArray[np.float32],
+        NDArray[np.float32],
+    ]:
+        X_train, y_train = self.get_train_dataset()
+        X_val, y_val = self.get_val_dataset()
+
+        B, T, C = X_train.shape
+        channels = self.target_channel_dim if self.local_norm_endo_only else C
+        if self.local_norm == "local_z":
+            X_train, mean, std = local_z_norm_numpy(X_train, channels=channels)
+            y_train, _, _ = local_z_norm_numpy(y_train, mean, std, channels=channels)
+            X_val, val_mean, val_std = local_z_norm_numpy(X_val, channels=channels)
+            y_val, _, _ = local_z_norm_numpy(
+                y_val, val_mean, val_std, channels=channels
+            )
+        elif self.local_norm == "difference":
+            x_diffed = np.diff(X_train, axis=1, prepend=X_train[:, :1, :])
+            y_diffed = np.diff(
+                y_train, axis=1, prepend=X_train[:, -1:, : self.target_channel_dim]
+            )
+            X_train[:, :, :channels] = x_diffed[:, :, :channels]
+            y_train[:, :, : self.target_channel_dim] = y_diffed[
+                :, :, : self.target_channel_dim
+            ]
+
+            x_diffed = np.diff(X_val, axis=1, prepend=X_val[:, :1, :])
+            y_diffed = np.diff(
+                y_val, axis=1, prepend=X_val[:, -1:, : self.target_channel_dim]
+            )
+            X_val[:, :, :channels] = x_diffed[:, :, :channels]
+            y_val[:, :, : self.target_channel_dim] = y_diffed[
+                :, :, : self.target_channel_dim
+            ]
+
+        return X_train, y_train, X_val, y_val

@@ -689,14 +689,7 @@ class NBeatsX(BaseLightningModule):
 
         self.use_norm = use_norm
 
-    def model_forward(self, look_back_window: t.Tensor):
-        if self.use_norm:
-            means = look_back_window.mean(1, keepdim=True).detach()
-            look_back_window = look_back_window - means
-            stdev = t.sqrt(
-                t.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            look_back_window /= stdev
+    def model_specific_forward(self, look_back_window: t.Tensor):
         B, T, C = look_back_window.shape
         device = look_back_window.device
         heartrate = look_back_window[:, :, 0]  # (B, T)
@@ -716,19 +709,6 @@ class NBeatsX(BaseLightningModule):
         )
 
         prediction = prediction.unsqueeze(-1)
-
-        if self.use_norm:
-            prediction = prediction * (
-                stdev[:, 0, : self.target_channel_dim]
-                .unsqueeze(1)
-                .repeat(1, self.prediction_window, 1)
-            )
-
-            prediction = prediction + (
-                means[:, 0, : self.target_channel_dim]
-                .unsqueeze(1)
-                .repeat(1, self.prediction_window, 1)
-            )
 
         return prediction
 

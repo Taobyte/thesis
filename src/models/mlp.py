@@ -115,7 +115,7 @@ class MLP(BaseLightningModule):
     def model_specific_train_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ):
-        preds = self.model(look_back_window)
+        preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
         loss = self.criterion(preds, prediction_window)
@@ -125,7 +125,7 @@ class MLP(BaseLightningModule):
     def model_specific_val_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ):
-        preds = self.model(look_back_window)
+        preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
         assert preds.shape == prediction_window.shape
         if self.tune:

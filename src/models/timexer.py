@@ -386,17 +386,6 @@ class Model(nn.Module):
         return dec_out
 
     def forecast_multi(self, x_enc, x_mark_enc):
-        if self.use_norm:
-            # Normalization from Non-stationary Transformer
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-        _, _, N = x_enc.shape
-
         en_embed, n_vars = self.en_embedding(x_enc.permute(0, 2, 1))
         ex_embed = self.ex_embedding(x_enc, x_mark_enc)
 
@@ -409,15 +398,6 @@ class Model(nn.Module):
 
         dec_out = self.head(enc_out)  # z: [bs x nvars x target_window]
         dec_out = dec_out.permute(0, 2, 1)
-
-        if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
-            dec_out = dec_out + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
 
         return dec_out
 
@@ -441,7 +421,7 @@ class TimeXer(BaseLightningModule):
         self.learning_rate = learning_rate
         self.criterion = get_loss_fn(loss_fn)
 
-    def model_forward(self, x):
+    def model_specific_forward(self, x):
         # timexer assumes that endogenous variables is the last channel!
         if self.use_dynamic_features:
             x = torch.flip(x, dims=[-1])
@@ -454,8 +434,8 @@ class TimeXer(BaseLightningModule):
     def _shared_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
         preds = preds[:, :, : prediction_window.shape[-1]]
-
         assert preds.shape == prediction_window.shape
+
         mae_criterion = torch.nn.L1Loss()
         mae_loss = mae_criterion(preds, prediction_window)
         loss = self.criterion(preds, prediction_window)

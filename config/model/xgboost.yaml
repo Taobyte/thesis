@@ -1,3 +1,7 @@
+defaults:
+  - base_module
+
+
 name: "xgboost"
 
 model:
@@ -18,7 +22,6 @@ model:
 pl_model:
   _target_: src.models.xgboost.XGBoost
   loss: ${loss_fn}
-  use_norm: ${use_norm_baseline}
   verbose: False
 
 trainer:

@@ -1,3 +1,6 @@
+defaults:
+  - base_module
+
 name: "patchtst"
 
 model:
@@ -9,7 +12,7 @@ model:
   decomposition: 0 # we don't use timeseries decomposition for heartrate forecasting
   kernel_size: 3 # kernel size is used in timeseries decomposition layers
   individual: False 
-  revin: ${use_norm_dl} # normalization strategy 
+  revin: False # we implement local z-normalization in BaseLightningModule 
   affine: 0 # parameter for RevIN layer
   padding_patch: "end"
   head_dropout: 0.0 # not set in PatchTST paper

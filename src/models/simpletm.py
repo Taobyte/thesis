@@ -393,15 +393,6 @@ class Model(nn.Module):
         self.projector = projector
 
     def forward(self, x_enc: Tensor, x_mark_enc: Tensor) -> Tuple[Tensor, Tensor]:
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            # x_enc /= stdev
-            x_enc = x_enc / stdev
-
         _, _, N = x_enc.shape
 
         enc_embedding = self.enc_embedding
@@ -415,14 +406,6 @@ class Model(nn.Module):
 
         # Output Projection             B L' N -> B H (Horizon) N
         dec_out = projector(enc_out).permute(0, 2, 1)[:, :, :N]
-
-        if self.use_norm:
-            dec_out = dec_out * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
-            dec_out = dec_out + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
 
         return dec_out, attns
 
@@ -442,7 +425,7 @@ class SimpleTM(BaseLightningModule):
         self.criterion = get_loss_fn(loss_fn)
         self.save_hyperparameters(ignore=["model", "criterion"])
 
-    def model_forward(self, look_back_window: Tensor) -> Tensor:
+    def model_specific_forward(self, look_back_window: Tensor) -> Tensor:
         # B, T, C = x.shape
         # time = torch.zeros((B, T, 5), dtype=float)
         preds, _ = self.model(
@@ -454,10 +437,9 @@ class SimpleTM(BaseLightningModule):
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tuple[Tensor, Tensor]:
         preds = self.model_forward(look_back_window)
-
         preds = preds[:, :, : prediction_window.shape[-1]]
-
         assert preds.shape == prediction_window.shape
+
         mae_criterion = torch.nn.L1Loss()
         mae_loss = mae_criterion(preds, prediction_window)
         loss = self.criterion(preds, prediction_window)

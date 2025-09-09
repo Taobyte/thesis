@@ -1,28 +1,20 @@
 import torch
-import numpy as np
 
 from torch import Tensor
 from sklearn.linear_model import LinearRegression
-from numpy.typing import NDArray
 from typing import Any
 from einops import rearrange
 
 from src.losses import get_loss_fn
 from src.models.utils import BaseLightningModule
-from src.normalization import local_z_norm_numpy
 
 
 class Model(torch.nn.Module):
     def __init__(
         self,
-        lbw_train_dataset: NDArray[np.float32],
-        pw_train_dataset: NDArray[np.float32],
-        lbw_val_dataset: NDArray[np.float32],
-        pw_val_dataset: NDArray[np.float32],
         look_back_window: int,
         prediction_window: int,
         target_channel_dim: int = 1,
-        use_norm: bool = False,
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -31,27 +23,8 @@ class Model(torch.nn.Module):
 
         self.model = LinearRegression()
 
-        self.use_norm = use_norm
-        if use_norm:
-            lbw_train_dataset, mean, std = local_z_norm_numpy(lbw_train_dataset)
-            pw_train_dataset, _, _ = local_z_norm_numpy(pw_train_dataset, mean, std)
-            lbw_val_dataset, mean, std = local_z_norm_numpy(lbw_val_dataset)
-            pw_val_dataset, _, _ = local_z_norm_numpy(pw_val_dataset, mean, std)
-
-        self.lbw_train_dataset = lbw_train_dataset
-        self.pw_train_dataset = pw_train_dataset
-        self.lbw_val_dataset = lbw_val_dataset
-        self.pw_val_dataset = pw_val_dataset
-
     def forward(self, look_back_window: Tensor) -> Tensor:
         device = look_back_window.device
-        if self.use_norm:
-            means = look_back_window.mean(1, keepdim=True).detach()
-            look_back_window = look_back_window - means
-            stdev = torch.sqrt(
-                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            look_back_window /= stdev
 
         look_back_window = rearrange(look_back_window, "B T C -> B (T C)")
         look_back_window = look_back_window.detach().cpu().numpy()
@@ -59,14 +32,10 @@ class Model(torch.nn.Module):
         pred = rearrange(pred, "B (T C) -> B T C", C=self.target_channel_dim)
         pred = torch.from_numpy(pred).to(device)
 
-        if self.use_norm:
-            pred = pred * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
+        import pdb
 
-            pred = pred + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
+        pdb.set_trace()
+
         return pred
 
 
@@ -83,15 +52,12 @@ class Linear(BaseLightningModule):
         self.criterion = get_loss_fn(loss)
         self.mae_criterion = torch.nn.L1Loss()
 
-    def model_forward(self, look_back_window: Tensor):
+    def model_specific_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
-    # we use this hack!
     def on_train_epoch_start(self):
-        X_train = self.model.lbw_train_dataset
-        y_train = self.model.pw_train_dataset
-        X_val = self.model.lbw_val_dataset
-        y_val = self.model.pw_val_dataset
+        datamodule = self.trainer.datamodule
+        X_train, y_train, X_val, y_val = datamodule.get_numpy_dataset()
 
         X_train = rearrange(X_train, "B T C -> B (T C)")
         y_train = rearrange(y_train, "B T C -> B (T C)")

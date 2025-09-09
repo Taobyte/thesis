@@ -298,17 +298,6 @@ class Model(nn.Module):
         return dec_out[:, -self.pred_len :, :]  # [B, L, D]
 
     def forecast(self, x_enc, x_mark_enc):
-        B, L, M = x_enc.shape
-
-        # Normalization from Non-stationary Transformer
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
         enc_out = self.predict_linear_pre(enc_out.permute(0, 2, 1)).permute(
@@ -332,15 +321,6 @@ class Model(nn.Module):
         # print(dec_out.shape)
         # dec_out = dec_out.reshape(B, self.pred_len + self.seq_len, -1)
 
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out = dec_out * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
-            )
-            dec_out = dec_out + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1)
-            )
-
         return dec_out
 
 
@@ -358,17 +338,16 @@ class GPT4TS(BaseLightningModule):
         self.criterion = get_loss_fn(loss)
         self.save_hyperparameters(ignore=["model"])
 
-    def model_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def model_specific_forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
         time = torch.zeros((B, T, 1)).to(device=x.device)
         return self.model(x, time)
 
     def _shared_step(self, look_back_window, prediction_window):
         preds = self.model_forward(look_back_window)
-
         preds = preds[:, :, : prediction_window.shape[-1]]
-
         assert preds.shape == prediction_window.shape
+
         mae_criterion = torch.nn.L1Loss()
         mae_loss = mae_criterion(preds, prediction_window)
 

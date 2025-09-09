@@ -136,7 +136,6 @@ class Model(torch.nn.Module):
         self.rev = RevIN(look_back_channel_dim) if revin else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.rev(x, "norm") if self.revin else self.rev(x)
         x = self.dropout(x)
 
         # flatten the input tensor
@@ -157,10 +156,7 @@ class Model(torch.nn.Module):
         out = weighted_pred.sum(dim=1)
         out_reshaped = rearrange(out, "B (T C) -> B T C", C=self.look_back_channel_dim)
 
-        out_reshaped_rev = (
-            self.rev(out_reshaped, "denorm") if self.revin else self.rev(out_reshaped)
-        )
-        return out_reshaped_rev[:, :, : self.target_channel_dim]
+        return out_reshaped[:, :, : self.target_channel_dim]
 
 
 class MOLE(BaseLightningModule):
@@ -182,13 +178,13 @@ class MOLE(BaseLightningModule):
 
         self.optimizer_name = optimizer_name
 
-    def model_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
+    def model_specific_forward(self, look_back_window: torch.Tensor) -> torch.Tensor:
         return self.model(look_back_window)
 
     def _shared_step(
         self, x: torch.Tensor, y: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        preds = self.model(x)
+        preds = self.model_forward(x)
         loss = self.criterion(preds, y)
         mae_loss = self.mae_criterion(preds, y)
 

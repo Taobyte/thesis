@@ -1,5 +1,5 @@
 experiment_name: "endo_only"
-normalization: global
+normalization: none
 loss_fn: "MSE"
 
 use_heart_rate: True 

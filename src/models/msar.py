@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from einops import rearrange
 from torch import Tensor
-from typing import List, Any, Union
+from typing import List, Any
 
 from src.models.utils import BaseLightningModule
 
@@ -18,7 +18,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         target_channel_dim: int = 1,
         jitter: float = 1e-6,
         sigma_min: float = 1e-2,
-        use_norm: bool = False,
     ):
         super().__init__()
         self.n_states = n_states
@@ -29,8 +28,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         self.jitter = jitter
         self.sigma_min = sigma_min
-
-        self.use_norm = use_norm
 
         # HMM parameters
         self.transition_matrix = torch.nn.Parameter(torch.randn(n_states, n_states))
@@ -283,14 +280,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         Returns: predictions (B, prediction_window, C)
         """
 
-        if self.use_norm:
-            means = emissions.mean(1, keepdim=True).detach()
-            emissions = emissions - means
-            stdev = torch.sqrt(
-                torch.var(emissions, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            emissions /= stdev
-
         _, log_alpha = self.forward_algorithm(emissions)
         most_likely_state = log_alpha[:, -1, :].argmax(dim=1)  # (B,) - last state
 
@@ -335,14 +324,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
 
         preds = torch.cat(preds, dim=1)  # (B, prediction_window, C)
 
-        if self.use_norm:
-            preds = preds * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
-
-            preds = preds + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
         return preds
 
 
@@ -362,7 +343,7 @@ class HMM(BaseLightningModule):
 
         self.weight_decay = weight_decay
 
-    def model_forward(self, look_back_window: Tensor):
+    def model_specific_forward(self, look_back_window: Tensor):
         preds = self.model(look_back_window)
         return preds
 

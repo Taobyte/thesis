@@ -35,23 +35,13 @@ def setup(
 
     datamodule = instantiate(
         config.dataset.datamodule,
-        normalization=config.normalization,
         return_whole_series=return_whole_series,
     )
 
     model_kwargs = get_model_kwargs(config, datamodule)
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
-        config.model.pl_model,
-        model=model,
-        name=config.model.name,
-        use_plots=config.use_plots,
-        normalization=config.normalization,
-        tune=config.tune,
-        probabilistic_models=config.probabilistic_models,
-        experiment_name=config.experiment.experiment_name,
-        seed=config.seed,
-        return_whole_series=return_whole_series,
+        config.model.pl_model, model=model, return_whole_series=return_whole_series
     )
 
     callbacks: List[Union[Callback, EarlyStopping, ModelCheckpoint]] = []

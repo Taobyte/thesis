@@ -15,7 +15,9 @@ datamodule:
   use_dynamic_features: ${use_dynamic_features}
   use_static_features: ${use_static_features}
 
-  return_whole_series: False
+  normalization: ${normalization}
+  local_norm: ${local_norm}
+  local_norm_endo_only: ${local_norm_endo_only}
 
   test_local: False 
   train_frac: ${train_frac}
