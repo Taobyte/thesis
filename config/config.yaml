@@ -21,9 +21,9 @@ n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee"] # these datasets have folds defined in config/experiments
 local_datasets: ["lieee", "ldalia", "lwildppg", "lmitbih"]
 global_datasets: ["ieee", "dalia", "wildppg"]
-normalization: global # ${experiment.normalization} # can be either "global", "minmax" or  "none"
-local_norm: "local_z" # can be either "local_z", "difference" or "none" 
-local_norm_endo_only: False
+normalization: global # ${experiment.normalization} # can be either "global", "minmax" or  "gnone"
+local_norm: "local_z" # can be either "local_z", "difference" or "lnone" 
+local_norm_endo_only: ${experiment.local_norm_endo_only}
 
 # local experiment config
 train_frac: 0.7

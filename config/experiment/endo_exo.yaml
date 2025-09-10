@@ -6,8 +6,8 @@ use_heart_rate: True
 use_dynamic_features: True
 use_static_features: False 
 
-use_norm_dl: True
-use_norm_baseline: False
+local_norm_endo_only: False
+
 
 
 
