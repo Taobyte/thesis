@@ -34,7 +34,7 @@ sbatch --export=ALL --job-name="${WILDPPG_RUNS}_difference" -o "${WILDPPG_RUNS}_
 IEEE_RUNS="exo_lieee"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lieee lbw=$LBW pw=$PW model=linear normalization=global local_norm=local_z use_wandb=True experiment=endo_exo,endo_only seed=0"
-sbatch --export=ALL --job-name="${IEEE_RUNS}_local" -o "${IEEE_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
+sbatch --export=ALL --job-name="${IEEE_RUNS}_local" -o "${IEEE_RUNS}_local_z_%j.out" --time="$TIME" --wrap="$JOB"
 
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lieee lbw=$LBW pw=$PW model=mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx normalization=global local_norm=difference use_wandb=True experiment=endo_exo,endo_only seed=0"
 sbatch --export=ALL --job-name="${IEEE_RUNS}_difference" -o "${IEEE_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
