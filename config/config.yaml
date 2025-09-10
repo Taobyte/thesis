@@ -42,10 +42,6 @@ use_dynamic_features: ${experiment.use_dynamic_features}
 use_static_features: ${experiment.use_static_features}
 loss_fn: ${experiment.loss_fn} # can be "MSE", "SMAPE" or "MAE"
 
-# Non-Stationary Experiments
-use_norm_dl: ${experiment.use_norm_dl}  # indicates if we should use local z-normalization for DL models
-use_norm_baseline: ${experiment.use_norm_baseline} # indicates if we should use local z-normalization for baselines
-
 # wandb logging settings
 use_wandb: False
 wandb:

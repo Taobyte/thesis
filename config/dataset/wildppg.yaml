@@ -13,6 +13,9 @@ datamodule:
 
   freq: 25
 
+  add_temp: False
+  add_alt: False
+
   target_channel_dim: 1 
   dynamic_exogenous_variables: 1
   static_exogenous_variables: 0 

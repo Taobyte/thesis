@@ -32,10 +32,6 @@ class Model(torch.nn.Module):
         pred = rearrange(pred, "B (T C) -> B T C", C=self.target_channel_dim)
         pred = torch.from_numpy(pred).to(device)
 
-        import pdb
-
-        pdb.set_trace()
-
         return pred
 
 

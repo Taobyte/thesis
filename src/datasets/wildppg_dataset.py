@@ -27,7 +27,9 @@ def nan_helper(y):
 
 
 class WildPPGDataset(HRDataset):
-    def __init__(self, **kwargs: Any):
+    def __init__(self, add_temp: bool = False, add_alt: bool = False, **kwargs: Any):
+        self.add_temp = add_temp
+        self.add_alt = add_alt
         super().__init__(**kwargs)
 
     def __read_data__(
@@ -37,17 +39,15 @@ class WildPPGDataset(HRDataset):
         arrays = []
         for participant in self.participants:
             # Load PPG signal and heart rate values
-            ppg = data_all["data_ppg_wrist"][participant, 0]
+            ppg = data_all["data_ppg_ankle"][participant, 0]
             hr = data_all["data_bpm_values"][participant][0].astype(float)
             activity = data_all["data_imu_wrist"][participant][0]
-
-            # print(f"hr contains NaNs: {np.isnan(hr).any()}")
-            # print(f"hr is below 30 {np.sum(hr < 30)}")
-            # print(f"activity contains NaNs: {np.isnan(activity).any()}")
-            # print(f"Activity is Inf: {np.isinf(activity).any()}")
+            # temperature = data_all["data_temp_chest"][participant][0]
+            # altitude = data_all["data_altitude_values"][participant][0]
+            # temperature = data_all["data_imu_ankle"][participant][0]
+            # altitude = data_all["data_imu_chest"][participant][0]
 
             # impute the values for hr and activity
-
             hr[hr < 30] = np.nan
             nans, x = nan_helper(hr)
             hr[nans] = np.interp(x(nans), x(~nans), hr[~nans])
@@ -63,6 +63,10 @@ class WildPPGDataset(HRDataset):
                 series = hr  # (W, 1)
                 if self.use_dynamic_features:
                     series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
+                    if self.add_temp:
+                        series = np.concatenate((series, temperature), axis=1)  # (W,3)
+                    if self.add_alt:
+                        series = np.concatenate((series, altitude), axis=1)  # (W, 4)
             else:
                 series = ppg[:, :, np.newaxis]  # shape (W, 200, 1)
                 if self.use_dynamic_features:
@@ -92,6 +96,8 @@ class WildPPGDataModule(BaseDataModule):
         train_participants: List[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: List[int] = [10, 11],
         test_participants: List[int] = [9, 12, 13, 14, 15],
+        add_temp: bool = False,
+        add_alt: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -101,6 +107,9 @@ class WildPPGDataModule(BaseDataModule):
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        self.add_temp = add_temp
+        self.add_alt = add_alt
 
     def setup(self, stage: str):
         common_args = {
@@ -114,6 +123,8 @@ class WildPPGDataModule(BaseDataModule):
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
+            "add_temp": self.add_temp,
+            "add_alt": self.add_alt,
         }
         if stage == "fit":
             self.train_dataset = WildPPGDataset(
