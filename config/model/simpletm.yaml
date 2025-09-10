@@ -23,7 +23,6 @@ model:
   dropout: 0.015 
   geomattn_dropout: 0.25 
 
-  use_norm: ${use_norm_dl} # instance normalization in forward function of the model
   
 pl_model: 
   _target_: src.models.simpletm.SimpleTM

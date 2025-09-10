@@ -320,7 +320,6 @@ class Model(BaseKalmanFilter):
         target_channel_dim: int = 1,
         look_back_window: int = 5,
         prediction_window: int = 3,
-        use_norm: bool = False,
     ):
         control_dim = 0
         if use_dynamic_features:
@@ -343,8 +342,6 @@ class Model(BaseKalmanFilter):
 
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
-
-        self.use_norm = use_norm
 
     def _prediction_step(
         self,

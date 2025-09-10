@@ -82,7 +82,6 @@ class ExactGP(BaseLightningModule):
         self,
         model: MultitaskGPModel,
         learning_rate: float = 0.001,
-        use_norm: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -93,18 +92,12 @@ class ExactGP(BaseLightningModule):
         self.mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, model)
 
         self.mae_loss = torch.nn.L1Loss()
-        self.use_norm = use_norm
 
         self.automatic_optimization = False
 
-    def model_forward(self, look_back_window: torch.Tensor) -> Tuple[Tensor, Tensor]:
-        if self.use_norm:
-            means = look_back_window.mean(1, keepdim=True).detach()
-            look_back_window = look_back_window - means
-            stdev = torch.sqrt(
-                torch.var(look_back_window, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            look_back_window /= stdev
+    def model_specific_forward(
+        self, look_back_window: torch.Tensor
+    ) -> Tuple[Tensor, Tensor]:
         T = self.trainer.datamodule.prediction_window
         look_back_window = rearrange(
             look_back_window, "B T C -> B (T C)"
@@ -113,17 +106,6 @@ class ExactGP(BaseLightningModule):
 
         mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
         std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
-
-        if self.use_norm:
-            mean = mean * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
-
-            mean = mean + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
-
-            std = std * stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
 
         return mean, std
 

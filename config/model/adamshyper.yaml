@@ -22,8 +22,6 @@ model:
   beta: 0.5
   gamma: 4.2
 
-  use_norm: ${use_norm_dl}
-
 pl_model: 
   _target_: src.models.adamshyper.AdaMSHyper
   learning_rate: 0.002 

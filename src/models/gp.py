@@ -246,7 +246,6 @@ class GaussianProcess(BaseLightningModule):
         use_feature_extractor: bool = False,
         learning_rate: float = 0.001,
         jitter: float = 1e-6,
-        use_norm: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -261,7 +260,6 @@ class GaussianProcess(BaseLightningModule):
         self.mae_loss = torch.nn.L1Loss()
 
         self.use_feature_extractor = use_feature_extractor
-        self.use_norm = use_norm
 
     def model_specific_forward(
         self, look_back_window: torch.Tensor

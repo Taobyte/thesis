@@ -250,7 +250,6 @@ class Model(nn.Module):
         use_exo_endo: bool,
         seq_len: int,
         pred_len: int,
-        use_norm: bool,
         patch_len: int,
         d_model: int,
         embed: str,
@@ -270,7 +269,6 @@ class Model(nn.Module):
         self.use_exo_endo = use_exo_endo
         self.seq_len = seq_len
         self.pred_len = pred_len
-        self.use_norm = use_norm
 
         if patch_len > look_back_window:
             print(
@@ -331,15 +329,6 @@ class Model(nn.Module):
         self.head = FlattenHead(enc_in, self.head_nf, pred_len, head_dropout=dropout)
 
     def forecast(self, x_enc, x_mark_enc):
-        if self.use_norm:
-            # Normalization from Non-stationary Transformer
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
         _, _, N = x_enc.shape
 
         #  # removed .unsqueeze(-1) from input to en_embedding
@@ -373,15 +362,6 @@ class Model(nn.Module):
 
         dec_out = self.head(enc_out)  # z: [bs x nvars x target_window]
         dec_out = dec_out.permute(0, 2, 1)
-
-        if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (
-                stdev[:, 0, -1:].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
-            dec_out = dec_out + (
-                means[:, 0, -1:].unsqueeze(1).repeat(1, self.pred_len, 1)
-            )
 
         return dec_out
 

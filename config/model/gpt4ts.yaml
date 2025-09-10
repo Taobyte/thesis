@@ -21,8 +21,6 @@ model:
   gpt_layers: 6 
   dropout: 0.1 
   
-  use_norm: ${use_norm_dl}
-
 pl_model: 
   _target_: src.models.gpt4ts.GPT4TS
   learning_rate: 0.0001

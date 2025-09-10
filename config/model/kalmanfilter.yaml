@@ -18,8 +18,6 @@ model:
   smoothness_weight: 0.0
   reconstruction_weight: 0.0
 
-  use_norm: ${use_norm_baseline}
-
 pl_model: 
   _target_: src.models.kalmanfilter.KalmanFilter
   learning_rate: 0.001

@@ -981,7 +981,6 @@ class Model(nn.Module):
         beta: float = 0.5,
         gamma: float = 4.2,
         inner_size: int = 5,
-        use_norm: bool = True,
     ):
         super(Model, self).__init__()
         hyper_num = [hn1, hn2, hn3]  # number of hyperedges at scales 1, 2, 3
@@ -1036,18 +1035,7 @@ class Model(nn.Module):
             self.argg.append(nn.Linear(self.all_size[i], self.pred_len))
         self.chan_tran = nn.Linear(channels, channels)
 
-        self.use_norm = use_norm
-
     def forward(self, x):
-        # normalization
-        if self.use_norm:
-            mean_enc = x.mean(1, keepdim=True).detach()
-            x = x - mean_enc
-            std_enc = torch.sqrt(
-                torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5
-            ).detach()
-            x = x / std_enc
-
         adj_matrix = self.multiadphyper(x)
         seq_enc = self.conv_layers(x)
 
@@ -1103,9 +1091,6 @@ class Model(nn.Module):
 
         x = x_out + x + x_out_inter
         x = self.Linear_Tran(x).permute(0, 2, 1)
-
-        if self.use_norm:
-            x = x * std_enc + mean_enc
 
         return x, result_conloss  # [Batch, Output length, Channel]
 

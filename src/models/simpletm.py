@@ -326,7 +326,6 @@ class Model(nn.Module):
         n_channels: int = 7,
         d_model: int = 512,
         output_attention: bool = False,
-        use_norm: int = 1,
         geomattn_dropout: float = 0.5,
         alpha: float = 1,
         kernel_size: int = 3,  # TODO
@@ -345,7 +344,6 @@ class Model(nn.Module):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.output_attention = output_attention
-        self.use_norm = use_norm
         self.geomattn_dropout = geomattn_dropout
         self.alpha = alpha
         self.kernel_size = kernel_size

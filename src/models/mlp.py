@@ -18,7 +18,6 @@ class Model(torch.nn.Module):
         n_hid_layers: int = 2,
         activation: str = "relu",
         dropout: float = 0.0,
-        use_norm: bool = False,
         autoregressive: bool = False,
     ):
         super().__init__()
@@ -54,16 +53,9 @@ class Model(torch.nn.Module):
         self.layers.append(torch.nn.Linear(prev_dim, out_dim))
         self.network = torch.nn.Sequential(*self.layers)
 
-        self.use_norm = use_norm
         self.autoregressive = autoregressive
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.use_norm:
-            means = x.mean(1, keepdim=True).detach()
-            x = x - means
-            stdev = torch.sqrt(torch.var(x, dim=1, keepdim=True, unbiased=False) + 1e-5)
-            x /= stdev
-
         x = rearrange(x, "B T C -> B (T C)")
         if self.autoregressive:
             preds: list[Tensor] = []
@@ -82,14 +74,6 @@ class Model(torch.nn.Module):
 
         pred = rearrange(pred, "B (T C) -> B T C", C=self.input_channels)
 
-        if self.use_norm:
-            pred = pred * (
-                stdev[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
-
-            pred = pred + (
-                means[:, 0, :].unsqueeze(1).repeat(1, self.prediction_window, 1)
-            )
         return pred
 
 

@@ -244,7 +244,6 @@ class Model(nn.Module):
         gpt_layers: int = 6,
         mlp: str = 0,
         use_gpu: bool = False,
-        use_norm: bool = True,
     ):
         super(Model, self).__init__()
         self.is_ln = ln
@@ -290,8 +289,6 @@ class Model(nn.Module):
         self.predict_linear = nn.Linear(self.patch_size, enc_in)
         self.ln = nn.LayerNorm(d_ff)
         self.out_layer = nn.Linear(d_ff, c_out)
-
-        self.use_norm = use_norm
 
     def forward(self, x_enc, x_mark_enc):
         dec_out = self.forecast(x_enc, x_mark_enc)

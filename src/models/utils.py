@@ -80,7 +80,10 @@ class BaseLightningModule(L.LightningModule):
         return self.name in self.probabilistic_forecast_models
 
     def _call_model(self, x: Tensor) -> ModelOutput:
-        out = self.model_specific_forward(x)
+        if self.has_probabilistic_forecast:
+            out, _ = self.model_specific_forward(x)
+        else:
+            out = self.model_specific_forward(x)
 
         if isinstance(out, ModelOutput):
             return out
@@ -226,12 +229,8 @@ class BaseLightningModule(L.LightningModule):
         look_back_window_norm, prediction_window_norm = batch
         batch_size = look_back_window_norm.size(0)
         self.batch_size.append(batch_size)
-        # Prediction
-        if self.has_probabilistic_forecast:
-            preds, _ = self.model_forward(look_back_window_norm)
-        else:
-            preds = self.model_forward(look_back_window_norm)
 
+        preds = self.model_forward(look_back_window_norm)
         preds = preds[:, :, : self.target_channel_dim]
         assert preds.shape == prediction_window_norm.shape
 

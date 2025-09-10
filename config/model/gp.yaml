@@ -1,3 +1,6 @@
+defaults:
+  - base_module
+
 name: "gp"
 n_points: 250
 strategy: "kmeans" # find inducing points using "kmeans" or "random" randomly sample inducing points
@@ -25,7 +28,6 @@ pl_model:
   _target_: src.models.gp.GaussianProcess
   learning_rate: 0.001 
   use_feature_extractor: False
-  use_norm: ${use_norm_baseline}
   jitter: 1e-4
 
 trainer:

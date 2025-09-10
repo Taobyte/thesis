@@ -14,7 +14,6 @@ model:
   activation: "relu" # can be tanh, relu or none
   autoregressive: False
 
-  use_norm: ${use_norm_baseline}
 
 pl_model: 
   _target_: src.models.mlp.MLP

@@ -16,7 +16,7 @@ model:
   input_dropout: 0.0
 
   use_last: False
-  revin: ${use_norm_baseline}
+  revin: False 
 
 pl_model: 
   _target_: src.models.mole.MOLE

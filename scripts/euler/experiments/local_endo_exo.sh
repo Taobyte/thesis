@@ -27,7 +27,7 @@ sbatch --export=ALL --job-name="${WILDPPG_RUNS}_minmax"      -o "${WILDPPG_RUNS}
 JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lwildppg lbw=$LBW pw=$PW model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,nbeatsx normalization=global local_norm=local_z use_wandb=True experiment=endo_exo,endo_only seed=0"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_local"      -o "${WILDPPG_RUNS}_local_%j.out"      --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lwildppg lbw=$LBW pw=$PW model=linear,msar,kalmanfilter,gpt4ts normalization=global local_z=difference use_wandb=True experiment=endo_exo,endo_only seed=0"
+JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=lwildppg lbw=$LBW pw=$PW model=linear,msar,kalmanfilter,gpt4ts normalization=global local_norm=difference use_wandb=True experiment=endo_exo,endo_only seed=0"
 sbatch --export=ALL --job-name="${WILDPPG_RUNS}_difference" -o "${WILDPPG_RUNS}_difference_%j.out" --time="$TIME" --wrap="$JOB"
 
 # ------------------- IEEE -------------------

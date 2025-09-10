@@ -673,7 +673,6 @@ class NBeatsX(BaseLightningModule):
         loss_fn: str = "MSE",
         n_lr_decay_steps: int = 3,
         lr_decay: float = 0.5,
-        use_norm: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -686,8 +685,6 @@ class NBeatsX(BaseLightningModule):
 
         self.criterion = get_loss_fn(loss_fn=loss_fn)
         self.mae_criterion = nn.L1Loss()
-
-        self.use_norm = use_norm
 
     def model_specific_forward(self, look_back_window: t.Tensor):
         B, T, C = look_back_window.shape
