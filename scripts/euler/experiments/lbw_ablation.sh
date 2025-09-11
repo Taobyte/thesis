@@ -10,31 +10,13 @@ TIME=24:00:00
 
 # DALIA 
 
-DALIA_RUNS="lbw_dalia_ablation"
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=dalia lbw=a,b,c,d,e pw=a model=linear,kalmanfilter,gp,adamshyper,nbeatsx normalization=global use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$DALIA_RUNS_global" -o "$DALIA_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
+JOB="python main.py --multirun hydra/launcher=cpu dataset=dalia,wildppg,ieee lbw=a,b,c,d,e pw=a model=linear,xgboost normalization=global local_norm=difference use_wandb=True experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
+sbatch --job-name="cpu" -o "lbw_abl_cpu_%j.out" --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=dalia lbw=a,b,c,d,e pw=a model=timesnet,patchtst,timexer,gpt4ts normalization=none use_norm_dl=True use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$DALIA_RUNS_local" -o "$DALIA_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
+JOB="python main.py --multirun hydra/launcher=gpu_small dataset=dalia,wildppg,ieee lbw=a,b,c,d,e pw=a model=mole,msar,kalmanfilter,gp,mlp normalization=global local_norm=difference use_wandb=True experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
+sbatch --job-name="gpu_small" -o "lbw_abl_gpu_s_%j.out" --time="$TIME" --wrap="$JOB"
 
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=dalia lbw=a,b,c,d,e pw=a model=mole,msar,xgboost,mlp,simpletm normalization=difference use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$DALIA_RUNS_difference" -o "$DALIA_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
+JOB="python main.py --multirun hydra/launcher=gpu_large dataset=dalia,wildppg,ieee lbw=a,b,c,d,e pw=a model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx normalization=global local_norm=local_z use_wandb=True experiment=endo_exo,endo_only folds=fold_0,fold_1,fold_2"
+sbatch --job-name="gpu_large" -o "lbw_abl_gpu_l_%j.out" --time="$TIME" --wrap="$JOB"
 
-# WILDPPG
 
-WILDPPG_RUNS="lbw_wildppg_ablation"
-
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=nbeatsx normalization=global use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$WILDPPG_RUNS_global" -o "$WILDPPG_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
-
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=mole,xgboost,mlp,timesnet,simpletm,adamshyper,patchtst,timexer normalization=global use_norm_dl=True use_norm_baseline=True use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$WILDPPG_RUNS_local" -o "$WILDPPG_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
-
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=wildppg lbw=a,b,c,d,e pw=a model=linear,msar,kalmanfilter,gp,gpt4ts normalization=difference use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$WILDPPG_RUNS_difference" -o "$WILDPPG_RUNS_%j.out" --time="$TIME" --wrap="$JOB"
-
-# IEEE
-
-IEEE_RUNS="lbw_ieee_ablation"
-JOB="python main.py --multirun hydra/launcher=submitit_slurm dataset=ieee lbw=a,b,c,d,e pw=a model=linear,mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx normalization=difference use_wandb=True tune=False experiment=ablation folds=fold_0,fold_1,fold_2"
-sbatch --job-name="$IEEE_RUNS_difference" -o "$IEEE_RUNS_%j.out" --time="$TIME" --wrap="$JOB"

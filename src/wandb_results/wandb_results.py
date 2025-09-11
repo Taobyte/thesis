@@ -196,7 +196,7 @@ def main():
             args.models,
             args.look_back_window,
             args.prediction_window,
-            start_time="2025-08-31",
+            start_time="2025-09-10",
         )
     elif args.type == "horizon_exo_diff":
         horizon_exo_difference(

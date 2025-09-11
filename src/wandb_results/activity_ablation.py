@@ -327,6 +327,8 @@ def visualize_exo_difference(
     cols["D"] = dataset_col
     cols["M"] = metric_col
 
+    # models.remove("msar")
+
     for dataset in datasets:
         print(f"Processing {dataset}...")
 

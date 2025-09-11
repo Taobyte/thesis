@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from src.metrics import Evaluator
 from src.normalization import global_z_denorm, min_max_denorm
 from src.datasets.utils import BaseDataModule
-from src.plotting import plot_max_min_median_predictions
 
 
 @dataclass
@@ -219,9 +218,6 @@ class BaseLightningModule(L.LightningModule):
         avg_metrics["ND"] = avg_metrics["MAE"] / avg_metrics["abs_target_mean"]
         avg_metrics["MASE"] = avg_metrics["MAE"] / avg_metrics["naive_mae"]
         self.log_dict(avg_metrics, logger=True, sync_dist=True)
-
-        if self.use_plots:
-            plot_max_min_median_predictions(self)
 
     def evaluate(
         self, batch: Tuple[Tensor, Tensor], batch_idx: int
