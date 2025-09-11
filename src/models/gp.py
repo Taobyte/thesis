@@ -262,7 +262,7 @@ class GaussianProcess(BaseLightningModule):
         self.use_feature_extractor = use_feature_extractor
 
     def model_specific_forward(
-        self, look_back_window: torch.Tensor
+        self, look_back_window: torch.Tensor, return_raw_preds: bool = False
     ) -> Tuple[Tensor, Tensor]:
         T = self.trainer.datamodule.prediction_window
         if not self.use_feature_extractor:
@@ -274,13 +274,15 @@ class GaussianProcess(BaseLightningModule):
 
         mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
         std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
-
-        return mean, std
+        if return_raw_preds:
+            return preds
+        else:
+            return mean, std
 
     def _shared_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        preds, _ = self.model_specific_forward(look_back_window)
+        preds = self.model_specific_forward(look_back_window, return_raw_preds=True)
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
         loss = -self.mll(preds, prediction_window)
         mae_loss = self.mae_loss(preds.mean, prediction_window)
