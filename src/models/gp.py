@@ -15,7 +15,7 @@ from gpytorch.distributions import MultivariateNormal
 
 from typing import Tuple, Any
 
-from src.models.utils import BaseLightningModule
+from src.models.utils import BaseLightningModule, ModelOutput
 
 
 class TimeSeriesFeatureExtractor(nn.Module):
@@ -274,18 +274,18 @@ class GaussianProcess(BaseLightningModule):
 
         mean = rearrange(preds.mean, "B (T C) -> B T C", T=T)
         std = rearrange(preds.stddev, "B (T C) -> B T C", T=T)
-        if return_raw_preds:
-            return preds
-        else:
-            return mean, std
+        aux = {"std": std, "preds": preds}
+        return ModelOutput(mean, aux=aux)
 
     def _shared_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        preds = self.model_specific_forward(look_back_window, return_raw_preds=True)
+        mean, aux = self.model_forward(look_back_window, with_aux=True)
+        preds = aux["preds"]
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
+        mean = rearrange(mean, "B T C -> B (T C)")
         loss = -self.mll(preds, prediction_window)
-        mae_loss = self.mae_loss(preds.mean, prediction_window)
+        mae_loss = self.mae_loss(mean, prediction_window)
         return loss, mae_loss
 
     def model_specific_train_step(

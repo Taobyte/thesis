@@ -79,10 +79,7 @@ class BaseLightningModule(L.LightningModule):
         return self.name in self.probabilistic_forecast_models
 
     def _call_model(self, x: Tensor) -> ModelOutput:
-        if self.has_probabilistic_forecast:
-            out, _ = self.model_specific_forward(x)
-        else:
-            out = self.model_specific_forward(x)
+        out = self.model_specific_forward(x)
 
         if isinstance(out, ModelOutput):
             return out
@@ -256,6 +253,7 @@ class BaseLightningModule(L.LightningModule):
         look_back_window = self._denormalize_tensor(look_back_window_norm)
         prediction_window = self._denormalize_tensor(prediction_window_norm)
         preds = self._denormalize_tensor(preds)
+
         # Metric Calculation
         metrics, current_metrics = self.evaluator(
             prediction_window, preds, look_back_window
