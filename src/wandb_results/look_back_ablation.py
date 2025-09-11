@@ -1,20 +1,18 @@
+import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
 
 from plotly.subplots import make_subplots
-from matplotlib import colors
 from tqdm import tqdm
-from typing import List, Tuple
+from typing import Tuple
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
-    METRICS,
     MODELS,
     BASELINES,
     DL,
     dataset_to_name,
-    metric_to_name,
     model_to_name,
     model_colors,
     dataset_colors,
@@ -25,9 +23,200 @@ TITLE_SIZE = 22 * 2
 AXIS_TITLE_SIZE = 40
 TICK_SIZE = 32
 LEGEND_SIZE = 40
-LINE_WIDTH = 8
-MARKER_SIZE = 15
+LINE_WIDTH = 4
+MARKER_SIZE = 8
 LINE_OPACITY = 0.9
+
+
+# Configure which direction is "better" for each metric
+METRIC_GOAL = {
+    "MASE": "min",
+    "MAE": "min",
+    "MSE": "min",
+    "SMAPE": "min",
+    "DA": "max",
+}
+
+
+def _metric_goal(metric_name: str) -> str:
+    # fallback: minimize if unknown
+    return METRIC_GOAL.get(metric_name, "min")
+
+
+def _best_from_nested(metric_dict_model: dict, metric_key: str, goal: str):
+    """
+    Given metric_dict_model = metrics[model] = {lbw: {pw: {metric_key: value, ...}}}
+    return (best_value, best_lbw, best_pw)
+    """
+    best_val = None
+    best_lbw = None
+    best_pw = None
+
+    for lbw, pw_dict in metric_dict_model.items():
+        for pw, mvals in pw_dict.items():
+            if metric_key not in mvals:
+                continue
+            val = mvals[metric_key]
+            if val is None or (
+                isinstance(val, float) and (np.isnan(val) or np.isinf(val))
+            ):
+                continue
+            if best_val is None:
+                best_val, best_lbw, best_pw = val, lbw, pw
+            else:
+                if goal == "min" and val < best_val:
+                    best_val, best_lbw, best_pw = val, lbw, pw
+                if goal == "max" and val > best_val:
+                    best_val, best_lbw, best_pw = val, lbw, pw
+
+    return best_val, best_lbw, best_pw
+
+
+def _std_at(std_dict_model: dict, lbw, pw, metric_key: str):
+    try:
+        return std_dict_model[lbw][pw].get(metric_key, None)
+    except Exception:
+        return None
+
+
+def summarize_one_dataset(
+    dataset_label: str,
+    models: list,
+    metric_key: str,
+    exo_mean_dict: dict,
+    exo_std_dict: dict,
+    endo_mean_dict: dict,
+    endo_std_dict: dict,
+    show_pw=True,
+    diff_mode="best_vs_best",
+):
+    """
+    Build a wide table (one row) for a single dataset:
+      columns = model names
+      cell = "{score ± std} | lbw=..[, pw=..] | Δ=exo-endo"
+    diff_mode:
+      - "best_vs_best": Δ = exo_best - endo_best (each at its own best lbw/pw)
+      - "same_hypers": Δ computed at the exo best lbw/pw (falls back if missing)
+    """
+    goal = _metric_goal(metric_key)
+    row = {}
+    for model in models:
+        # Guard for missing models
+        if model not in exo_mean_dict or model not in endo_mean_dict:
+            row[model] = "—"
+            continue
+
+        exo_best, exo_lbw, exo_pw = _best_from_nested(
+            exo_mean_dict[model], metric_key, goal
+        )
+        endo_best, endo_lbw, endo_pw = _best_from_nested(
+            endo_mean_dict[model], metric_key, goal
+        )
+
+        if exo_best is None and endo_best is None:
+            row[model] = "—"
+            continue
+
+        # Choose how to compute Δ
+        if diff_mode == "same_hypers" and exo_lbw is not None:
+            # compute endo at exo's best hypers if available
+            try:
+                endo_same = endo_mean_dict[model][exo_lbw][exo_pw][metric_key]
+            except Exception:
+                endo_same = None
+            delta = (
+                (exo_best - endo_same)
+                if (exo_best is not None and endo_same is not None)
+                else None
+            )
+        else:
+            # best_vs_best (default)
+            delta = (
+                (exo_best - endo_best)
+                if (exo_best is not None and endo_best is not None)
+                else None
+            )
+
+        # Get stds at the corresponding best points
+        exo_std = (
+            _std_at(exo_std_dict.get(model, {}), exo_lbw, exo_pw, metric_key)
+            if exo_lbw is not None
+            else None
+        )
+
+        # Build pretty cell string (favor exo since that's the richer model)
+        def fmt(v):
+            if v is None:
+                return "—"
+            # Percent-like display for DA/SMAPE if they are in 0..1 range
+            if metric_key in ("DA",) and 0 <= v <= 1:
+                return f"{v * 100:.1f}%"
+            return f"{v:.4f}"
+
+        parts = []
+        # score ± std for exo
+        score_part = fmt(exo_best)
+        if exo_std is not None:
+            score_part += f" ± {fmt(exo_std)}"
+        parts.append(score_part)
+
+        # lbw/pw
+        if exo_lbw is not None:
+            if show_pw and exo_pw is not None:
+                parts.append(f"lbw={exo_lbw}, pw={exo_pw}")
+            else:
+                parts.append(f"lbw={exo_lbw}")
+
+        # Δ
+        if delta is not None:
+            # Note: for error metrics (min), negative Δ means exo is better
+            # for DA (max), positive Δ means exo is better
+            parts.append(f"Δ(exo-endo)={delta:+.4f}")
+        else:
+            parts.append("Δ=—")
+
+        row[model] = " | ".join(parts)
+
+    # Single-row DataFrame labeled by dataset
+    df = pd.DataFrame([row], index=[dataset_label])
+    return df
+
+
+def summarize_all_datasets(
+    dataset_labels: list,
+    models: list,
+    metric_key: str,
+    per_dataset_metrics: list,  # list of tuples: (exo_mean, exo_std, endo_mean, endo_std)
+    diff_mode="best_vs_best",
+    to_excel_path=None,
+) -> pd.DataFrame:
+    """
+    dataset_labels: ["DaLiA", "WildPPG", "Capture24"]  (same order as your loop)
+    per_dataset_metrics: [(exo_mean_dict, exo_std_dict, endo_mean_dict, endo_std_dict), ...]
+    """
+    tables = []
+    for label, (exo_m, exo_s, endo_m, endo_s) in zip(
+        dataset_labels, per_dataset_metrics
+    ):
+        tables.append(
+            summarize_one_dataset(
+                label,
+                models=models,
+                metric_key=metric_key,
+                exo_mean_dict=exo_m,
+                exo_std_dict=exo_s,
+                endo_mean_dict=endo_m,
+                endo_std_dict=endo_s,
+                diff_mode=diff_mode,
+            )
+        )
+    big = pd.concat(tables, axis=0)
+
+    if to_excel_path:
+        with pd.ExcelWriter(to_excel_path) as xw:
+            big.to_excel(xw, sheet_name=metric_key)
+
+    return big
 
 
 def find_best_model(metrics: dict, lbw: int, pw: int, metric: str) -> Tuple[str, float]:
@@ -214,34 +403,55 @@ def ablation_delta_plot(
         fig.show()
 
 
+def _series_for(
+    mean_dict, std_dict, model, lbw_ablation, x_vals, lbw, pw, metric, factor
+):
+    means, stds = [], []
+    for xv in x_vals:
+        key_lbw = str(xv) if lbw_ablation else str(lbw)
+        key_pw = str(pw) if lbw_ablation else str(xv)
+        try:
+            m = mean_dict[model][int(key_lbw)][int(key_pw)][metric] * factor
+            s = std_dict[model][int(key_lbw)][int(key_pw)][metric] * factor
+        except KeyError:
+            m, s = np.nan, 0.0
+        means.append(m)
+        stds.append(s)
+    return means, stds
+
+
+def _alpha_fill(color_str, alpha=0.18):
+    # works for 'rgba(r,g,b,a)' or '#RRGGBB' or 'rgb(r,g,b)'
+    c = color_str
+    if isinstance(c, tuple):  # (r,g,b) 0-255
+        r, g, b = c
+        return f"rgba({r},{g},{b},{alpha})"
+    if c.startswith("rgba"):
+        head, body = c.split("(", 1)
+        rgb = body.split(")")[0].split(",")[:3]
+        r, g, b = [x.strip() for x in rgb]
+        return f"rgba({r},{g},{b},{alpha})"
+    if c.startswith("rgb("):
+        r, g, b = c[4:-1].split(",")
+        return f"rgba({r.strip()},{g.strip()},{b.strip()},{alpha})"
+    if c.startswith("#") and len(c) == 7:
+        r = int(c[1:3], 16)
+        g = int(c[3:5], 16)
+        b = int(c[5:7], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+    return "rgba(0,0,0,0.18)"
+
+
 def visualize_look_back_window_difference(
     datasets: list[str],
     look_back_window: list[int],
     prediction_window: list[int],
-    experiment: str = "endo_only",
     start_time: str = "2025-6-05",
     save_html: bool = False,
     use_std: bool = False,
-    models: list[str] = [],
+    models: list[str] = MODELS,
 ):
-    metrics = ["SMAPE"]  # METRICS
-    ALL_MODELS = models
-    IEEE_MODELS = [
-        "linear",
-        # "xgboost",
-        "kalmanfilter",
-        "patchtst",
-        # "timexer",
-        "nbeatsx",
-    ]
-    DALIA_MODELS = ["xgboost", "mole", "simpletm", "timexer"]  #  "mlp", "nbeatsx"
-    use_specific_models = 0
-    plot_aggregated_results = 0
-
     num_datasets = len(datasets)
-    n_metrics = len(metrics)
-    if len(models) == 0:
-        models = MODELS
 
     lbw_ablation = True
     if len(look_back_window) == 1:
@@ -264,175 +474,171 @@ def visualize_look_back_window_difference(
     x_text = [str(v) for v in x_vals]
 
     readable_dataset_names = [dataset_to_name[d] for d in datasets]
-    subplot_titles = readable_dataset_names
+    readable_model_names = [model_to_name[m] for m in models]
+    metric = "MASE"
+
+    all_metrics = []
 
     fig = make_subplots(
-        rows=n_metrics + plot_aggregated_results,
-        cols=num_datasets,
-        subplot_titles=subplot_titles,
-        # row_titles=row_titles,
+        rows=num_datasets,
+        cols=len(models),
+        column_titles=readable_model_names,
+        row_titles=readable_dataset_names,
         shared_xaxes=True,
-        horizontal_spacing=0.03,
-        vertical_spacing=0.03,
+        shared_yaxes=False,
+        horizontal_spacing=0.005,
+        vertical_spacing=0.005,
     )
-
     for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
-        if use_specific_models:
-            if dataset == "dalia":
-                models = DALIA_MODELS
-            elif dataset == "ieee":
-                models = IEEE_MODELS
-            else:
-                models = ALL_MODELS
-
-        runs = get_runs(
+        exo_runs = get_runs(
             dataset,
             look_back_window,
             prediction_window,
             models,
             start_time,
-            experiment_name=experiment,
+            experiment_name="endo_exo",
+        )
+        endo_runs = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            start_time,
+            experiment_name="endo_only",
         )
 
-        mean_dict, std_dict = get_metrics(runs)
+        _, exo_mean_dict, exo_std_dict = get_metrics(exo_runs)
+        _, endo_mean_dict, endo_std_dict = get_metrics(endo_runs)
 
-        for j, metric in enumerate(metrics):
-            assert set(mean_dict.keys()) == set(models), (
-                f"Models froms runs: {mean_dict.keys()} | Models from cmd {models}"
+        all_metrics.append((exo_mean_dict, exo_std_dict, endo_mean_dict, endo_std_dict))
+
+        factor = 100 if metric == "SMAPE" else 1
+        row = b + 1
+
+        for m, model in enumerate(models):
+            col = m + 1
+            base_color = model_colors[model]
+
+            # --- build series for both settings ---
+            exo_means, exo_stds = _series_for(
+                exo_mean_dict,
+                exo_std_dict,
+                model,
+                lbw_ablation,
+                x,
+                lbw if not lbw_ablation else None,
+                pw if lbw_ablation else None,
+                metric,
+                factor,
             )
-            factor = 100 if metric == "SMAPE" else 1
-            baseline_means: List[float] = []
-            dl_means: List[float] = []
-            row = j + 1
-            col = b + 1
-            for m, model in enumerate(models):
-                model_name = model_to_name[model]
+            endo_means, endo_stds = _series_for(
+                endo_mean_dict,
+                endo_std_dict,
+                model,
+                lbw_ablation,
+                x,
+                lbw if not lbw_ablation else None,
+                pw if lbw_ablation else None,
+                metric,
+                factor,
+            )
 
-                means: list[float] = []
-                stds: list[float] = []
-                for ablation_x in x:
-                    if lbw_ablation:
-                        if metric in mean_dict[model][str(ablation_x)][str(pw)]:
-                            means.append(
-                                factor
-                                * mean_dict[model][str(ablation_x)][str(pw)][metric]
-                            )
-                            stds.append(
-                                std_dict[model][str(ablation_x)][str(pw)][metric]
-                            )
-                        else:
-                            print(
-                                f"{model} {str(ablation_x)} {str(pw)} {metric} does not exist"
-                            )
-                    else:
-                        means.append(
-                            factor * mean_dict[model][str(lbw)][str(ablation_x)][metric]
-                        )
-                        stds.append(std_dict[model][str(lbw)][str(ablation_x)][metric])
+            # bands
+            exo_upper = [a + b for a, b in zip(exo_means, exo_stds)]
+            exo_lower = [a - b for a, b in zip(exo_means, exo_stds)]
+            endo_upper = [a + b for a, b in zip(endo_means, endo_stds)]
+            endo_lower = [a - b for a, b in zip(endo_means, endo_stds)]
 
-                if model in BASELINES:
-                    baseline_means.append(means)
-                elif model in DL:
-                    dl_means.append(means)
+            # Legend: show only once to avoid 28 entries
+            show_legend = row == 1 and col == 1
 
-                upper = [m + s for m, s in zip(means, stds)]
-                lower = [m - s for m, s in zip(means, stds)]
-
+            # --- endo_exo line (solid) ---
+            fig.add_trace(
+                go.Scatter(
+                    x=x_pos,
+                    y=exo_means,
+                    mode="lines+markers",
+                    name="endo_exo",
+                    line=dict(color=base_color, width=LINE_WIDTH),
+                    marker=dict(size=MARKER_SIZE),
+                    opacity=LINE_OPACITY,
+                    showlegend=show_legend,
+                    legendgroup="endo_exo",
+                ),
+                row=row,
+                col=col,
+            )
+            if use_std:
                 fig.add_trace(
                     go.Scatter(
-                        x=x_pos,
-                        y=means,
-                        mode="lines+markers",
-                        name=model_name,
-                        line=dict(color=model_colors[model], width=LINE_WIDTH),
-                        marker=dict(size=MARKER_SIZE),
-                        opacity=LINE_OPACITY,
-                        showlegend=(row == 1) and col == 1,
-                        legendgroup=model_name,
+                        x=x_pos + x_pos[::-1],
+                        y=exo_upper + exo_lower[::-1],
+                        fill="toself",
+                        fillcolor=_alpha_fill(base_color, 0.18),
+                        line=dict(width=0),
+                        hoverinfo="skip",
+                        showlegend=False,
+                        legendgroup="endo_exo",
                     ),
                     row=row,
                     col=col,
                 )
 
-                # Std deviation band (fill between)
-                if use_std:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x_pos + x_pos[::-1],
-                            y=upper + lower[::-1],
-                            fill="toself",
-                            fillcolor=color.replace("1.0", "0.2")
-                            if "rgba" in color
-                            else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
-                            line=dict(color="rgba(255,255,255,0)"),
-                            hoverinfo="skip",
-                            showlegend=False,
-                            name=model_name,
-                        ),
-                        row=row,
-                        col=col,
-                    )
-
-            if plot_aggregated_results:
-                baseline_means_mean = np.mean(
-                    np.stack(baseline_means), axis=0
-                ).tolist()  # (len(look_back_window),)
-                dl_means_mean = np.mean(np.stack(dl_means), axis=0).tolist()
-                baseline_means_std = np.std(np.stack(baseline_means), axis=0).tolist()
-                # (len(look_back_window),)
-                dl_means_std = np.std(np.stack(dl_means), axis=0).tolist()
-
-                for name, color, y, stds in zip(
-                    ["Baselines", "DL"],
-                    [model_colors["baseline"], model_colors["dl"]],
-                    [baseline_means_mean, dl_means_mean],
-                    [baseline_means_std, dl_means_std],
-                ):
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x_pos,
-                            y=y,
-                            mode="lines+markers",
-                            name=name,
-                            showlegend=(j == 0) and row == 1,
-                            line=dict(color=color),
-                            legendgroup=name,
-                            # legendgrouptitle_text="Baselines vs DL",
-                        ),
-                        row=row + 1,
-                        col=col,
-                    )
-
-                    upper = [m + s for m, s in zip(y, stds)]
-                    lower = [m - s for m, s in zip(y, stds)]
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x_pos + x_pos[::-1],
-                            y=upper + lower[::-1],
-                            fill="toself",
-                            fillcolor=f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
-                            line=dict(color="rgba(255,255,255,0)"),
-                            hoverinfo="skip",
-                            showlegend=False,
-                            name=name,
-                            legendgroup=name,
-                            legendgrouptitle_text="Baselines vs DL",
-                        ),
-                        row=row + 1,
-                        col=col,
-                    )
-
-            fig.update_xaxes(
-                title_text="Lookback Window" if lbw_ablation else "Prediction Window",
-                tickmode="array",
-                tickvals=x_pos,
-                ticktext=x_text,
-                title_font=dict(size=AXIS_TITLE_SIZE),
-                tickfont=dict(size=TICK_SIZE),
+            # --- endo_only line (dashed) ---
+            fig.add_trace(
+                go.Scatter(
+                    x=x_pos,
+                    y=endo_means,
+                    mode="lines+markers",
+                    name="endo_only",
+                    line=dict(color=base_color, width=LINE_WIDTH, dash="dash"),
+                    marker=dict(size=MARKER_SIZE),
+                    opacity=LINE_OPACITY,
+                    showlegend=show_legend,
+                    legendgroup="endo_only",
+                ),
                 row=row,
                 col=col,
             )
+            if use_std:
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_pos + x_pos[::-1],
+                        y=endo_upper + endo_lower[::-1],
+                        fill="toself",
+                        fillcolor=_alpha_fill(base_color, 0.10),  # slightly lighter
+                        line=dict(width=0),
+                        hoverinfo="skip",
+                        showlegend=False,
+                        legendgroup="endo_only",
+                    ),
+                    row=row,
+                    col=col,
+                )
+
+    subplot_size = 300  # pixels per subplot
+    cols = len(models)
+    rows = num_datasets
+
+    # Account for spacing and margins
+    total_width = cols * subplot_size
+    total_height = rows * subplot_size
+
+    # Update layout with proper dimensions
+    fig.update_layout(
+        width=total_width,
+        height=total_height,
+    )
+
+    fig.update_xaxes(
+        tickvals=x_pos,  # positions where ticks appear
+        ticktext=x_text,  # labels for those ticks
+        scaleanchor="y",
+        scaleratio=1,
+    )
+
+    # Force square aspect ratio - ONLY anchor x to y, not both ways
+    fig.update_xaxes(scaleanchor="y", scaleratio=1)
 
     # LEGEND POSITION
     fig.update_layout(
@@ -447,21 +653,6 @@ def visualize_look_back_window_difference(
         ),
         margin=dict(b=30),
     )
-
-    # FONT SIZE & STYLE
-    fig.update_layout(
-        font=dict(size=TICK_SIZE),
-        legend=dict(font=dict(size=LEGEND_SIZE)),
-        margin=dict(t=90, b=120),
-    )
-
-    fig.update_xaxes(
-        title_font=dict(size=AXIS_TITLE_SIZE), tickfont=dict(size=TICK_SIZE)
-    )
-    fig.update_yaxes(
-        title_font=dict(size=AXIS_TITLE_SIZE), tickfont=dict(size=TICK_SIZE)
-    )
-
     fig.update_layout(legend=dict(font=dict(size=16)))
 
     for ann in fig["layout"]["annotations"]:
@@ -483,3 +674,24 @@ def visualize_look_back_window_difference(
         print(f"Successfully saved {plot_name}")
     else:
         fig.show()
+
+    table_metric = "MASE"  # or "MAE", "DA", "SMAPE", "MSE"
+
+    table = summarize_all_datasets(
+        dataset_labels=datasets,
+        models=models,
+        metric_key=table_metric,
+        per_dataset_metrics=all_metrics,
+        diff_mode="best_vs_best",  # or "same_hypers"
+        to_excel_path=None,
+    )
+
+    latex_str = table.to_latex(
+        index=False,
+        escape=False,
+        header=True,
+        # column_format=column_format,
+        bold_rows=False,
+        # float_format="%.3f",
+    )
+    print(latex_str)

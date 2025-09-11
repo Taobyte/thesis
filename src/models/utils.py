@@ -219,6 +219,28 @@ class BaseLightningModule(L.LightningModule):
         avg_metrics["MASE"] = avg_metrics["MAE"] / avg_metrics["naive_mae"]
         self.log_dict(avg_metrics, logger=True, sync_dist=True)
 
+    def _denormalize_tensor(
+        self,
+        preds: Tensor,
+    ):
+        device = preds.device
+        if self.normalization == "global":
+            train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
+            mean = train_dataset.mean
+            std = train_dataset.std
+            mean = Tensor(mean).reshape(1, 1, -1).to(device).float()
+            std = Tensor(std).reshape(1, 1, -1).to(device).float()
+            preds = global_z_denorm(preds, mean, std)
+        elif self.normalization == "minmax":
+            train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
+            min = train_dataset.min
+            max = train_dataset.max
+            min = Tensor(min).reshape(1, 1, -1).to(device).float()
+            max = Tensor(max).reshape(1, 1, -1).to(device).float()
+            preds = min_max_denorm(preds, min, max)
+
+        return preds
+
     def evaluate(
         self, batch: Tuple[Tensor, Tensor], batch_idx: int
     ) -> Tuple[dict[str, float], dict[str, list[float]]]:
@@ -231,31 +253,9 @@ class BaseLightningModule(L.LightningModule):
         assert preds.shape == prediction_window_norm.shape
 
         # denormalize preds and prediction_window
-        if self.normalization == "global":
-            device = look_back_window_norm.device
-            train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
-            mean = train_dataset.mean
-            std = train_dataset.std
-            mean = Tensor(mean).reshape(1, 1, -1).to(device).float()
-            std = Tensor(std).reshape(1, 1, -1).to(device).float()
-            preds = global_z_denorm(preds, mean, std)
-            prediction_window = global_z_denorm(prediction_window_norm, mean, std)
-            look_back_window = global_z_denorm(look_back_window_norm, mean, std)
-        elif self.normalization == "minmax":
-            device = look_back_window_norm.device
-            train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
-            min = train_dataset.min
-            max = train_dataset.max
-            min = Tensor(min).reshape(1, 1, -1).to(device).float()
-            max = Tensor(max).reshape(1, 1, -1).to(device).float()
-
-            preds = min_max_denorm(preds, min, max)
-            prediction_window = min_max_denorm(prediction_window_norm, min, max)
-            look_back_window = min_max_denorm(look_back_window_norm, min, max)
-        else:
-            prediction_window = prediction_window_norm
-            look_back_window = look_back_window_norm
-
+        look_back_window = self._denormalize_tensor(look_back_window_norm)
+        prediction_window = self._denormalize_tensor(prediction_window_norm)
+        preds = self._denormalize_tensor(preds)
         # Metric Calculation
         metrics, current_metrics = self.evaluator(
             prediction_window, preds, look_back_window

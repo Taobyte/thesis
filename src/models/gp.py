@@ -280,13 +280,7 @@ class GaussianProcess(BaseLightningModule):
     def _shared_step(
         self, look_back_window: Tensor, prediction_window: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        if not self.use_feature_extractor:
-            _, _, C = prediction_window.shape
-            look_back_window = rearrange(
-                look_back_window, "B T C -> B (T C)"
-            )  # GPytorch assumes flattened channels
-        with gpytorch.settings.cholesky_jitter(self.jitter):
-            preds = self.model(look_back_window)
+        preds, _ = self.model_specific_forward(look_back_window)
         prediction_window = rearrange(prediction_window, "B T C -> B (T C)")
         loss = -self.mll(preds, prediction_window)
         mae_loss = self.mae_loss(preds.mean, prediction_window)

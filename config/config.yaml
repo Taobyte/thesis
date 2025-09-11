@@ -55,6 +55,10 @@ wandb:
 # training 
 min_delta: 0.001
 use_efficiency_callback: False
+use_prediction_callback: False
+
+# local settings
+test_local: False # test on test windows from local for the global models
 
 # tuner flag
 tune: False

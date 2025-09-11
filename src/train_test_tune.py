@@ -9,7 +9,7 @@ from lightning.pytorch.loggers.logger import DummyLogger
 from omegaconf import OmegaConf
 from omegaconf import DictConfig
 from hydra.utils import get_original_cwd
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from collections import defaultdict
 
 from src.utils import setup, delete_checkpoint
@@ -88,7 +88,7 @@ def tune_local(config: DictConfig, wandb_logger: WandbLogger, run_name: str) -> 
 
 def train_test_global(
     config: DictConfig, wandb_logger: WandbLogger, run_name: str
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
     datamodule, pl_model, trainer, callbacks = setup(config, wandb_logger, run_name)
     checkpoint_callback = callbacks[0]
 
@@ -108,36 +108,39 @@ def train_test_global(
         )
 
     del datamodule
-    ckpt_path = checkpoint_callback.best_model_path or None
-    dummy_logger = DummyLogger()
-    local_datamodule, _, local_trainer, _ = setup(config, dummy_logger, run_name)
-    local_datamodule.test_local = True
-    local_datamodule.setup("fit")  # initialize train_dataset for normalization
+    if config.test_local:
+        ckpt_path = checkpoint_callback.best_model_path or None
+        dummy_logger = DummyLogger()
+        local_datamodule, _, local_trainer, _ = setup(config, dummy_logger, run_name)
+        local_datamodule.test_local = True
+        local_datamodule.setup("fit")  # initialize train_dataset for normalization
 
-    if ckpt_path and (config.model.name not in config.special_models):
-        local_test_results = local_trainer.test(
-            pl_model, datamodule=local_datamodule, ckpt_path=ckpt_path
+        if ckpt_path and (config.model.name not in config.special_models):
+            local_test_results = local_trainer.test(
+                pl_model, datamodule=local_datamodule, ckpt_path=ckpt_path
+            )
+        else:
+            print("Best checkpoint not found, testing with current model.")
+            local_test_results = local_trainer.test(
+                pl_model, datamodule=local_datamodule, ckpt_path=None
+            )
+
+        delete_checkpoint(trainer, checkpoint_callback)
+
+        print("End Evaluation.")
+
+        global_results = pd.DataFrame(global_test_results)
+        local_results = pd.DataFrame(local_test_results)
+
+        wandb_logger.experiment.log(
+            {
+                "local_results": wandb.Table(dataframe=local_results),
+            }
         )
-    else:
-        print("Best checkpoint not found, testing with current model.")
-        local_test_results = local_trainer.test(
-            pl_model, datamodule=local_datamodule, ckpt_path=None
-        )
 
-    delete_checkpoint(trainer, checkpoint_callback)
+        return global_results, local_results
 
-    print("End Evaluation.")
-
-    global_results = pd.DataFrame(global_test_results)
-    local_results = pd.DataFrame(local_test_results)
-
-    wandb_logger.experiment.log(
-        {
-            "local_results": wandb.Table(dataframe=local_results),
-        }
-    )
-
-    return global_results, local_results
+    return None
 
 
 def train_test_local(

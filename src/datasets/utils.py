@@ -241,9 +241,6 @@ class BaseDataModule(L.LightningDataModule):
     def _get_dataset(
         self, mode: str = "train"
     ) -> Tuple[NDArray[np.float32], NDArray[np.float32]]:
-        """
-        return z-normalized dataset
-        """
         self.setup(stage="fit")
         if mode == "train":
             dataloader = self.train_dataloader()

@@ -67,11 +67,11 @@ def main():
         choices=[
             "none",
             "global",
-            "local",
+            "minmax",
         ],
         required=False,
         default=None,
-        help="Normalization must be 'none', 'global' or 'local' ",
+        help="Normalization must be 'none', 'global' or 'minmax' ",
     )
 
     parser.add_argument(
@@ -174,8 +174,7 @@ def main():
             args.dataset,
             args.look_back_window,
             args.prediction_window,
-            experiment=args.experiment,
-            start_time="2025-8-23",
+            start_time="2025-9-11",
             save_html=args.save_html,
             use_std=args.use_std,
             models=args.models,

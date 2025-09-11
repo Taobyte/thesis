@@ -53,7 +53,7 @@ class DaLiADataset(HRDataset):
                     stride = 2
                     argmax_activities: list[int] = []
                     activity_label_1hz = activity[::4].astype(
-                        np.int64
+                        np.int32
                     )  # activity is 4Hz
                     for i in range(
                         0, len(activity_label_1hz) - window_size + 1, stride
@@ -81,6 +81,27 @@ class DaLiADataset(HRDataset):
         max = np.max(combined, axis=0)
 
         return loaded_series, [mean, std, min, max]
+
+    def _read_activity_data_(self) -> list[NDArray[np.int32]]:
+        participant_activity_labels: list[NDArray[np.int32]] = []
+        for i in self.participants:
+            label = "S" + str(i)
+            data_path = Path(self.data_dir) / (label + ".npz")
+            data = np.load(data_path)
+            activity = data["activity"]
+            activity_label_1hz = activity[::4].astype(np.int32)  # activity is 4Hz
+            argmax_activities: list[int] = []
+            window_size = 8
+            stride = 2
+            for i in range(0, len(activity_label_1hz) - window_size + 1, stride):
+                window = activity_label_1hz[i : i + window_size, :]
+                counts = np.bincount(window[:, 0], minlength=9)
+                argmax_activities.append(int(np.argmax(counts)))
+
+            processed_activity = np.array(argmax_activities)[:, np.newaxis]
+            participant_activity_labels.append(processed_activity)
+
+        return participant_activity_labels
 
 
 class DaLiADataModule(BaseDataModule):

@@ -2,7 +2,12 @@ import time
 import math
 import numpy as np
 import torch
+import wandb
+
+from pathlib import Path
+from numpy.typing import NDArray
 from lightning import Callback
+from lightning.pytorch.loggers import WandbLogger
 
 
 class EfficiencyCallback(Callback):
@@ -130,3 +135,48 @@ class EfficiencyCallback(Callback):
             "[Efficiency]",
             {k.replace(self.log_prefix, ""): v for k, v in metrics.items()},
         )
+
+
+class PredictionCallback(Callback):
+    def __init__(self, filename: str = "test_predictions.npz"):
+        self.filename = filename
+
+    def on_test_end(self, trainer, pl_module):
+        datamodule = trainer.datamodule
+        assert datamodule.name == "dalia"
+        test_dataset = datamodule.test_dataset
+        activity_labels: list[NDArray[np.int32]] = test_dataset._read_activity_data_()
+        ground_truth: list[NDArray[np.float32]] = test_dataset.data
+
+        dl = datamodule.test_dataloader()
+        pl_module.eval()
+        predictions: list[NDArray[np.float32]] = []
+        with torch.no_grad():
+            for look_back_window, _ in dl:
+                preds = pl_module.model_forward(look_back_window)
+                denorm_preds = pl_module._denormalize_tensor(preds)
+                preds_numpy = denorm_preds.detach().float().numpy()
+                predictions.append(preds_numpy)
+
+        stacked_preds = np.concatenate(predictions, axis=0)
+
+        result_dict: dict[str, NDArray[np.float32]] = {
+            "preds": stacked_preds,
+            "labels": np.asarray(activity_labels, dtype=object),
+            "gt_series": np.asarray(ground_truth, dtype=object),
+        }
+
+        outdir = Path(trainer.default_root_dir) / "predictions"
+        outdir.mkdir(parents=True, exist_ok=True)
+        outpath = outdir / self.filename
+        np.savez_compressed(outpath, **result_dict)
+
+        wb_logger = trainer.logger
+        assert isinstance(wb_logger, WandbLogger), (
+            f"Error: logger is not of type WandBLogger, type = {type(wb_logger)}"
+        )
+        run = wb_logger.experiment  # this is a wandb.Run
+
+        art = wandb.Artifact("test_predictions", type="predictions")
+        art.add_file(str(outpath))
+        run.log_artifact(art)

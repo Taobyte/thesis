@@ -13,7 +13,7 @@ from lightning import LightningDataModule, Trainer, LightningModule
 from typing import Tuple, Union, List
 
 from src.models.utils import get_model_kwargs
-from src.callbacks import EfficiencyCallback
+from src.callbacks import EfficiencyCallback, PredictionCallback
 
 
 def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
@@ -66,6 +66,10 @@ def setup(
     if config.use_efficiency_callback:
         efficiency_callback = EfficiencyCallback()
         callbacks.append(efficiency_callback)
+
+    if config.use_prediction_callback:
+        prediction_callback = PredictionCallback()
+        callbacks.append(prediction_callback)
 
     trainer = L.Trainer(
         logger=wandb_logger,
