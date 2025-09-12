@@ -69,8 +69,14 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             ]
         )
 
+        self.sticky_bias = torch.nn.Parameter(
+            torch.tensor(math.log((n_states - 1) * 0.95 / (1 - 0.95)))
+        )
+
     def get_transition_matrix(self):
-        logits = self.transition_matrix
+        logits = self.transition_matrix + torch.diag(
+            self.sticky_bias.expand(self.n_states)
+        )
         return F.softmax(logits, dim=1)  # Each row sums to 1
 
     def get_initial_distribution(self):
