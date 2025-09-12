@@ -3,8 +3,8 @@
 model:
   model:
    hid_dim: 128
-   n_hid_layers: 3
+   n_hid_layers: 1 # 3
    dropout: 0.226
   
   pl_model:
-    learning_rate: 0.0092
+    learning_rate: 0.0005 # 0.0092
