@@ -106,7 +106,7 @@ def create_group_run_name(
 
     ln_endo_only_tag = "ln_endo_only" if local_norm_endo_only else "ln_endo_exo"
     group_name = f"{normalization}_{local_norm}_{ln_endo_only_tag}_{dataset_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
-    run_name = f"{normalization}_{local_norm}_{ln_endo_only_tag}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}"
+    run_name = f"{normalization}_{local_norm}_{ln_endo_only_tag}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
 
     tags: list[str] = [dataset_name, model_name, normalization, experiment_name]
     if dataset_name in fold_datasets:
