@@ -24,8 +24,8 @@ TITLE_SIZE = 22 * 2
 AXIS_TITLE_SIZE = 40
 TICK_SIZE = 32
 LEGEND_SIZE = 40
-LINE_WIDTH = 4
-MARKER_SIZE = 8
+LINE_WIDTH = 8
+MARKER_SIZE = 16
 LINE_OPACITY = 0.9
 
 
@@ -440,14 +440,14 @@ def visualize_look_back_window_difference(
     all_metrics = []
 
     fig = make_subplots(
-        rows=num_datasets,
-        cols=len(models),
-        column_titles=readable_model_names,
-        row_titles=readable_dataset_names,
+        rows=2 * num_datasets,
+        cols=len(models) // 2,
+        subplot_titles=readable_model_names,
+        # row_titles=readable_dataset_names,
         shared_xaxes=True,
         shared_yaxes=False,
-        horizontal_spacing=0.005,
-        vertical_spacing=0.005,
+        horizontal_spacing=0.01,
+        vertical_spacing=0.05,
     )
     for b, dataset in tqdm(enumerate(datasets), total=num_datasets):
         exo_runs = get_runs(
@@ -473,10 +473,10 @@ def visualize_look_back_window_difference(
         all_metrics.append((exo_mean_dict, exo_std_dict, endo_mean_dict, endo_std_dict))
 
         factor = 100 if metric == "SMAPE" else 1
-        row = b + 1
 
         for m, model in enumerate(models):
-            col = m + 1
+            row = 2 * b + m // 7 + 1
+            col = m % 7 + 1
             base_color = model_colors[model]
 
             # --- build series for both settings ---
@@ -576,9 +576,9 @@ def visualize_look_back_window_difference(
                     col=col,
                 )
 
-    subplot_size = 300  # pixels per subplot
-    cols = len(models)
-    rows = num_datasets
+    subplot_size = 500  # pixels per subplot
+    cols = len(models) // 2
+    rows = 2 * num_datasets
 
     # Account for spacing and margins
     total_width = cols * subplot_size
@@ -598,25 +598,53 @@ def visualize_look_back_window_difference(
 
     fig.update_xaxes(row=1, col=1, scaleanchor="y", scaleratio=1)
 
-    # LEGEND POSITION
+    for i, ann in enumerate(fig.layout.annotations):
+        # make only the subplot titles bigger (they come from subplot_titles=...)
+        if ann.text in readable_model_names:  # titles you passed in
+            fig.layout.annotations[i].update(
+                text=f"<b>{ann.text}</b>",
+                font=dict(size=28, family="Arial"),  # adjust size as you like
+            )
+
     fig.update_layout(
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.25,
+            y=-0.12,
             xanchor="center",
             x=0.5,
-            title_text="Model",
-            itemsizing="trace",
-        ),
-        margin=dict(b=30),
+            font=dict(size=28),  # legend text size
+            itemsizing="constant",
+        )
     )
-    fig.update_layout(legend=dict(font=dict(size=16)))
 
-    for ann in fig["layout"]["annotations"]:
-        if ann["text"] in readable_dataset_names:
-            ann["font"] = dict(size=TITLE_SIZE, color="black", family="Arial")
-            ann["text"] = f"<b>{ann['text']}</b>"
+    fig.update_xaxes(tickfont=dict(size=22), row="all", col="all")
+    fig.update_yaxes(tickfont=dict(size=22), row="all", col="all")
+
+    fig.update_xaxes(tickvals=x_pos, ticktext=x_text, row="all", col="all")
+
+    fig.add_annotation(
+        text="<b>Lookback Window</b>",
+        x=0.5,
+        xref="paper",
+        y=0,
+        yref="paper",
+        yshift=-40,
+        showarrow=False,
+        font=dict(size=26),
+    )
+
+    fig.add_annotation(
+        text="<b>MASE</b>",
+        x=0,
+        xref="paper",
+        xshift=-50,
+        y=0.5,
+        yref="paper",
+        textangle=-90,
+        showarrow=False,
+        font=dict(size=26),
+    )
 
     if save_html:
         plot_name = f"{dataset}_{use_heart_rate}_{use_dynamic_features}_{'_'.join(models)}_{'_'.join([str(lbw) for lbw in look_back_window])}_{'_'.join([str(pw) for pw in prediction_window])}"
