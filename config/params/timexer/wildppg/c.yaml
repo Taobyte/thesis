@@ -2,10 +2,10 @@
 
 model:
   model:
-    patch_len: 10
+    patch_len: 5 # 10
     d_model: 256
     d_ff: 128
-    e_layers: 1
+    e_layers: 2 # 1
     dropout: 0.199
   pl_model:
-    learning_rate: 0.0002
+    learning_rate: 0.00004 # 0.0002
