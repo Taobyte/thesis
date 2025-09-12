@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 
@@ -42,7 +43,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             [
                 torch.nn.Parameter(
                     torch.randn(
-                        look_back_channel_dim,
+                        target_channel_dim,
                     )
                 )
                 for _ in range(n_states)
@@ -51,7 +52,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         # Covariance matrices for each state (using Cholesky decomposition for positive definiteness)
         self.covar_chol = torch.nn.ParameterList(
             [
-                torch.nn.Parameter(torch.randn((look_back_channel_dim,)))
+                torch.nn.Parameter(torch.randn((target_channel_dim,)))
                 for _ in range(n_states)
             ]
         )
@@ -61,7 +62,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             [
                 torch.nn.Linear(
                     look_back_window * look_back_channel_dim,
-                    look_back_channel_dim,
+                    target_channel_dim,
                     bias=False,
                 )
                 for _ in range(n_states)
@@ -69,7 +70,8 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         )
 
     def get_transition_matrix(self):
-        return F.softmax(self.transition_matrix, dim=1)  # Each row sums to 1
+        logits = self.transition_matrix
+        return F.softmax(logits, dim=1)  # Each row sums to 1
 
     def get_initial_distribution(self):
         return F.softmax(self.initial_distribution, dim=0)
@@ -77,15 +79,6 @@ class LinearAutoregressiveHMM(torch.nn.Module):
     def get_covariance_matrices(self):
         """Get positive definite covariance matrices using Cholesky decomposition"""
         covars = [torch.diag(F.softplus(v) + self.sigma_min) for v in self.covar_chol]
-        #  for chol in self.covar_chol:
-        #      # Make sure diagonal is positive
-        #      chol_tril = torch.tril(chol)
-        #      diag_indices = torch.arange(chol_tril.size(0))
-        #      chol_tril[diag_indices, diag_indices] = torch.exp(
-        #          chol_tril[diag_indices, diag_indices]
-        #      )
-        #      covar = chol_tril @ chol_tril.T
-        #      covars.append(covar)
         return covars
 
     def get_inputs(self, emissions: Tensor, is_series: bool = True):
@@ -120,10 +113,12 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         Returns: (B, L, n_states)
         """
 
-        B, L, C = emissions.shape
+        B, L, _ = emissions.shape
 
         inputs = self.get_inputs(emissions, is_series=is_series)
-        targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
+        targets = rearrange(
+            emissions[:, :, : self.target_channel_dim], "B L C -> (B L) C"
+        )  # (B*L, C)
 
         log_probs = torch.zeros(B, L, self.n_states, device=emissions.device)
 
@@ -135,7 +130,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             )  # (B,C)
             covar = covars[state]  # (C, C)
             covar_reg = covar + self.jitter * torch.eye(
-                C, device=covar.device
+                self.target_channel_dim, device=covar.device
             ).unsqueeze(0).expand(B * L, -1, -1)
 
             # add linear autoregressive compontent b=B*L d=C
@@ -143,52 +138,12 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             mean = hidden_state_mean + ar_component
 
             dist = torch.distributions.MultivariateNormal(mean, covar_reg)
+
             log_prob = dist.log_prob(targets)  # (B*L, )
             log_prob = rearrange(log_prob, "(B L) -> B L", L=L)
             log_probs[:, :, state] = log_prob
 
         return log_probs
-
-    # def get_gaussian_log_likelihood(self, emissions: Tensor, is_series: bool = False):
-    #    """
-    #    emissions: (B, L, C)
-    #    returns: log_probs: (B, L, K)
-    #    """
-    #    B, L, C = emissions.shape
-    #    device = emissions.device
-
-    #    # Inputs X_{t-1:t-L} flattened
-    #    inputs = self.get_inputs(emissions, is_series=is_series)  # (B*L, L*C)
-    #    targets = rearrange(emissions, "B L C -> (B L) C")  # (B*L, C)
-
-    #    # Stack per-state params
-    #    means = torch.stack(list(self.means), dim=0)  # (K, C)
-    #    sigmas = (
-    #        F.softplus(torch.stack(list(getattr(self, "covar_chol")))) + self.sigma_min
-    #    )  # (K, C)
-
-    #    # Stack Linear weights into one tensor: W_weight[k] is (LC, C)
-    #    W_weight = torch.stack([w.weight.T for w in self.W], dim=0)  # (K, L*C, C)
-
-    #    # AR outputs for ALL states at once: (B*L, K, C)
-    #    # einsum: (b l_c) x (k l_c c) -> (b k c)
-    #    ar_all = torch.einsum("bf,kfc->bkc", inputs, W_weight)
-
-    #    # Full per-state means for ALL states: (B*L, K, C)
-    #    means_all = means.unsqueeze(0) + ar_all
-
-    #    # Diagonal Gaussian log prob, vectorized
-    #    diff = targets.unsqueeze(1) - means_all  # (B*L, K, C)
-    #    z = (diff / sigmas.unsqueeze(0)) ** 2  # (B*L, K, C)
-
-    #    log_det = 2.0 * torch.log(sigmas).sum(dim=-1)  # (K,)
-    #    const = C * torch.log(torch.tensor(2.0 * torch.pi, device=device))
-
-    #    log_prob = -0.5 * (z.sum(dim=-1) + log_det.unsqueeze(0) + const)  # (B*L, K)
-
-    #    log_probs = log_prob.view(B, L, self.n_states)  # (B, L, K)
-
-    #    return log_probs
 
     def forward_algorithm_series(self, emissions: Tensor, lengths: Tensor):
         """
@@ -286,7 +241,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
         # Get transition matrix
         trans_matrix = self.get_transition_matrix()  # (n_states, n_states)
 
-        preds = []
+        preds: list[Tensor] = []
         current_emissions = emissions.clone()
 
         for _ in range(self.prediction_window):
@@ -311,13 +266,20 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             state_mean = state_means[most_likely_state]  # (B, C)
 
             current_pred = ar_pred + state_mean  # (B, C)
-            preds.append(current_pred.unsqueeze(1))  # (B, 1, C)
+            current_pred = current_pred.unsqueeze(1)
+            preds.append(current_pred)  # (B, 1, C)
+
+            if self.look_back_channel_dim > self.target_channel_dim:
+                last_exo = current_emissions[:, -1:, self.target_channel_dim :]
+                next_emission = torch.cat([current_pred, last_exo], dim=-1)
+            else:
+                next_emission = current_pred
 
             # Update emissions for next prediction
             current_emissions = torch.cat(
                 [
                     current_emissions[:, -(self.look_back_window - 1) :, :],
-                    current_pred.unsqueeze(1),
+                    next_emission,
                 ],
                 dim=1,
             )
@@ -388,7 +350,7 @@ class HMM(BaseLightningModule):
             raise NotImplementedError()
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=0.5, patience=3
+            optimizer, factor=0.5, patience=3, min_lr=1e-5
         )
         return {
             "optimizer": optimizer,

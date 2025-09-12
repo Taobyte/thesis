@@ -433,7 +433,10 @@ def visualize_look_back_window_difference(
     x_pos = list(range(len(x_vals)))
     x_text = [str(v) for v in x_vals]
 
-    readable_dataset_names = [dataset_to_name[d] for d in datasets]
+    row_names: list[str] = []
+    for dataset in datasets:
+        row_names.append(f"BL {dataset_to_name[dataset]}")
+        row_names.append(f"DL {dataset_to_name[dataset]}")
     readable_model_names = [model_to_name[m] for m in models]
     metric = "MASE"
 
@@ -443,7 +446,7 @@ def visualize_look_back_window_difference(
         rows=2 * num_datasets,
         cols=len(models) // 2,
         subplot_titles=readable_model_names,
-        # row_titles=readable_dataset_names,
+        row_titles=row_names,
         shared_xaxes=True,
         shared_yaxes=False,
         horizontal_spacing=0.01,
@@ -576,36 +579,59 @@ def visualize_look_back_window_difference(
                     col=col,
                 )
 
+    # figure dimensions
     subplot_size = 500  # pixels per subplot
     cols = len(models) // 2
     rows = 2 * num_datasets
 
-    # Account for spacing and margins
     total_width = cols * subplot_size
     total_height = rows * subplot_size
 
-    # Update layout with proper dimensions
     fig.update_layout(
         width=total_width,
         height=total_height,
     )
 
+    # x and y-axis ticks
     fig.update_xaxes(
-        tickvals=x_pos,  # positions where ticks appear
-        ticktext=x_text,  # labels for those ticks
-        scaleanchor=None,
+        tickvals=x_pos,
+        ticktext=x_text,
+        showticklabels=True,
+        tickfont=dict(size=16),  # label text size
+        ticks="outside",  # draw tick marks outside
+        ticklen=10,  # tick mark length (px)
+        tickwidth=3,  # tick mark thickness (px)
+        row="all",
+        col="all",
+    )
+
+    fig.update_yaxes(
+        showticklabels=True,
+        tickfont=dict(size=28),  # label text size
+        ticks="outside",
+        ticklen=10,
+        tickwidth=3,
+        nticks=4,  # fewer ticks (or use tickmode="linear", dtick=... )
+        row="all",
+        col="all",
     )
 
     fig.update_xaxes(row=1, col=1, scaleanchor="y", scaleratio=1)
 
+    # larger + bold annotations
     for i, ann in enumerate(fig.layout.annotations):
-        # make only the subplot titles bigger (they come from subplot_titles=...)
-        if ann.text in readable_model_names:  # titles you passed in
+        if ann.text in readable_model_names:
             fig.layout.annotations[i].update(
                 text=f"<b>{ann.text}</b>",
-                font=dict(size=28, family="Arial"),  # adjust size as you like
+                font=dict(size=28, family="Arial"),
+            )
+        if ann.text in row_names:
+            fig.layout.annotations[i].update(
+                text=f"<b>{ann.text}</b>",
+                font=dict(size=32, family="Arial"),
             )
 
+    # legend position + size
     fig.update_layout(
         legend=dict(
             orientation="h",
@@ -613,37 +639,9 @@ def visualize_look_back_window_difference(
             y=-0.12,
             xanchor="center",
             x=0.5,
-            font=dict(size=28),  # legend text size
+            font=dict(size=28),
             itemsizing="constant",
         )
-    )
-
-    fig.update_xaxes(tickfont=dict(size=22), row="all", col="all")
-    fig.update_yaxes(tickfont=dict(size=22), row="all", col="all")
-
-    fig.update_xaxes(tickvals=x_pos, ticktext=x_text, row="all", col="all")
-
-    fig.add_annotation(
-        text="<b>Lookback Window</b>",
-        x=0.5,
-        xref="paper",
-        y=0,
-        yref="paper",
-        yshift=-40,
-        showarrow=False,
-        font=dict(size=26),
-    )
-
-    fig.add_annotation(
-        text="<b>MASE</b>",
-        x=0,
-        xref="paper",
-        xshift=-50,
-        y=0.5,
-        yref="paper",
-        textangle=-90,
-        showarrow=False,
-        font=dict(size=26),
     )
 
     if save_html:
