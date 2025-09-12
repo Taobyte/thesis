@@ -2,7 +2,7 @@
 
 model:
   model:
-    state_dim: 39
+    state_dim: 200 # 39
   pl_model:
     learning_rate: 0.001
     weight_decay: 0.027

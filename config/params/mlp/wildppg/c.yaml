@@ -3,7 +3,7 @@
 model:
   model:
    hid_dim: 128
-   n_hid_layers: 1
+   n_hid_layers: 3
    dropout: 0.226
   
   pl_model:
