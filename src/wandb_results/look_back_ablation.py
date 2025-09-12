@@ -6,6 +6,7 @@ import plotly.io as pio
 from plotly.subplots import make_subplots
 from tqdm import tqdm
 from typing import Tuple
+from collections import defaultdict
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
@@ -99,13 +100,8 @@ def summarize_one_dataset(
       - "same_hypers": Δ computed at the exo best lbw/pw (falls back if missing)
     """
     goal = _metric_goal(metric_key)
-    row = {}
+    cols: dict[str, list[float]] = defaultdict(list)
     for model in models:
-        # Guard for missing models
-        if model not in exo_mean_dict or model not in endo_mean_dict:
-            row[model] = "—"
-            continue
-
         exo_best, exo_lbw, exo_pw = _best_from_nested(
             exo_mean_dict[model], metric_key, goal
         )
@@ -113,13 +109,8 @@ def summarize_one_dataset(
             endo_mean_dict[model], metric_key, goal
         )
 
-        if exo_best is None and endo_best is None:
-            row[model] = "—"
-            continue
-
         # Choose how to compute Δ
         if diff_mode == "same_hypers" and exo_lbw is not None:
-            # compute endo at exo's best hypers if available
             try:
                 endo_same = endo_mean_dict[model][exo_lbw][exo_pw][metric_key]
             except Exception:
@@ -130,55 +121,30 @@ def summarize_one_dataset(
                 else None
             )
         else:
-            # best_vs_best (default)
             delta = (
                 (exo_best - endo_best)
                 if (exo_best is not None and endo_best is not None)
                 else None
             )
 
-        # Get stds at the corresponding best points
-        exo_std = (
-            _std_at(exo_std_dict.get(model, {}), exo_lbw, exo_pw, metric_key)
-            if exo_lbw is not None
-            else None
+        best = exo_best if delta >= 0 else endo_best
+        best_lbw = exo_lbw if delta >= 0 else endo_lbw
+        mase = (
+            exo_mean_dict[model][exo_lbw][exo_pw]["MASE"]
+            if delta >= 0
+            else endo_mean_dict[model][endo_lbw][endo_pw]["MASE"]
         )
 
-        # Build pretty cell string (favor exo since that's the richer model)
-        def fmt(v):
-            if v is None:
-                return "—"
-            # Percent-like display for DA/SMAPE if they are in 0..1 range
-            if metric_key in ("DA",) and 0 <= v <= 1:
-                return f"{v * 100:.1f}%"
-            return f"{v:.4f}"
+        dir = (
+            exo_mean_dict[model][exo_lbw][exo_pw]["DIRACC"]
+            if delta >= 0
+            else endo_mean_dict[model][endo_lbw][endo_pw]["DIRACC"]
+        )
 
-        parts = []
-        # score ± std for exo
-        score_part = fmt(exo_best)
-        if exo_std is not None:
-            score_part += f" ± {fmt(exo_std)}"
-        parts.append(score_part)
-
-        # lbw/pw
-        if exo_lbw is not None:
-            if show_pw and exo_pw is not None:
-                parts.append(f"lbw={exo_lbw}, pw={exo_pw}")
-            else:
-                parts.append(f"lbw={exo_lbw}")
-
-        # Δ
-        if delta is not None:
-            # Note: for error metrics (min), negative Δ means exo is better
-            # for DA (max), positive Δ means exo is better
-            parts.append(f"Δ(exo-endo)={delta:+.4f}")
-        else:
-            parts.append("Δ=—")
-
-        row[model] = " | ".join(parts)
+        cols[model] = [best, delta, mase, dir, best_lbw]
 
     # Single-row DataFrame labeled by dataset
-    df = pd.DataFrame([row], index=[dataset_label])
+    df = pd.DataFrame.from_dict(cols)
     return df
 
 

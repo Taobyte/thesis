@@ -129,6 +129,8 @@ def main():
         bds_test(datamodules)
     elif args.type == "chaos":
         chaos_script(datamodules)
+    elif args.type == "scatter":
+        scatter_plots(datamodules)
 
 
 def viz_exo_wildppg():
@@ -518,8 +520,8 @@ def granger_test(datamodules: List[LightningDataModule]):
 
 
 def scatter_plots(datamodules: List[LightningDataModule]):
-    lags = 12
-    n_series_per_dataset = 1
+    lags = 10
+    n_series_per_dataset = 1 if len(datamodules) == 3 else 5
     n_dataset = len(datamodules)
     fig = make_subplots(
         rows=n_series_per_dataset * n_dataset,

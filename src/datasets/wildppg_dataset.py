@@ -41,7 +41,7 @@ class WildPPGDataset(HRDataset):
             # Load PPG signal and heart rate values
             ppg = data_all["data_ppg_ankle"][participant, 0]
             hr = data_all["data_bpm_values"][participant][0].astype(float)
-            activity = data_all["data_imu_wrist"][participant][0]
+            activity = data_all["data_imu_ankle"][participant][0]
             # temperature = data_all["data_temp_chest"][participant][0]
             # altitude = data_all["data_altitude_values"][participant][0]
             # temperature = data_all["data_imu_ankle"][participant][0]

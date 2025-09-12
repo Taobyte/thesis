@@ -55,6 +55,10 @@ class Linear(BaseLightningModule):
         datamodule = self.trainer.datamodule
         X_train, y_train, X_val, y_val = datamodule.get_numpy_dataset()
 
+        import pdb
+
+        pdb.set_trace()
+
         X_train = rearrange(X_train, "B T C -> B (T C)")
         y_train = rearrange(y_train, "B T C -> B (T C)")
 
