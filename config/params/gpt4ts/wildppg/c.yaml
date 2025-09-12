@@ -3,8 +3,8 @@
 model:
   model:
     d_model: 128
-    d_ff: 128
-    gpt_layers: 2
+    d_ff: 256 # 128
+    gpt_layers: 8 # 2
     dropout: 0.316
   
   pl_model:
