@@ -320,6 +320,7 @@ class Model(BaseKalmanFilter):
         target_channel_dim: int = 1,
         look_back_window: int = 5,
         prediction_window: int = 3,
+        explicit_covariance: bool = False,
     ):
         control_dim = 0
         if use_dynamic_features:
@@ -329,7 +330,9 @@ class Model(BaseKalmanFilter):
 
         super().__init__(state_dim=state_dim, obs_dim=obs_dim, control_dim=control_dim)
 
-        self.transition_model = LinearTransitionModule(state_dim, control_dim)
+        self.transition_model = LinearTransitionModule(
+            state_dim, control_dim, explicit_covariance=explicit_covariance
+        )
         self.observation_model = LinearObservationModule(state_dim, obs_dim)
         self.innovation_model = ClassicalInnovationModule(obs_dim)
         self.smoothness_weight = smoothness_weight
@@ -689,4 +692,17 @@ class KalmanFilter(BaseLightningModule):
             optimizer = torch.optim.LBFGS(
                 self.model.parameters(), lr=self.learning_rate
             )
-        return optimizer
+        else:
+            optimizer = torch.optim.SGD(
+                self.model.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss"},
+        }

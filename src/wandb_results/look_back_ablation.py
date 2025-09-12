@@ -143,7 +143,6 @@ def summarize_one_dataset(
 
         cols[model] = [best, delta, mase, dir, best_lbw]
 
-    # Single-row DataFrame labeled by dataset
     df = pd.DataFrame.from_dict(cols)
     return df
 
@@ -154,7 +153,6 @@ def summarize_all_datasets(
     metric_key: str,
     per_dataset_metrics: list,  # list of tuples: (exo_mean, exo_std, endo_mean, endo_std)
     diff_mode="best_vs_best",
-    to_excel_path=None,
 ) -> pd.DataFrame:
     """
     dataset_labels: ["DaLiA", "WildPPG", "Capture24"]  (same order as your loop)
@@ -177,10 +175,6 @@ def summarize_all_datasets(
             )
         )
     big = pd.concat(tables, axis=0)
-
-    if to_excel_path:
-        with pd.ExcelWriter(to_excel_path) as xw:
-            big.to_excel(xw, sheet_name=metric_key)
 
     return big
 
@@ -524,7 +518,7 @@ def visualize_look_back_window_difference(
                     x=x_pos,
                     y=exo_means,
                     mode="lines+markers",
-                    name="endo_exo",
+                    name="Endogenous & Exogenous",
                     line=dict(color=base_color, width=LINE_WIDTH),
                     marker=dict(size=MARKER_SIZE),
                     opacity=LINE_OPACITY,
@@ -556,7 +550,7 @@ def visualize_look_back_window_difference(
                     x=x_pos,
                     y=endo_means,
                     mode="lines+markers",
-                    name="endo_only",
+                    name="Endogenous Only",
                     line=dict(color=base_color, width=LINE_WIDTH, dash="dash"),
                     marker=dict(size=MARKER_SIZE),
                     opacity=LINE_OPACITY,
@@ -599,12 +593,10 @@ def visualize_look_back_window_difference(
     fig.update_xaxes(
         tickvals=x_pos,  # positions where ticks appear
         ticktext=x_text,  # labels for those ticks
-        scaleanchor="y",
-        scaleratio=1,
+        scaleanchor=None,
     )
 
-    # Force square aspect ratio - ONLY anchor x to y, not both ways
-    fig.update_xaxes(scaleanchor="y", scaleratio=1)
+    fig.update_xaxes(row=1, col=1, scaleanchor="y", scaleratio=1)
 
     # LEGEND POSITION
     fig.update_layout(
@@ -649,7 +641,6 @@ def visualize_look_back_window_difference(
         metric_key=table_metric,
         per_dataset_metrics=all_metrics,
         diff_mode="best_vs_best",  # or "same_hypers"
-        to_excel_path=None,
     )
 
     latex_str = table.to_latex(

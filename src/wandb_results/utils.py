@@ -102,15 +102,15 @@ def get_metrics(
                             if metric_name in metrics_to_keep:
                                 if isinstance(metric_value, str):
                                     print(
-                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS STRING {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} fold {fold_nr}"
                                     )
                                 elif np.isinf(metric_value):
                                     print(
-                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS INF {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} fold {fold_nr}"
                                     )
                                 elif np.isnan(metric_value):
                                     print(
-                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed}"
+                                        f"VALUE IS NAN {metric_value} for model {model} lbw {lbw} pw {pw} seed {seed} fold {fold_nr}"
                                     )
                                 else:
                                     metric_list[metric_name].append(metric_value)
