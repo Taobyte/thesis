@@ -1,16 +1,16 @@
 # @package _global_
 
-look_back_window: 14
+look_back_window: 30
 
 model:
-  pl_model:
-    learning_rate: 0.0007
-    weight_decay: 0.0001
   model:
-    stack_types: ["identity", "exogenous_wavenet"]
-    
-    n_hidden: 455
-    kernel_size: 5
-
-    dropout_prob_theta: 0.209
-    dropout_prob_exogenous: 0.07
+    dropout_prob_exogenous: 0.1147
+    dropout_prob_theta: 0.0543
+    kernel_size: 3
+    n_hidden: 500
+    stack_types:
+    - identity
+    - exogenous_wavenet
+  pl_model:
+    learning_rate: 0.0011
+    weight_decay: 0.0

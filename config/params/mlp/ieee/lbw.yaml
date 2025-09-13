@@ -1,14 +1,12 @@
 # @package _global_
 
-look_back_window: 19
+look_back_window: 5
 
 model:
   model:
-   hid_dim: 128
-   n_hid_layers: 3
-   dropout: 0.073
-   activation: "tanh"
+   hid_dim: 256
+   n_hid_layers: 2
+   dropout: 0.038
   
   pl_model:
-    learning_rate: 0.003
-    weight_decay: 1e-6
+    learning_rate: 0.002

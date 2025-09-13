@@ -4,9 +4,10 @@ look_back_window: 5
 
 model:
   pl_model:
-    optimizer_name: adamw
+    optimizer_name: adam
     learning_rate: 0.1 
-    weight_decay: 1e-06
+    weight_decay: 1e-6
   
   model:
-    n_states: 8
+    n_states: 16
+

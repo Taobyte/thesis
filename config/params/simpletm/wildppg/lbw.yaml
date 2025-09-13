@@ -1,12 +1,12 @@
 # @package _global_
 
-look_back_window: 12
+look_back_window: 20
 
 model:
   model:
-    d_model: 256
-    d_ff: 512
-    dropout: 0.195
-    geomattn_dropout: 0.390
+    d_model: 64 # 256
+    d_ff: 64
+    dropout: 0.1 # 0.254
+    geomattn_dropout: 0.1 # 0.266
   pl_model:
-    learning_rate: 0.014
+    learning_rate: 0.001 # 0.0066

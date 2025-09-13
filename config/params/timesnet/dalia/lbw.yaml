@@ -1,11 +1,11 @@
 # @package _global_
 
-look_back_window: 19
+look_back_window: 20
 
 model:
   pl_model:
-    learning_rate: 0.0042
+    learning_rate: 0.0046
   model:
     d_model: 64
-    d_ff: 128
-    dropout: 0.073
+    d_ff: 64
+    dropout: 0.1009

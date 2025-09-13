@@ -1,12 +1,12 @@
 # @package _global_
 
-look_back_window: 14
+look_back_window: 30
 
 model:
   model:
-   hid_dim: 256
+   hid_dim: 128
    n_hid_layers: 3
-   dropout: 0.026
+   dropout: 0.1108
   
   pl_model:
-    learning_rate: 0.0002
+    learning_rate: 0.001

@@ -1,10 +1,10 @@
 # @package _global_
 
-look_back_window: 50
+look_back_window: 20
 
 model:
   model:
-    state_dim: 16
+    state_dim: 108
   pl_model:
-    learning_rate: 0.008
-    weight_decay: 0.00003
+    learning_rate: 0.004
+    weight_decay: 0.0

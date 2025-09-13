@@ -156,11 +156,11 @@ def get_runs(
 
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters=filters)
+    runs = list(runs)
     print(f"Found {len(runs)} runs.")
 
     # assert len(runs) > 0, "No runs were found!"
     # assert len(runs) % 3 == 0, "Attention, length of runs is not divisible by 3!"
-    print(f"Length of the runs {len(runs)}")
     return runs
 
 

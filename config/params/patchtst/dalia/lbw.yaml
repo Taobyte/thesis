@@ -1,16 +1,16 @@
 # @package _global_
 
-look_back_window: 48
+look_back_window: 60
 
 model:
   model:
-    e_layers: 4
-    d_model: 32
-    d_ff: 256
-    dropout: 0.0801
+    e_layers: 2
+    d_model: 64
+    d_ff: 128
+    dropout: 0.041
     n_heads: 4
-    patch_len: 15 
-    stride: 3
+    patch_len: 11 
+    stride: 6
 
   pl_model:
-    learning_rate: 0.0003
+    learning_rate: 0.0001

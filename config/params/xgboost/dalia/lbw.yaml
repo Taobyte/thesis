@@ -4,10 +4,10 @@ look_back_window: 10
 
 model:
   model:
-    n_estimators: 740
-    max_depth: 9
-    reg_alpha: 0.1709
-    reg_lambda: 0.7477
-    subsample: 0.932
-    colsample_bytree: 0.964
-    learning_rate: 0.014
+    n_estimators: 325
+    max_depth: 8
+    reg_alpha: 0.333
+    reg_lambda: 0.003
+    subsample: 0.718
+    colsample_bytree: 0.939
+    learning_rate: 0.030

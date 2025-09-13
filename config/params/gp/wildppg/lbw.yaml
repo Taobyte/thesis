@@ -1,12 +1,12 @@
 # @package _global_
 
-look_back_window: 39
+look_back_window: 30
 
 model:
-  n_points: 500
+  n_points: 400
   model:
-    num_latents: 9
-    kernel: "matern"
+    num_latents: 4
+    kernel: "rbf"
     use_linear_trend: 1
   pl_model:
-    learning_rate: 0.0007
+    learning_rate: 0.0009

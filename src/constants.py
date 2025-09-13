@@ -34,15 +34,23 @@ MODELS: List[str] = [
 
 BASELINES: List[str] = [
     "linear",
+    "msar",
+    "mole",
     "kalmanfilter",
     "xgboost",
     "gp",
     "mlp",
-    "hlinear",
-    "hxgboost",
 ]
 
-DL: List[str] = ["timesnet", "simpletm", "adamshyper", "patchtst", "timexer", "gpt4ts"]
+DL: List[str] = [
+    "timesnet",
+    "simpletm",
+    "adamshyper",
+    "patchtst",
+    "timexer",
+    "gpt4ts",
+    "nbeatsx",
+]
 
 # Colors for plotting
 model_colors = {

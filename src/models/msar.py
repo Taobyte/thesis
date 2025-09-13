@@ -265,6 +265,7 @@ class LinearAutoregressiveHMM(torch.nn.Module):
             for i, state in enumerate(most_likely_state):
                 ar_pred_list.append(self.W[state](look_back_data_reshaped[i]))
             ar_pred = torch.stack(ar_pred_list, dim=0)
+
             # Add state-specific mean
             state_means = torch.stack(
                 [self.means[i] for i in range(self.n_states)], dim=0

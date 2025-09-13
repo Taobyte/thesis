@@ -5,7 +5,7 @@ import plotly.io as pio
 
 from plotly.subplots import make_subplots
 from tqdm import tqdm
-from typing import Tuple
+from typing import Tuple, Union
 from collections import defaultdict
 
 from src.wandb_results.utils import get_metrics, get_runs
@@ -100,7 +100,11 @@ def summarize_one_dataset(
       - "same_hypers": Δ computed at the exo best lbw/pw (falls back if missing)
     """
     goal = _metric_goal(metric_key)
-    cols: dict[str, list[float]] = defaultdict(list)
+    cols: dict[str, list[Union[float, str]]] = defaultdict(list)
+    cols["Dataset"] = [
+        rf"\multirow{{6}}{{*}}{{\rotatebox[origin=c]{{90}}{{{dataset_to_name[dataset_label]}}}}}"
+    ] + [""] * 5
+    cols["Metrics"] = ["MSE", "MAE", "DIR", "MASE", "IMPR", "LBW"]
     for model in models:
         exo_best, exo_lbw, exo_pw = _best_from_nested(
             exo_mean_dict[model], metric_key, goal
@@ -110,29 +114,36 @@ def summarize_one_dataset(
         )
 
         # Choose how to compute Δ
-        if diff_mode == "same_hypers" and exo_lbw is not None:
-            try:
-                endo_same = endo_mean_dict[model][exo_lbw][exo_pw][metric_key]
-            except Exception:
-                endo_same = None
-            delta = (
-                (exo_best - endo_same)
-                if (exo_best is not None and endo_same is not None)
-                else None
-            )
-        else:
-            delta = (
-                (exo_best - endo_best)
-                if (exo_best is not None and endo_best is not None)
-                else None
-            )
+        if diff_mode == "same_hypers":
+            if exo_lbw is None:
+                import pdb
 
-        best = exo_best if delta >= 0 else endo_best
-        best_lbw = exo_lbw if delta >= 0 else endo_lbw
+                pdb.set_trace()
+            endo_same = endo_mean_dict[model][exo_lbw][exo_pw][metric_key]
+            delta = endo_same - exo_best
+            denom = endo_same
+        else:
+            delta = endo_best - exo_best
+            denom = endo_best
+
+        # best = exo_best if delta < 0 else endo_best
+        best_lbw = exo_lbw if delta < 0 else endo_lbw
         mase = (
             exo_mean_dict[model][exo_lbw][exo_pw]["MASE"]
             if delta >= 0
             else endo_mean_dict[model][endo_lbw][endo_pw]["MASE"]
+        )
+
+        mse = (
+            exo_mean_dict[model][exo_lbw][exo_pw]["MSE"]
+            if delta >= 0
+            else endo_mean_dict[model][endo_lbw][endo_pw]["MSE"]
+        )
+
+        mae = (
+            exo_mean_dict[model][exo_lbw][exo_pw]["MAE"]
+            if delta >= 0
+            else endo_mean_dict[model][endo_lbw][endo_pw]["MAE"]
         )
 
         dir = (
@@ -141,7 +152,9 @@ def summarize_one_dataset(
             else endo_mean_dict[model][endo_lbw][endo_pw]["DIRACC"]
         )
 
-        cols[model] = [best, delta, mase, dir, best_lbw]
+        imprv = 100 * (delta / denom)
+
+        cols[f"{model_to_name[model]}"] = [mse, mae, dir, mase, imprv, best_lbw]
 
     df = pd.DataFrame.from_dict(cols)
     return df
@@ -661,20 +674,26 @@ def visualize_look_back_window_difference(
 
     table_metric = "MASE"  # or "MAE", "DA", "SMAPE", "MSE"
 
-    table = summarize_all_datasets(
-        dataset_labels=datasets,
-        models=models,
-        metric_key=table_metric,
-        per_dataset_metrics=all_metrics,
-        diff_mode="best_vs_best",  # or "same_hypers"
-    )
+    def print_latex_table(models: list[str]):
+        table = summarize_all_datasets(
+            dataset_labels=datasets,
+            models=models,
+            metric_key=table_metric,
+            per_dataset_metrics=all_metrics,
+            diff_mode="same_hypers",
+        )
 
-    latex_str = table.to_latex(
-        index=False,
-        escape=False,
-        header=True,
-        # column_format=column_format,
-        bold_rows=False,
-        # float_format="%.3f",
-    )
-    print(latex_str)
+        n_columns = len(table.columns)
+
+        latex_str = table.to_latex(
+            index=False,
+            escape=False,
+            header=True,
+            column_format="|".join(["c"] * n_columns),
+            bold_rows=False,
+            float_format="%.3f",
+        )
+        print(latex_str)
+
+    print_latex_table(BASELINES)
+    print_latex_table(DL)
