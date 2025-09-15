@@ -423,6 +423,7 @@ def visualize_look_back_window_difference(
     save_html: bool = False,
     use_std: bool = False,
     models: list[str] = MODELS,
+    metric: str = "MASE",
 ):
     num_datasets = len(datasets)
 
@@ -451,7 +452,6 @@ def visualize_look_back_window_difference(
         row_names.append(f"BL {dataset_to_name[dataset]}")
         row_names.append(f"DL {dataset_to_name[dataset]}")
     readable_model_names = [model_to_name[m] for m in models]
-    metric = "MASE"
 
     all_metrics = []
 

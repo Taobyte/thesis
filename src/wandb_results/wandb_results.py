@@ -116,15 +116,6 @@ def main():
     )
 
     parser.add_argument(
-        "--window_statistic",
-        choices=["mean", "var", "power"],
-        required=False,
-        default=None,
-        type=str,
-        help="Which window statistic for the heartrate value to use. Can be 'mean', 'var' or 'power'. Only supported by DaLia dataset at the moment.",
-    )
-
-    parser.add_argument(
         "--use_std",
         required=False,
         action="store_true",
