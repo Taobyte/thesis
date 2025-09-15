@@ -68,8 +68,8 @@ model_colors = {
     "timexer": "#999933",
     "gpt4ts": "#DDCC77",
     "nbeatsx": "#CC6677",
-    "dl": "#882255",
-    "baseline": "#AA4499",
+    "dl": "#0072B2",
+    "baseline": "#D55E00",
 }
 
 dataset_colors = {

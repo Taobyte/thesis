@@ -1,19 +1,43 @@
+import yaml
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
 from plotly.subplots import make_subplots
-from typing import List, DefaultDict
+from typing import List, DefaultDict, Tuple
 from collections import defaultdict
+from pathlib import Path
 
 from src.wandb_results.utils import get_metrics, get_runs
 from src.constants import (
     MODELS,
+    BASELINES,
+    DL,
     model_to_name,
     model_colors,
     model_to_abbr,
     dataset_to_name,
 )
+
+
+# --- style knobs (tweak here) ---
+SUBPLOT_TITLE_SIZE = 40  # larger subplot titles
+LINE_WIDTH = 8.0  # thicker median lines
+MARKER_SIZE = 16  # larger point markers
+LEGEND_Y = -0.18  # how far below the plot the legend sits
+
+
+def model_to_lbw(
+    dataset: str,
+    model: str,
+    params_path: str = "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config/params",
+) -> int:
+    yaml_file = Path(params_path) / model / dataset / "lbw.yaml"
+    if not yaml_file.is_file():
+        raise FileNotFoundError(f"Missing file: {yaml_file}")
+    with yaml_file.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return int(data["look_back_window"])
 
 
 def process_diff(
@@ -24,9 +48,6 @@ def process_diff(
     start_time: str,
     metric: str = "MSE",
 ):
-    assert len(look_back_window) == 1
-    lbw = look_back_window[0]
-
     runs_exo = get_runs(
         dataset,
         look_back_window,
@@ -49,6 +70,7 @@ def process_diff(
     cols = defaultdict(list)
     for pw in prediction_window:
         for m in models:
+            lbw = model_to_lbw(dataset, m)
             diffs: List[float] = []
             imprv: List[float] = []
             for fold_nr, seed_dict in exo_metrics[m][lbw][pw].items():
@@ -80,13 +102,6 @@ def process_diff(
     )  # keys in cols become columns; rows align to models
     df.index.name = "model"
     return df
-
-
-# --- style knobs (tweak here) ---
-SUBPLOT_TITLE_SIZE = 18  # larger subplot titles
-LINE_WIDTH = 4.0  # thicker median lines
-MARKER_SIZE = 9  # larger point markers
-LEGEND_Y = -0.18  # how far below the plot the legend sits
 
 
 def _add_models(fig, x, df: pd.DataFrame, col: int, showlegend: bool):
@@ -167,17 +182,16 @@ def horizon_exo_difference(
     start_time: str = "2025-08-28",
     use_std: bool = False,
 ):
-    models.remove("msar")  # we remove msar due to bad performance
     N_BASELINES = len(models) // 2
 
-    BASELINE_COLOR = "rgb(31,119,180)"  # blue
-    DL_COLOR = "rgb(214,39,40)"  # red
+    BASELINE_COLOR = model_colors["baseline"]
+    DL_COLOR = model_colors["dl"]
 
     # make subplot titles bold
     dataset_names = [f"<b>{dataset_to_name[d]}</b>" for d in datasets]
 
     fig = make_subplots(
-        rows=2,
+        rows=1,
         cols=len(datasets),
         shared_yaxes=False,
         subplot_titles=dataset_names,
@@ -233,18 +247,7 @@ def horizon_exo_difference(
         # Only show legend once
         showlegend = j == 1
 
-        # Baselines band + median
-        _add_band(
-            fig,
-            x_labels,
-            baseline_q25,
-            baseline_q75,
-            BASELINE_COLOR,
-            "Baselines",
-            1,
-            j,
-            showlegend,
-        )
+        # median
         _add_median(
             fig,
             x_labels,
@@ -255,13 +258,25 @@ def horizon_exo_difference(
             j,
             showlegend,
         )
-
-        # DL band + median
-        _add_band(fig, x_labels, dl_q25, dl_q75, DL_COLOR, "DL", 1, j, showlegend)
         _add_median(fig, x_labels, dl_median, DL_COLOR, "DL", 1, j, showlegend)
 
+        # band
+        if use_std:
+            _add_band(
+                fig,
+                x_labels,
+                baseline_q25,
+                baseline_q75,
+                BASELINE_COLOR,
+                "Baselines",
+                1,
+                j,
+                showlegend,
+            )
+            _add_band(fig, x_labels, dl_q25, dl_q75, DL_COLOR, "DL", 1, j, showlegend)
+
         # add all models two second row
-        _add_models(fig, x_labels, df, j, showlegend)
+        # _add_models(fig, x_labels, df, j, showlegend)
 
         # equally spaced categorical x
         fig.update_xaxes(
@@ -475,3 +490,261 @@ def visualize_exo_difference(
         # float_format="%.3f",
     )
     print(latex_str)
+
+
+def pw_ablation_table(
+    datasets: list[str],
+    models: list[str] = MODELS,
+    look_back_window: list[int] = [5, 10, 20, 30, 60],
+    prediction_window: list[int] = [1, 3, 5, 10, 20],
+    metric: str = "MSE",
+    start_time: str = "2025-8-28",
+    baselines: bool = False,
+    dls: bool = False,
+) -> None:
+    if baselines:
+        models = BASELINES
+    elif dls:
+        models = DL
+
+    cols = defaultdict(list)
+
+    for dataset in datasets:
+        cols["Dataset"].extend(
+            [
+                rf"\multirow{{15}}{{*}}{{\rotatebox[origin=c]{{90}}{{{dataset_to_name[dataset]}}}}}"
+            ]
+            + [""] * (len(prediction_window) * 3 - 1)
+        )
+        cols["Metric"].extend(["Endo", "Exo", "Imprv"] * len(prediction_window))
+        runs_exo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_exo",
+            start_time=start_time,
+        )
+        _, exo_mean, _ = get_metrics(runs_exo)
+
+        runs_endo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_only",
+            start_time=start_time,
+        )
+        _, endo_mean, _ = get_metrics(runs_endo)
+
+        for pw in prediction_window:
+            cols["PW"].extend([rf"\multirow{{3}}{{*}}{{{pw}}}"] + [""] * 2)
+            for model in models:
+                lbw = model_to_lbw(dataset, model)
+                exo_val = exo_mean[model][lbw][pw][metric]
+                endo_val = endo_mean[model][lbw][pw][metric]
+                imprv = 100 * (endo_val - exo_val) / endo_val
+                abbr = model_to_abbr[model]
+                cols[abbr].extend([endo_val, exo_val, imprv])
+
+    df = pd.DataFrame.from_dict(cols)
+    order = ["Dataset", "PW", "Metric"] + [model_to_abbr[m] for m in models]
+    df = df[order]
+
+    latex_str = df.to_latex(
+        index=False,
+        escape=False,
+        header=True,
+        column_format="|".join(["c"] * len(df.columns)),
+        bold_rows=False,
+        float_format="%.3f",
+    )
+    print(latex_str)
+
+
+def get_best_value(
+    metric_dict: dict,
+    std_dict: dict,
+    pw: int,
+    dataset: str,
+    models: list[str],
+    metric: str,
+) -> Tuple[float, float]:
+    best_val: float = np.inf
+    best_std: float = np.inf
+    for model in models:
+        lbw = model_to_lbw(dataset, model)
+        val = metric_dict[model][lbw][pw][metric]
+        if val < best_val:
+            best_val = val
+            best_std = std_dict[model][lbw][pw][metric]
+
+    return best_val, best_std
+
+
+def get_df(
+    prediction_window: list[int],
+    metric_dict: dict,
+    std_dict: dict,
+    dataset: str,
+    models: list[str],
+    metric: str,
+):
+    means: list[float] = []
+    stds: list[float] = []
+    for pw in prediction_window:
+        mean, std = get_best_value(metric_dict, std_dict, pw, dataset, models, metric)
+        means.append(mean)
+        stds.append(std)
+
+    d = {"means": means, "stds": stds}
+    df = pd.DataFrame.from_dict(d)
+    return df
+
+
+def best_model_viz_horizon_ablation(
+    datasets: list[str],
+    models: list[str] = MODELS,
+    look_back_window: list[int] = [5, 10, 20, 30, 60],
+    prediction_window: list[int] = [1, 3, 5, 10, 20],
+    metric: str = "MASE",
+    start_time: str = "2025-8-28",
+    use_std: bool = False,
+) -> None:
+    # Subplot titles: pretty dataset names
+    titles = [f"<b>{dataset_to_name[d]}</b>" for d in datasets]
+    fig = make_subplots(
+        rows=1, cols=len(datasets), subplot_titles=titles, horizontal_spacing=0.08
+    )
+
+    for j, dataset in enumerate(datasets, start=1):
+        # fetch metrics
+        runs_exo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_exo",
+            start_time=start_time,
+        )
+        _, exo_mean, exo_std = get_metrics(runs_exo)
+
+        runs_endo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_only",
+            start_time=start_time,
+        )
+        _, endo_mean, endo_std = get_metrics(runs_endo)
+
+        # best per horizon for baselines and DL
+        exo_bl_df = get_df(
+            prediction_window, exo_mean, exo_std, dataset, BASELINES, metric
+        )
+        endo_bl_df = get_df(
+            prediction_window, endo_mean, endo_std, dataset, BASELINES, metric
+        )
+        exo_dl_df = get_df(prediction_window, exo_mean, exo_std, dataset, DL, metric)
+        endo_dl_df = get_df(prediction_window, endo_mean, endo_std, dataset, DL, metric)
+
+        # make indices match horizons (1,3,5,10,20) for clarity
+        for _df in (exo_bl_df, endo_bl_df, exo_dl_df, endo_dl_df):
+            _df.index = prediction_window
+
+        x = prediction_window
+        x_labels = [str(x_val) for x_val in prediction_window]
+        bl_color = model_colors["baseline"]
+        dl_color = model_colors["dl"]
+        showlegend = j == 1
+
+        def add_line(x, y, stds, name, color, dash):
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                    mode="lines+markers",
+                    line=dict(width=LINE_WIDTH, color=color, dash=dash),
+                    marker=dict(size=MARKER_SIZE),
+                    name=name,
+                    showlegend=showlegend,
+                    error_y=(
+                        dict(type="data", array=stds, visible=True) if use_std else None
+                    ),
+                ),
+                row=1,
+                col=j,
+            )
+
+        # Baselines: Exo solid, Endo dashed
+        add_line(
+            x,
+            exo_bl_df["means"].values,
+            exo_bl_df["stds"].values,
+            "Baselines — Exo (best)",
+            bl_color,
+            "solid",
+        )
+        add_line(
+            x,
+            endo_bl_df["means"].values,
+            endo_bl_df["stds"].values,
+            "Baselines — Endo (best)",
+            bl_color,
+            "dash",
+        )
+
+        # DL: Exo solid, Endo dashed
+        add_line(
+            x,
+            exo_dl_df["means"].values,
+            exo_dl_df["stds"].values,
+            "DL — Exo (best)",
+            dl_color,
+            "solid",
+        )
+        add_line(
+            x,
+            endo_dl_df["means"].values,
+            endo_dl_df["stds"].values,
+            "DL — Endo (best)",
+            dl_color,
+            "dash",
+        )
+
+        # axes
+        fig.update_xaxes(
+            title_text="Horizon",
+            type="category",
+            categoryorder="array",
+            categoryarray=x_labels,
+            row=1,
+            col=j,
+        )
+        fig.update_yaxes(title_text=f"Best {metric}", row=1, col=j)
+
+    # layout & legend
+    fig.update_annotations(font=dict(size=SUBPLOT_TITLE_SIZE))
+    fig.update_layout(
+        legend=dict(
+            orientation="h", x=0.5, xanchor="center", y=LEGEND_Y, yanchor="top"
+        ),
+        margin=dict(b=120),
+    )
+    fig.update_xaxes(title_font=dict(size=14))
+    fig.update_yaxes(title_font=dict(size=14))
+
+    subplot_size = 500  # pixels per subplot
+    rows = 1
+    cols = len(datasets)
+
+    total_width = cols * subplot_size
+    total_height = rows * subplot_size
+
+    fig.update_layout(
+        width=total_width,
+        height=total_height,
+    )
+
+    fig.show()

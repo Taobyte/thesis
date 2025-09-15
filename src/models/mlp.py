@@ -93,7 +93,7 @@ class MLP(BaseLightningModule):
         self.criterion = get_loss_fn(loss)
         self.mae_loss = torch.nn.L1Loss()
 
-    def model_forward(self, look_back_window: Tensor):
+    def model_specific_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
     def model_specific_train_step(

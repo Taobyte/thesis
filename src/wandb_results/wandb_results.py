@@ -8,9 +8,10 @@ from src.wandb_results.metric_table import (
     compare_endo_exo_latex_tables,
     plot_best_lbw,
 )
-from src.wandb_results.activity_ablation import (
-    visualize_exo_difference,
+from src.wandb_results.horizon_ablation import (
     horizon_exo_difference,
+    pw_ablation_table,
+    best_model_viz_horizon_ablation,
 )
 from src.wandb_results.look_back_ablation import (
     visualize_look_back_window_difference,
@@ -41,9 +42,10 @@ def main():
             "best_lbw_latex",
             "viz",
             "delta",
-            "activity_ablation",
-            "norm_ablation",
+            "horizon_ablation",
+            "horizon_viz",
             "horizon_exo_diff",
+            "norm_ablation",
             "efficiency",
             "mitbih",
             "optuna",
@@ -135,6 +137,28 @@ def main():
         help="Plot table.",
     )
 
+    parser.add_argument(
+        "--baselines",
+        required=False,
+        action="store_true",
+        help="Use Baseline models.",
+    )
+
+    parser.add_argument(
+        "--dls",
+        required=False,
+        action="store_true",
+        help="Use DL models.",
+    )
+
+    parser.add_argument(
+        "--metric",
+        type=str,
+        required=False,
+        default="MASE",
+        help="Target metric for the plots.",
+    )
+
     args = parser.parse_args()
 
     if args.type == "table":
@@ -189,17 +213,34 @@ def main():
             start_time="2025-8-23",
             save_html=args.save_html,
         )
-    elif args.type == "activity_ablation":
-        visualize_exo_difference(
+    elif args.type == "horizon_ablation":
+        pw_ablation_table(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            metric=args.metric,
+            start_time="2025-09-10",
+            baselines=args.baselines,
+            dls=args.dls,
+        )
+    elif args.type == "horizon_exo_diff":
+        horizon_exo_difference(
             args.dataset,
             args.models,
             args.look_back_window,
             args.prediction_window,
             start_time="2025-09-10",
         )
-    elif args.type == "horizon_exo_diff":
-        horizon_exo_difference(
-            args.dataset, args.models, args.look_back_window, args.prediction_window
+    elif args.type == "horizon_viz":
+        best_model_viz_horizon_ablation(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            metric=args.metric,
+            start_time="2025-09-10",
+            use_std=args.use_std,
         )
     elif args.type == "norm_ablation":
         plot_normalization_table(
