@@ -19,6 +19,7 @@ class Model(torch.nn.Module):
         activation: str = "relu",
         dropout: float = 0.0,
         autoregressive: bool = False,
+        target_channel_dim: int = 1,
     ):
         super().__init__()
 
@@ -37,6 +38,7 @@ class Model(torch.nn.Module):
 
         self.prediction_window = prediction_window
         self.input_channels = input_channels
+        self.target_channel_dim = target_channel_dim
         in_dim = look_back_window * input_channels
         out_dim = (
             input_channels if autoregressive else prediction_window * input_channels
@@ -74,7 +76,7 @@ class Model(torch.nn.Module):
 
         pred = rearrange(pred, "B (T C) -> B T C", C=self.input_channels)
 
-        return pred
+        return pred[:, :, : self.target_channel_dim]
 
 
 class MLP(BaseLightningModule):

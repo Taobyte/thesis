@@ -28,6 +28,9 @@ LINE_WIDTH = 8
 MARKER_SIZE = 16
 LINE_OPACITY = 0.9
 
+SUBPLOT_TITLE_SIZE = 40
+LEGEND_Y = -0.18
+
 
 # Configure which direction is "better" for each metric
 METRIC_GOAL = {
@@ -415,6 +418,11 @@ def _alpha_fill(color_str, alpha=0.18):
     return "rgba(0,0,0,0.18)"
 
 
+# -----------------------------------------------------------------------------------------------------
+# INDIVIDUAL MODEL SUBPLOTS + BEST LBW TABLE
+# -----------------------------------------------------------------------------------------------------
+
+
 def visualize_look_back_window_difference(
     datasets: list[str],
     look_back_window: list[int],
@@ -697,3 +705,205 @@ def visualize_look_back_window_difference(
 
     print_latex_table(BASELINES)
     print_latex_table(DL)
+    print_latex_table(models)
+
+
+# -----------------------------------------------------------------------------------------------------
+# BEST MODEL LBW ABLATION VISUALIZATION
+# -----------------------------------------------------------------------------------------------------
+
+
+def get_best_value(
+    metric_dict: dict,
+    std_dict: dict,
+    lbw: int,
+    pw: int,
+    dataset: str,
+    models: list[str],
+    metric: str,
+) -> Tuple[float, float]:
+    best_val: float = np.inf
+    best_std: float = np.inf
+    for model in models:
+        val = metric_dict[model][lbw][pw][metric]
+        if val < best_val:
+            best_val = val
+            best_std = std_dict[model][lbw][pw][metric]
+
+    return best_val, best_std
+
+
+def get_df(
+    look_back_window: list[int],
+    metric_dict: dict,
+    std_dict: dict,
+    dataset: str,
+    models: list[str],
+    metric: str,
+    pw: int = 3,
+):
+    means: list[float] = []
+    stds: list[float] = []
+    for lbw in look_back_window:
+        mean, std = get_best_value(
+            metric_dict, std_dict, lbw, pw, dataset, models, metric
+        )
+        means.append(mean)
+        stds.append(std)
+
+    d = {"means": means, "stds": stds}
+    df = pd.DataFrame.from_dict(d)
+    return df
+
+
+def best_model_viz_lbw_ablation(
+    datasets: list[str],
+    models: list[str] = MODELS,
+    look_back_window: list[int] = [5, 10, 20, 30, 60],
+    prediction_window: list[int] = [3],
+    metric: str = "MASE",
+    start_time: str = "2025-8-28",
+    use_std: bool = False,
+) -> None:
+    assert len(prediction_window) == 1
+    pw = prediction_window[0]
+    titles = [f"<b>{dataset_to_name[d]}</b>" for d in datasets]
+    fig = make_subplots(
+        rows=1, cols=len(datasets), subplot_titles=titles, horizontal_spacing=0.08
+    )
+
+    for j, dataset in enumerate(datasets, start=1):
+        # fetch metrics
+        runs_exo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_exo",
+            start_time=start_time,
+            local_norm_endo_only=False,
+        )
+        _, exo_mean, exo_std = get_metrics(runs_exo)
+
+        runs_endo = get_runs(
+            dataset,
+            look_back_window,
+            prediction_window,
+            models,
+            experiment_name="endo_only",
+            start_time=start_time,
+            local_norm_endo_only=False,
+        )
+        _, endo_mean, endo_std = get_metrics(runs_endo)
+
+        # best per horizon for baselines and DL
+        exo_bl_df = get_df(
+            look_back_window, exo_mean, exo_std, dataset, BASELINES, metric, pw
+        )
+        endo_bl_df = get_df(
+            look_back_window, endo_mean, endo_std, dataset, BASELINES, metric, pw
+        )
+        exo_dl_df = get_df(look_back_window, exo_mean, exo_std, dataset, DL, metric, pw)
+        endo_dl_df = get_df(
+            look_back_window, endo_mean, endo_std, dataset, DL, metric, pw
+        )
+
+        # make indices match horizons (1,3,5,10,20) for clarity
+        for _df in (exo_bl_df, endo_bl_df, exo_dl_df, endo_dl_df):
+            _df.index = look_back_window
+
+        x = look_back_window
+        x_labels = [str(x_val) for x_val in look_back_window]
+        bl_color = model_colors["baseline"]
+        dl_color = model_colors["dl"]
+        showlegend = j == 1
+
+        def add_line(x, y, stds, name, color, dash):
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                    mode="lines+markers",
+                    line=dict(width=LINE_WIDTH, color=color, dash=dash),
+                    marker=dict(size=MARKER_SIZE),
+                    name=name,
+                    showlegend=showlegend,
+                    error_y=(
+                        dict(type="data", array=stds, visible=True) if use_std else None
+                    ),
+                ),
+                row=1,
+                col=j,
+            )
+
+        # Baselines: Exo solid, Endo dashed
+        add_line(
+            x,
+            exo_bl_df["means"].values,
+            exo_bl_df["stds"].values,
+            "Baselines — Exo (best)",
+            bl_color,
+            "solid",
+        )
+        add_line(
+            x,
+            endo_bl_df["means"].values,
+            endo_bl_df["stds"].values,
+            "Baselines — Endo (best)",
+            bl_color,
+            "dash",
+        )
+
+        # DL: Exo solid, Endo dashed
+        add_line(
+            x,
+            exo_dl_df["means"].values,
+            exo_dl_df["stds"].values,
+            "DL — Exo (best)",
+            dl_color,
+            "solid",
+        )
+        add_line(
+            x,
+            endo_dl_df["means"].values,
+            endo_dl_df["stds"].values,
+            "DL — Endo (best)",
+            dl_color,
+            "dash",
+        )
+
+        # axes
+        fig.update_xaxes(
+            title_text="Lookback Window",
+            type="category",
+            categoryorder="array",
+            categoryarray=x_labels,
+            row=1,
+            col=j,
+        )
+        fig.update_yaxes(title_text=f"Best {metric}", row=1, col=j)
+
+    # layout & legend
+    fig.update_annotations(font=dict(size=SUBPLOT_TITLE_SIZE))
+    fig.update_layout(
+        legend=dict(
+            orientation="h", x=0.5, xanchor="center", y=LEGEND_Y, yanchor="top"
+        ),
+        margin=dict(b=120),
+    )
+    fig.update_xaxes(title_font=dict(size=14))
+    fig.update_yaxes(title_font=dict(size=14))
+
+    subplot_size = 500  # pixels per subplot
+    rows = 1
+    cols = len(datasets)
+
+    total_width = cols * subplot_size
+    total_height = rows * subplot_size
+
+    fig.update_layout(
+        width=total_width,
+        height=total_height,
+    )
+
+    fig.show()

@@ -1,0 +1,28 @@
+defaults:
+  - base_module
+
+name: "ensemble"
+
+model:
+  _target_: src.models.ensemble.Model
+  hidden_dim: 16
+  look_back_window: ${look_back_window}
+  prediction_window: ${prediction_window}
+  target_channel_dim: ${dataset.datamodule.target_channel_dim}
+  look_back_channel_dim: ${dataset.datamodule.look_back_channel_dim}
+  freeze_experts: True
+  softmax_temp: 1.0
+
+  use_mixture_net: False
+
+pl_model: 
+  _target_: src.models.ensemble.Ensemble
+  learning_rate: 0.001 
+
+trainer:
+  max_epochs: 1000
+  use_early_stopping: True
+  patience: 5
+
+data: 
+  batch_size: 256

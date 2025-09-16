@@ -34,6 +34,8 @@ special_models: ["linear","xgboost", "exactgp", "dummy"] # these models are not 
 probabilistic_models: ["gp", "dklgp", "exactgp"] # these models output the mean & std as the prediction
 return_series_models: ["msar"]
 
+ensemble_models: ["linear", "kalmanfilter", "mole", "xgboost", "gp", "mlp"]
+
 look_back_window: 5
 prediction_window: 3
 

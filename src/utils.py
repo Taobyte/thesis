@@ -27,7 +27,10 @@ def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
 
 
 def setup(
-    config: DictConfig, wandb_logger: WandbLogger, run_name: str
+    config: DictConfig,
+    wandb_logger: WandbLogger,
+    run_name: str,
+    fitted_models: list[LightningModule] = [],
 ) -> Tuple[LightningDataModule, LightningModule, Trainer, list[Callback]]:
     return_whole_series = False
     if config.model.name in config.return_series_models:
@@ -39,6 +42,8 @@ def setup(
     )
 
     model_kwargs = get_model_kwargs(config, datamodule)
+    if fitted_models:  # needed for ensemble model
+        model_kwargs["fitted_models"] = fitted_models
     model = instantiate(config.model.model, **model_kwargs)
     pl_model = instantiate(
         config.model.pl_model, model=model, return_whole_series=return_whole_series

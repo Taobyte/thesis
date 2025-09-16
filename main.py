@@ -7,7 +7,13 @@ import lightning as L
 from omegaconf import DictConfig, OmegaConf
 from typing import Optional
 
-from src.train_test_tune import tune, tune_local, train_test_global, train_test_local
+from src.train_test_tune import (
+    tune,
+    tune_local,
+    train_test_global,
+    train_test_local,
+    train_test_global_ensemble,
+)
 from src.utils import (
     setup_wandb_logger,
     get_optuna_name,
@@ -44,7 +50,10 @@ def main(config: DictConfig) -> Optional[float]:
         return avg_val_loss
     else:
         if config.dataset.name in config.global_datasets:
-            train_test_global(config, wandb_logger, run_name)
+            if config.model.name == "ensemble":
+                train_test_global_ensemble(config, wandb_logger, run_name)
+            else:
+                train_test_global(config, wandb_logger, run_name)
         elif config.dataset.name in config.local_datasets:
             train_test_local(config, wandb_logger, run_name)
         else:

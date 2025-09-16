@@ -1,4 +1,3 @@
-import yaml
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -6,9 +5,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import List, DefaultDict, Tuple
 from collections import defaultdict
-from pathlib import Path
 
-from src.wandb_results.utils import get_metrics, get_runs
+from src.wandb_results.utils import get_metrics, get_runs, model_to_lbw
 from src.constants import (
     MODELS,
     BASELINES,
@@ -25,19 +23,6 @@ SUBPLOT_TITLE_SIZE = 40  # larger subplot titles
 LINE_WIDTH = 8.0  # thicker median lines
 MARKER_SIZE = 16  # larger point markers
 LEGEND_Y = -0.18  # how far below the plot the legend sits
-
-
-def model_to_lbw(
-    dataset: str,
-    model: str,
-    params_path: str = "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config/params",
-) -> int:
-    yaml_file = Path(params_path) / model / dataset / "lbw.yaml"
-    if not yaml_file.is_file():
-        raise FileNotFoundError(f"Missing file: {yaml_file}")
-    with yaml_file.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return int(data["look_back_window"])
 
 
 def process_diff(

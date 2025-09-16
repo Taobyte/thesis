@@ -1,3 +1,4 @@
+import yaml
 import pandas as pd
 import numpy as np
 import wandb
@@ -8,17 +9,23 @@ from src.utils import create_group_run_name
 from matplotlib import colors
 from tqdm import tqdm
 from collections import defaultdict
-from typing import Tuple, List
+from typing import Tuple
 from pathlib import Path
 
 from src.constants import dataset_to_name
 
 
-def local_vs_global_metrics(
-    dataset: str, look_back_window: List[int], prediction_window: List[int]
-):
-    # global_mean_metrics
-    pass
+def model_to_lbw(
+    dataset: str,
+    model: str,
+    params_path: str = "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config/params",
+) -> int:
+    yaml_file = Path(params_path) / model / dataset / "lbw.yaml"
+    if not yaml_file.is_file():
+        raise FileNotFoundError(f"Missing file: {yaml_file}")
+    with yaml_file.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return int(data["look_back_window"])
 
 
 def get_metrics(
@@ -136,8 +143,10 @@ def get_runs(
     start_time: str = "2025-6-12",
     window_statistic: str = None,
     experiment_name: str = "endo_exo",
+    local_norm_endo_only: bool = False,
 ):
     conditions = [
+        {"config.local_norm_endo_only": local_norm_endo_only},
         {"config.experiment.experiment_name": {"$in": [experiment_name]}},
         {"config.dataset.name": {"$in": [dataset]}},
         {"config.look_back_window": {"$in": look_back_window}},

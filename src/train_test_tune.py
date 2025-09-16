@@ -4,6 +4,7 @@ import pandas as pd
 import wandb
 import gc
 
+from lightning import LightningModule
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.loggers.logger import DummyLogger
 from omegaconf import OmegaConf
@@ -11,6 +12,9 @@ from omegaconf import DictConfig
 from hydra.utils import get_original_cwd
 from typing import Tuple, List, Optional
 from collections import defaultdict
+
+from hydra import compose
+from hydra.core.hydra_config import HydraConfig
 
 from src.utils import setup, delete_checkpoint
 
@@ -140,7 +144,81 @@ def train_test_global(
 
         return global_results, local_results
 
+    delete_checkpoint(trainer, checkpoint_callback)
+
     return None
+
+
+def compose_model_config(config_dir: str, model_name: str) -> DictConfig:
+    """
+    Re-compose a Hydra DictConfig for a specific model, keeping all CLI overrides.
+    - Forces model=<model_name>
+    - Keeps user's CLI overrides (except any existing model=...)
+    - Keeps the current choices for dataset/experiment/lbw/pw/folds/path if the CLI did not set them
+    """
+    # 1) Grab current task overrides (the exact CLI the user passed)
+    try:
+        cli_overrides: List[str] = list(HydraConfig.get().overrides.task)
+    except Exception:
+        cli_overrides = []
+
+    # 2) Remove any existing 'model=' override; we'll inject our own
+    filtered = [ov for ov in cli_overrides if not ov.startswith("model=")]
+
+    # 3) Ensure key group choices persist if the user didn’t set them explicitly
+    try:
+        choices = dict(HydraConfig.get().runtime.choices)
+    except Exception:
+        choices = {}
+
+    for grp in ("dataset", "experiment", "lbw", "pw", "folds", "path"):
+        if grp in choices and not any(ov.startswith(f"{grp}=") for ov in filtered):
+            filtered.append(f"{grp}={choices[grp]}")
+
+    cfg_name = HydraConfig.get().job.config_name or "config"
+
+    return compose(config_name=cfg_name, overrides=[f"model={model_name}", *filtered])
+
+
+def load_best_into(pl_model: LightningModule, ckpt_path: str) -> LightningModule:
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    pl_model.load_state_dict(ckpt["state_dict"], strict=True)
+    pl_model.eval()
+    return pl_model
+
+
+def train_test_global_ensemble(
+    config: DictConfig, wandb_logger: WandbLogger, run_name: str
+) -> None:
+    fitted_models = []
+
+    for model in config.ensemble_models:
+        model_config = compose_model_config(config.path.config_path, model)
+
+        datamodule, pl_model, trainer, callbacks = setup(
+            model_config, DummyLogger(), run_name
+        )
+        print(f"Start Training Model {model}.")
+        trainer.fit(pl_model, datamodule=datamodule)
+        print(f"End Training Model {model}.")
+
+        ckpt_cb = callbacks[0]
+        if model not in config.special_models:
+            best_path = ckpt_cb.best_model_path
+            load_best_into(pl_model, best_path)
+            delete_checkpoint(trainer, ckpt_cb)
+
+        pl_model.eval()
+        fitted_models.append(pl_model)
+
+        del datamodule, trainer, callbacks
+        torch.cuda.empty_cache()
+
+    datamodule, pl_model, trainer, callbacks = setup(
+        config, wandb_logger, run_name, fitted_models=fitted_models
+    )
+    trainer.fit(pl_model, datamodule=datamodule)
+    trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
 
 
 def train_test_local(

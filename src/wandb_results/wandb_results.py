@@ -2,12 +2,6 @@ import argparse
 
 from src.constants import MODELS
 
-from src.wandb_results.metric_table import (
-    plot_tables,
-    latex_metric_table,
-    compare_endo_exo_latex_tables,
-    plot_best_lbw,
-)
 from src.wandb_results.horizon_ablation import (
     horizon_exo_difference,
     pw_ablation_table,
@@ -16,6 +10,11 @@ from src.wandb_results.horizon_ablation import (
 from src.wandb_results.look_back_ablation import (
     visualize_look_back_window_difference,
     ablation_delta_plot,
+    best_model_viz_lbw_ablation,
+)
+from src.wandb_results.exo_norm_ablation import (
+    exo_norm_ablation_table,
+    exo_norm_ablation_heatmap,
 )
 from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
@@ -41,11 +40,14 @@ def main():
             "latex_compare",
             "best_lbw_latex",
             "viz",
+            "best_lbw_viz",
             "delta",
             "horizon_ablation",
             "horizon_viz",
             "horizon_exo_diff",
             "norm_ablation",
+            "exo_norm_ablation_table",
+            "exo_norm_ablation_heatmap",
             "efficiency",
             "mitbih",
             "optuna",
@@ -152,39 +154,7 @@ def main():
 
     args = parser.parse_args()
 
-    if args.type == "table":
-        plot_tables(
-            args.dataset,
-            args.look_back_window,
-            args.prediction_window,
-            True,
-            args.experiment,
-            start_time="2025-08-08",
-        )
-    elif args.type == "latex_table":
-        latex_metric_table(
-            args.dataset,
-            args.look_back_window,
-            args.prediction_window,
-            args.experiment,
-            start_time="2025-08-08",
-        )
-    elif args.type == "latex_compare":
-        compare_endo_exo_latex_tables(
-            args.dataset,
-            args.look_back_window,
-            args.prediction_window,
-            start_time="2025-08-08",
-        )
-    elif args.type == "best_lbw_latex":
-        plot_best_lbw(
-            args.dataset,
-            args.prediction_window,
-            args.experiment,
-            start_time="2025-8-08",
-            models=args.models,
-        )
-    elif args.type == "viz":
+    if args.type == "viz":
         visualize_look_back_window_difference(
             args.dataset,
             args.look_back_window,
@@ -193,6 +163,16 @@ def main():
             save_html=args.save_html,
             use_std=args.use_std,
             models=args.models,
+        )
+    elif args.type == "best_lbw_viz":
+        best_model_viz_lbw_ablation(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            metric=args.metric,
+            start_time="2025-09-08",
+            use_std=args.use_std,
         )
     elif args.type == "delta":
         ablation_delta_plot(
@@ -239,6 +219,26 @@ def main():
             prediction_window=args.prediction_window,
             models=args.models,
             start_time="2025-08-30",
+        )
+    elif args.type == "exo_norm_ablation_table":
+        exo_norm_ablation_table(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            metric=args.metric,
+            start_time="2025-09-10",
+            baselines=args.baselines,
+            dls=args.dls,
+        )
+    elif args.type == "exo_norm_ablation_heatmap":
+        exo_norm_ablation_heatmap(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            metric=args.metric,
+            start_time="2025-09-10",
         )
     elif args.type == "efficiency":
         plot_efficiency_table(
