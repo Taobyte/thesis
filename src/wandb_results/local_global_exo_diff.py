@@ -141,9 +141,9 @@ def local_global_diff(
             ]
             + [""] * (len(prediction_window) * 2 - 1)
         )
-        cols["Metrics"].extend(["Abs Gain", "Exo Gain"] * len(prediction_window))
         for pw in prediction_window:
             cols["PW"].extend([rf"\multirow{{2}}{{*}}{{{pw}}}", ""])
+        cols["Metrics"].extend(["Abs Gain", "Exo Gain"] * len(prediction_window))
         deltas = defaultdict(list)
         for model in models:
             for pw in prediction_window:
@@ -158,14 +158,10 @@ def local_global_diff(
                 exo_gain_delta = g_impr - l_impr
                 abs_gain_delta = best_local - best_global
                 deltas[model].append(exo_gain_delta)
-                cols[model].extend([abs_gain_delta, exo_gain_delta])
-        import pdb
+                cols[model_to_abbr[model]].extend([abs_gain_delta, exo_gain_delta])
 
-        pdb.set_trace()
         df = pd.DataFrame.from_dict(cols)
-        df.columns = [model_to_abbr[m] for m in models]
-        order = ["Dataset", "PW", "Metric"] + [model_to_abbr[m] for m in models]
-        df = df[order]
+
         latex_str = df.to_latex(
             index=False,
             escape=False,
@@ -175,9 +171,7 @@ def local_global_diff(
             float_format="%.3f",
         )
         print(latex_str)
-        import pdb
 
-        pdb.set_trace()
         delta_df = pd.DataFrame.from_dict(deltas)
         delta_df.index = prediction_window
         delta_df.columns = [model_to_abbr[m] for m in models]
