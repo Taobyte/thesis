@@ -18,6 +18,7 @@ from src.constants import (
     DL,
     dataset_to_name,
     model_to_name,
+    model_to_abbr,
     model_colors,
     dataset_colors,
 )
@@ -134,18 +135,37 @@ def local_global_diff(
             prediction_window,
         )
         cols = defaultdict(list)
+        cols["Dataset"].extend(
+            [
+                rf"\multirow{{{2 * len(prediction_window)}}}{{*}}{{\rotatebox[origin=c]{{90}}{{{dataset_to_name[dataset]}}}}}"
+            ]
+            + [""] * (len(prediction_window) * 2 - 1)
+        )
+        cols["Metrics"].extend(["Abs Gain", "Exo Gain"] * len(prediction_window))
+        for pw in prediction_window:
+            cols["PW"].extend([rf"\multirow{{2}}{{*}}{{{pw}}}", ""])
+        deltas = defaultdict(list)
         for model in models:
             for pw in prediction_window:
                 l_ex = local_exo_res[model][lbw][pw]
                 l_end = local_endo_res[model][lbw][pw]
+                best_local = min(l_ex, l_end)
                 l_impr = 100 * (l_ex - l_end) / l_end
                 g_ex = global_exo_res[model][lbw][pw]
                 g_end = global_endo_res[model][lbw][pw]
                 g_impr = 100 * (g_ex - g_end) / g_end
-                cols[model].extend([l_end, l_ex, l_impr, g_end, g_ex, g_impr])
+                best_global = min(g_ex, g_end)
+                exo_gain_delta = g_impr - l_impr
+                abs_gain_delta = best_local - best_global
+                deltas[model].append(exo_gain_delta)
+                cols[model].extend([abs_gain_delta, exo_gain_delta])
+        import pdb
 
+        pdb.set_trace()
         df = pd.DataFrame.from_dict(cols)
-
+        df.columns = [model_to_abbr[m] for m in models]
+        order = ["Dataset", "PW", "Metric"] + [model_to_abbr[m] for m in models]
+        df = df[order]
         latex_str = df.to_latex(
             index=False,
             escape=False,
@@ -155,3 +175,54 @@ def local_global_diff(
             float_format="%.3f",
         )
         print(latex_str)
+        import pdb
+
+        pdb.set_trace()
+        delta_df = pd.DataFrame.from_dict(deltas)
+        delta_df.index = prediction_window
+        delta_df.columns = [model_to_abbr[m] for m in models]
+
+        z = delta_df.to_numpy(dtype=float)
+        cbar_title = "Local − Global exo gain (%)"
+
+        x = list(delta_df.columns)
+        y = [str(i) for i in delta_df.index]
+
+        vmax = np.nanpercentile(np.abs(z), 90)
+        if not np.isfinite(vmax) or vmax == 0:
+            vmax = 1.0
+        vmin = -vmax
+
+        # value labels (optional)
+        text = np.where(np.isnan(z), "", np.round(z, 2).astype(str))
+
+        fig = go.Figure(
+            go.Heatmap(
+                z=z,
+                x=x,
+                y=y,
+                colorscale="RdBu",
+                zmin=vmin,
+                zmax=vmax,
+                zmid=0,
+                colorbar=dict(title=cbar_title),
+                hovertemplate="Model=%{x}<br>Horizon=%{y}<br>ΔΔ=%{z:.2f}%<extra></extra>",
+                text=text,
+                texttemplate="%{text}",
+                textfont={"size": 10},
+                showscale=True,
+            )
+        )
+        title = "Exogenous gain: Local − Global (%)"
+        fig.update_layout(
+            title=title,
+            xaxis_title="Model",
+            yaxis_title="Horizon (steps)",
+            yaxis=dict(
+                autorange="reversed"
+            ),  # put H=1 at top if your index is ascending
+            margin=dict(l=80, r=40, t=60, b=60),
+            width=max(720, 60 * len(x)),
+            height=max(340, 40 * len(y) + 140),
+        )
+        fig.show()
