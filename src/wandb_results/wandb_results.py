@@ -16,6 +16,7 @@ from src.wandb_results.exo_norm_ablation import (
     exo_norm_ablation_table,
     exo_norm_ablation_heatmap,
 )
+from local_global_exo_diff import local_global_diff
 from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
@@ -48,6 +49,7 @@ def main():
             "norm_ablation",
             "exo_norm_ablation_table",
             "exo_norm_ablation_heatmap",
+            "local_global",
             "efficiency",
             "mitbih",
             "optuna",
@@ -145,6 +147,13 @@ def main():
     )
 
     parser.add_argument(
+        "--is_local",
+        required=False,
+        action="store_true",
+        help="Process local datasets for horizon ablation.",
+    )
+
+    parser.add_argument(
         "--metric",
         type=str,
         required=False,
@@ -153,8 +162,14 @@ def main():
     )
 
     args = parser.parse_args()
-
-    if args.type == "viz":
+    if args.type == "norm_ablation":
+        plot_normalization_table(
+            datasets=args.dataset,
+            prediction_window=args.prediction_window,
+            models=args.models,
+            start_time="2025-08-30",
+        )
+    elif args.type == "viz":
         visualize_look_back_window_difference(
             args.dataset,
             args.look_back_window,
@@ -194,6 +209,7 @@ def main():
             start_time="2025-09-10",
             baselines=args.baselines,
             dls=args.dls,
+            is_local=args.is_local,
         )
     elif args.type == "horizon_exo_diff":
         horizon_exo_difference(
@@ -213,13 +229,7 @@ def main():
             start_time="2025-09-10",
             use_std=args.use_std,
         )
-    elif args.type == "norm_ablation":
-        plot_normalization_table(
-            datasets=args.dataset,
-            prediction_window=args.prediction_window,
-            models=args.models,
-            start_time="2025-08-30",
-        )
+
     elif args.type == "exo_norm_ablation_table":
         exo_norm_ablation_table(
             args.dataset,
@@ -239,6 +249,14 @@ def main():
             args.prediction_window,
             metric=args.metric,
             start_time="2025-09-10",
+        )
+    elif args.type == "local_global":
+        local_global_diff(
+            args.dataset,
+            args.models,
+            args.look_back_window,
+            args.prediction_window,
+            start_time="2025-09-17",
         )
     elif args.type == "efficiency":
         plot_efficiency_table(

@@ -486,6 +486,7 @@ def pw_ablation_table(
     start_time: str = "2025-8-28",
     baselines: bool = False,
     dls: bool = False,
+    is_local: bool = False,
 ) -> None:
     if baselines:
         models = BASELINES
@@ -525,10 +526,18 @@ def pw_ablation_table(
         for pw in prediction_window:
             cols["PW"].extend([rf"\multirow{{3}}{{*}}{{{pw}}}"] + [""] * 2)
             for model in models:
-                lbw = model_to_lbw(dataset, model)
-                exo_val = exo_mean[model][lbw][pw][metric]
-                endo_val = endo_mean[model][lbw][pw][metric]
-                imprv = 100 * (endo_val - exo_val) / endo_val
+                lbw = 10 if is_local else model_to_lbw(dataset, model)
+                if (
+                    metric in exo_mean[model][lbw][pw]
+                    and metric in endo_mean[model][lbw][pw]
+                ):
+                    exo_val = exo_mean[model][lbw][pw][metric]
+                    endo_val = endo_mean[model][lbw][pw][metric]
+                    imprv = 100 * (endo_val - exo_val) / endo_val
+                else:
+                    exo_val = np.nan
+                    endo_val = np.nan
+                    imprv = np.nan
                 abbr = model_to_abbr[model]
                 cols[abbr].extend([endo_val, exo_val, imprv])
 
@@ -554,11 +563,12 @@ def get_best_value(
     dataset: str,
     models: list[str],
     metric: str,
+    is_local: bool = False,
 ) -> Tuple[float, float]:
     best_val: float = np.inf
     best_std: float = np.inf
     for model in models:
-        lbw = model_to_lbw(dataset, model)
+        lbw = 10 if is_local else model_to_lbw(dataset, model)
         val = metric_dict[model][lbw][pw][metric]
         if val < best_val:
             best_val = val
@@ -574,11 +584,14 @@ def get_df(
     dataset: str,
     models: list[str],
     metric: str,
+    is_local: bool = False,
 ):
     means: list[float] = []
     stds: list[float] = []
     for pw in prediction_window:
-        mean, std = get_best_value(metric_dict, std_dict, pw, dataset, models, metric)
+        mean, std = get_best_value(
+            metric_dict, std_dict, pw, dataset, models, metric, is_local=is_local
+        )
         means.append(mean)
         stds.append(std)
 
@@ -595,6 +608,7 @@ def best_model_viz_horizon_ablation(
     metric: str = "MASE",
     start_time: str = "2025-8-28",
     use_std: bool = False,
+    is_local: bool = True,
 ) -> None:
     # Subplot titles: pretty dataset names
     titles = [f"<b>{dataset_to_name[d]}</b>" for d in datasets]
@@ -626,13 +640,35 @@ def best_model_viz_horizon_ablation(
 
         # best per horizon for baselines and DL
         exo_bl_df = get_df(
-            prediction_window, exo_mean, exo_std, dataset, BASELINES, metric
+            prediction_window,
+            exo_mean,
+            exo_std,
+            dataset,
+            BASELINES,
+            metric,
+            is_local=is_local,
         )
         endo_bl_df = get_df(
-            prediction_window, endo_mean, endo_std, dataset, BASELINES, metric
+            prediction_window,
+            endo_mean,
+            endo_std,
+            dataset,
+            BASELINES,
+            metric,
+            is_local=is_local,
         )
-        exo_dl_df = get_df(prediction_window, exo_mean, exo_std, dataset, DL, metric)
-        endo_dl_df = get_df(prediction_window, endo_mean, endo_std, dataset, DL, metric)
+        exo_dl_df = get_df(
+            prediction_window, exo_mean, exo_std, dataset, DL, metric, is_local=is_local
+        )
+        endo_dl_df = get_df(
+            prediction_window,
+            endo_mean,
+            endo_std,
+            dataset,
+            DL,
+            metric,
+            is_local=is_local,
+        )
 
         # make indices match horizons (1,3,5,10,20) for clarity
         for _df in (exo_bl_df, endo_bl_df, exo_dl_df, endo_dl_df):

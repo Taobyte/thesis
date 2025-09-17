@@ -1,3 +1,5 @@
+import os
+import json
 import yaml
 import pandas as pd
 import numpy as np
@@ -13,6 +15,11 @@ from typing import Tuple
 from pathlib import Path
 
 from src.constants import dataset_to_name
+
+
+os.environ.setdefault(
+    "WANDB_CACHE_DIR", "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/artifacts"
+)
 
 
 def model_to_lbw(
@@ -39,6 +46,7 @@ def get_metrics(
         "NRMSE",
         "SMAPE",
     ],
+    artifacts_path: str = "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/artifacts",
 ) -> Tuple[dict, dict, dict]:
     """
     Preprocess the run metrics for the wandb training runs in the runs list.
@@ -74,23 +82,31 @@ def get_metrics(
                 filtered_summary
             )
         else:
-            artifacts = run.logged_artifacts()
-
-            raw_artifact = None
-            for artifact in artifacts:
-                if "raw_metrics" in artifact.name:
-                    raw_artifact = artifact
-                    break
-
+            raw_artifact = next(
+                (a for a in run.logged_artifacts() if "raw_metrics" in a.name), None
+            )
             if raw_artifact is None:
-                print(f"No raw_metrics table found in run {run.name}")
+                print(f"No raw_metrics table for run {run.name}")
                 continue
+            else:
+                art_dir = Path(artifacts_path) / str(raw_artifact.name).replace(
+                    ":", "-"
+                )
 
-            table = raw_artifact.get("raw_metrics")
-            df = pd.DataFrame(table.data, columns=table.columns)
-            for fold, row in df.iterrows():
-                d = row.to_dict()
-                metrics[model_name][look_back_window][prediction_window][fold][seed] = d
+                if not os.path.exists(art_dir):
+                    raw_artifact.download()
+
+                json_path = art_dir / "raw_metrics.table.json"
+                with open(json_path, "r", encoding="utf-8") as f:
+                    obj = json.load(f)
+                data = obj["data"]
+                cols = obj["columns"]
+                df = pd.DataFrame(data, columns=cols)
+                for fold, row in df.iterrows():
+                    d = row.to_dict()
+                    metrics[model_name][look_back_window][prediction_window][fold][
+                        seed
+                    ] = d
 
         model_run_counts[model_name] += 1
 

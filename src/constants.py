@@ -119,7 +119,7 @@ dataset_to_name = {
     "dalia": "DaLiA",
     "wildppg": "WildPPG",
     "ieee": "IEEE",
-    "ldalia": "Dalia",
+    "ldalia": "LDalia",
     "lwildppg": "LWildPPG",
     "lieee": "LIEEE",
 }
