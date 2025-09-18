@@ -149,9 +149,11 @@ class PredictionCallback(Callback):
 
         dl = datamodule.test_dataloader()
         pl_module.eval()
+        device = pl_module.device
         predictions: list[NDArray[np.float32]] = []
         with torch.no_grad():
             for look_back_window, _ in dl:
+                look_back_window = look_back_window.to(device, non_blocking=True)
                 preds = pl_module.model_forward(look_back_window)
                 denorm_preds = pl_module._denormalize_tensor(preds)
                 preds_numpy = denorm_preds.detach().float().numpy()
