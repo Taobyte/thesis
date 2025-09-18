@@ -233,3 +233,15 @@ def compute_input_channel_dims(
         dims += static_exogenous_variables
 
     return dims
+
+
+def ensemble_epochs(strategy: str, base_epochs: int = 0) -> int:
+    """
+    Return how many epochs to run based on ensemble strategy.
+    - Fixed reducers ('mean', 'median') => min_epochs (default 0)
+    - Anything else => base_max_epochs
+    """
+
+    if strategy in {"mean", "median", "fixed"}:
+        return 0
+    return base_epochs

@@ -2,6 +2,7 @@ defaults:
   - base_module
 
 name: "ensemble"
+ensemble_models: ["linear", "xgboost", "mlp", "mole"] # ["linear", "kalmanfilter", "mole", "xgboost", "gp", "mlp"]
 
 model:
   _target_: src.models.ensemble.Model
@@ -13,14 +14,15 @@ model:
   freeze_experts: True
   softmax_temp: 1.0
 
-  use_mixture_net: False
+  strategy: "mixture_net"
 
 pl_model: 
   _target_: src.models.ensemble.Ensemble
   learning_rate: 0.001 
 
 trainer:
-  max_epochs: 1000
+  base_max_epochs: 1000
+  max_epochs: ${ensemble_epochs:${model.model.strategy},${model.trainer.base_max_epochs}}
   use_early_stopping: True
   patience: 5
 

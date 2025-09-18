@@ -21,6 +21,7 @@ from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
 from src.wandb_results.mitbih_results import plot_mitbih_metric_table
+from src.wandb_results.qualitative_results import plot_predictions
 
 
 def main():
@@ -52,6 +53,7 @@ def main():
             "local_global",
             "efficiency",
             "mitbih",
+            "predictions",
             "optuna",
         ],
         required=True,
@@ -267,6 +269,14 @@ def main():
         )
     elif args.type == "mitbih":
         plot_mitbih_metric_table()
+    elif args.type == "predictions":
+        plot_predictions(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            args.models,
+            args.experiment,
+        )
     elif args.type == "optuna":
         create_params_file_from_optuna(
             models=args.models, start_time="2025-8-31T21:30:00+02:00"

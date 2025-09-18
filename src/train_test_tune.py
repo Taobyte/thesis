@@ -190,9 +190,10 @@ def load_best_into(pl_model: LightningModule, ckpt_path: str) -> LightningModule
 def train_test_global_ensemble(
     config: DictConfig, wandb_logger: WandbLogger, run_name: str
 ) -> None:
+    assert config.model.name == "ensemble"
     fitted_models = []
 
-    for model in config.ensemble_models:
+    for model in config.model.ensemble_models:
         model_config = compose_model_config(config.path.config_path, model)
 
         datamodule, pl_model, trainer, callbacks = setup(
@@ -218,7 +219,8 @@ def train_test_global_ensemble(
         config, wandb_logger, run_name, fitted_models=fitted_models
     )
     trainer.fit(pl_model, datamodule=datamodule)
-    trainer.test(pl_model, datamodule=datamodule, ckpt_path="best")
+    ckpt_path = None if pl_model.model.strategy in ["mean", "median"] else "best"
+    trainer.test(pl_model, datamodule=datamodule, ckpt_path=ckpt_path)
 
 
 def train_test_local(

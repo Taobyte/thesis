@@ -25,7 +25,8 @@ normalization: global # ${experiment.normalization} # can be either "global", "m
 local_norm: "local_z" # can be either "local_z", "difference" or "lnone" 
 local_norm_endo_only: ${experiment.local_norm_endo_only}
 
-# local experiment config
+# local settings
+test_local: False # test on test windows from local for the global models
 train_frac: 0.7
 val_frac: 0.1
 
@@ -33,8 +34,6 @@ numpy_models: ["linear","xgboost","exactgp"] # these models get passed the windo
 special_models: ["linear","xgboost", "exactgp", "dummy"] # these models are not trained with Lightning 
 probabilistic_models: ["gp", "dklgp", "exactgp"] # these models output the mean & std as the prediction
 return_series_models: ["msar"]
-
-ensemble_models: ["linear", "kalmanfilter", "mole", "xgboost", "gp", "mlp"]
 
 look_back_window: 5
 prediction_window: 3
@@ -56,11 +55,10 @@ wandb:
 
 # training 
 min_delta: 0.001
-use_efficiency_callback: False
-use_prediction_callback: False
 
-# local settings
-test_local: False # test on test windows from local for the global models
+# callbacks
+use_efficiency_callback: False # compute efficiency related metrics
+use_prediction_callback: False # store predictions + metrics in numpy .npz format
 
 # tuner flag
 tune: False
@@ -70,7 +68,7 @@ hydra:
   run:
     dir: ${path.basedir}/outputs
   sweep:
-    dir: ${path.checkpoint_path}/multiruns # use scratch space for multirun outputs
+    dir: ${path.checkpoint_path}/multiruns # use euler scratch space for multirun outputs
 
 
 

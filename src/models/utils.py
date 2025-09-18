@@ -195,7 +195,7 @@ class BaseLightningModule(L.LightningModule):
         metrics, current_metrics = self.evaluate(batch, batch_idx)
 
         for k, v in current_metrics.items():
-            self.metric_full[k] += v
+            self.metric_full[k] += [float(val) for val in v]
         return metrics
 
     def on_test_epoch_start(self):

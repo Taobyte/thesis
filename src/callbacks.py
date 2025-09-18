@@ -1,4 +1,5 @@
 import time
+import json
 import math
 import numpy as np
 import torch
@@ -143,9 +144,7 @@ class PredictionCallback(Callback):
 
     def on_test_end(self, trainer, pl_module):
         datamodule = trainer.datamodule
-        assert datamodule.name == "dalia"
         test_dataset = datamodule.test_dataset
-        activity_labels: list[NDArray[np.int32]] = test_dataset._read_activity_data_()
         ground_truth: list[NDArray[np.float32]] = test_dataset.data
 
         dl = datamodule.test_dataloader()
@@ -158,25 +157,29 @@ class PredictionCallback(Callback):
                 preds_numpy = denorm_preds.detach().float().numpy()
                 predictions.append(preds_numpy)
 
-        stacked_preds = np.concatenate(predictions, axis=0)
-
-        result_dict: dict[str, NDArray[np.float32]] = {
-            "preds": stacked_preds,
-            "labels": np.asarray(activity_labels, dtype=object),
-            "gt_series": np.asarray(ground_truth, dtype=object),
+        stacked_preds = np.concatenate(predictions, axis=0).astype(np.float32)
+        metrics: dict[str, list[float]] = pl_module.metric_full
+        result_arrays = {
+            "preds": stacked_preds,  # (N, H, C)
+            "gt_series": np.asarray(ground_truth, dtype=object),  # ragged → object
         }
 
         outdir = Path(trainer.default_root_dir) / "predictions"
         outdir.mkdir(parents=True, exist_ok=True)
-        outpath = outdir / self.filename
-        np.savez_compressed(outpath, **result_dict)
+        npz_path = outdir / self.filename
+        np.savez_compressed(npz_path, **result_arrays)
 
+        metrics_path = outdir / (npz_path.stem + "_metrics.json")
+
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f)  # metrics is your dict[str, list[float]]
+
+        # Log to W&B
         wb_logger = trainer.logger
-        assert isinstance(wb_logger, WandbLogger), (
-            f"Error: logger is not of type WandBLogger, type = {type(wb_logger)}"
-        )
-        run = wb_logger.experiment  # this is a wandb.Run
+        assert isinstance(wb_logger, WandbLogger)
+        run = wb_logger.experiment
 
-        art = wandb.Artifact("test_predictions", type="predictions")
-        art.add_file(str(outpath))
+        art = wandb.Artifact(f"test_predictions-{run.id}", type="predictions")
+        art.add_file(str(npz_path))
+        art.add_file(str(metrics_path))
         run.log_artifact(art)

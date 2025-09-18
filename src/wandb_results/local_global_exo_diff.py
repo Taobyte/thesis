@@ -156,7 +156,7 @@ def local_global_diff(
                 g_impr = 100 * (g_ex - g_end) / g_end
                 best_global = min(g_ex, g_end)
                 exo_gain_delta = g_impr - l_impr
-                abs_gain_delta = best_local - best_global
+                abs_gain_delta = best_global - best_local
                 deltas[model].append(exo_gain_delta)
                 cols[model_to_abbr[model]].extend([abs_gain_delta, exo_gain_delta])
 

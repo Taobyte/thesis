@@ -160,8 +160,10 @@ def get_runs(
     window_statistic: str = None,
     experiment_name: str = "endo_exo",
     local_norm_endo_only: bool = False,
+    predictions: bool = False,
 ):
     conditions = [
+        {"config.use_prediction_callback": predictions},
         {"config.local_norm_endo_only": local_norm_endo_only},
         {"config.experiment.experiment_name": {"$in": [experiment_name]}},
         {"config.dataset.name": {"$in": [dataset]}},

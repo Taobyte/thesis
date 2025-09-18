@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from torch import Tensor
 from lightning import LightningModule
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 from einops import rearrange
 
 from src.losses import get_loss_fn
@@ -21,7 +21,7 @@ class Model(nn.Module):
         fitted_models: list[LightningModule] = [],
         freeze_experts: bool = True,
         softmax_temp: float = 1.0,
-        use_mixture_net: bool = True,
+        strategy: str = "mean",
     ):
         super().__init__()
         self.look_back_window = look_back_window
@@ -37,8 +37,8 @@ class Model(nn.Module):
                     p.requires_grad = False
                 m.eval()  # disable dropout/bn updates
 
-        self.use_mixture_net = use_mixture_net
-        if self.use_mixture_net:
+        self.strategy = strategy
+        if strategy == "mixture_net":
             self.softmax_temp = softmax_temp
             self.mixture_net = nn.Sequential(
                 nn.Linear(look_back_channel_dim * look_back_window, hidden_dim),
@@ -46,7 +46,7 @@ class Model(nn.Module):
                 nn.Linear(hidden_dim, self.n_models),
                 nn.Softmax(dim=-1),
             )
-        else:
+        elif strategy == "weights":
             self.weights = torch.nn.Parameter(
                 torch.randn(
                     self.n_models,
@@ -54,8 +54,8 @@ class Model(nn.Module):
             )
 
     def forward(self, look_back_window: Tensor) -> Tensor:
-        x = rearrange(look_back_window, "B T C -> B (T C)")
-        if self.use_mixture_net:
+        if self.strategy == "mixture_net":
+            x = rearrange(look_back_window, "B T C -> B (T C)")
             if self.softmax_temp != 1.0:
                 h = self.mixture_net[0](x)
                 h = self.mixture_net[1](h)
@@ -63,7 +63,7 @@ class Model(nn.Module):
                 weights = torch.softmax(logits, dim=-1)
             else:
                 weights = self.mixture_net(x)
-        else:
+        elif self.strategy == "weights":
             B, _, _ = look_back_window.shape
             weights = torch.nn.functional.softmax(self.weights, dim=-1)
             weights = weights.unsqueeze(0).expand(B, -1)
@@ -74,9 +74,13 @@ class Model(nn.Module):
             preds.append(p)
 
         P = torch.stack(preds, dim=-1)
-
-        w = weights.unsqueeze(1).unsqueeze(1)
-        pred = (P * w).sum(dim=-1)
+        if self.strategy in ["mixture_net", "weights"]:
+            w = weights.unsqueeze(1).unsqueeze(1)
+            pred = (P * w).sum(dim=-1)
+        elif self.strategy == "mean":
+            pred = P.mean(dim=-1)
+        elif self.strategy == "median":
+            pred, _ = P.median(dim=-1)
 
         return pred
 
@@ -96,7 +100,12 @@ class Ensemble(BaseLightningModule):
 
         self.learning_rate = learning_rate
 
-    def model_specific_forward(self, look_back_window: Tensor):
+        self.strategy = model.strategy
+        if self.strategy in ["mean", "median"]:
+            self.automatic_optimization = False
+
+    # here we override model_forward in order not to normalize the input tensor!
+    def model_forward(self, look_back_window: Tensor):
         return self.model(look_back_window)
 
     def _shared_step(
@@ -124,5 +133,7 @@ class Ensemble(BaseLightningModule):
         self.log("val_loss", loss, on_epoch=True, on_step=True, logger=True)
         return loss
 
-    def configure_optimizers(self) -> torch.optim.Adam:
+    def configure_optimizers(self) -> Optional[torch.optim.Adam]:
+        if self.strategy in ["mean", "median"]:
+            return None
         return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
