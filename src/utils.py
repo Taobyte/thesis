@@ -245,3 +245,8 @@ def ensemble_epochs(strategy: str, base_epochs: int = 0) -> int:
     if strategy in {"mean", "median", "fixed"}:
         return 0
     return base_epochs
+
+
+def exo_channels_wildppg(add_temp: bool, add_alt: bool) -> int:
+    base = 1
+    return base + add_temp + add_alt
