@@ -21,7 +21,10 @@ from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
 from src.wandb_results.mitbih_results import plot_mitbih_metric_table
-from src.wandb_results.qualitative_results import plot_predictions
+from src.wandb_results.qualitative_results import (
+    plot_predictions,
+    plot_best_exo_improvement,
+)
 
 
 def main():
@@ -37,10 +40,6 @@ def main():
         "--type",
         type=str,
         choices=[
-            "table",
-            "latex_table",
-            "latex_compare",
-            "best_lbw_latex",
             "viz",
             "best_lbw_viz",
             "delta",
@@ -54,6 +53,7 @@ def main():
             "efficiency",
             "mitbih",
             "predictions",
+            "exo_endo_preds",
             "optuna",
         ],
         required=True,
@@ -276,6 +276,13 @@ def main():
             args.prediction_window,
             args.models,
             args.experiment,
+        )
+    elif args.type == "exo_endo_preds":
+        plot_best_exo_improvement(
+            args.dataset,
+            args.look_back_window,
+            args.prediction_window,
+            args.models,
         )
     elif args.type == "optuna":
         create_params_file_from_optuna(

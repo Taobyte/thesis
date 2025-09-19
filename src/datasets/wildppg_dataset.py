@@ -27,25 +27,24 @@ def nan_helper(y):
 
 
 class WildPPGDataset(HRDataset):
-    def __init__(self, add_temp: bool = False, add_alt: bool = False, **kwargs: Any):
-        self.add_temp = add_temp
+    def __init__(self, shift: bool, add_alt: bool, add_temp: bool, **kwargs: Any):
+        self.shift = shift
         self.add_alt = add_alt
+        self.add_temp = add_temp
         super().__init__(**kwargs)
 
     def __read_data__(
         self,
     ) -> Tuple[list[NDArray[np.float32]], list[NDArray[np.float32]]]:
         data_all = loadmat(self.data_dir + "WildPPG.mat")
-        arrays = []
+        arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
             # Load PPG signal and heart rate values
             ppg = data_all["data_ppg_ankle"][participant, 0]
             hr = data_all["data_bpm_values"][participant][0].astype(float)
             activity = data_all["data_imu_ankle"][participant][0]
-            # temperature = data_all["data_temp_chest"][participant][0]
-            # altitude = data_all["data_altitude_values"][participant][0]
-            # temperature = data_all["data_imu_ankle"][participant][0]
-            # altitude = data_all["data_imu_chest"][participant][0]
+            temperature = data_all["data_temp_chest"][participant][0]
+            altitude = data_all["data_altitude_values"][participant][0]
 
             # impute the values for hr and activity
             hr[hr < 30] = np.nan
@@ -63,10 +62,10 @@ class WildPPGDataset(HRDataset):
                 series = hr  # (W, 1)
                 if self.use_dynamic_features:
                     series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
-                    if self.add_temp:
-                        series = np.concatenate((series, temperature), axis=1)  # (W,3)
-                    if self.add_alt:
-                        series = np.concatenate((series, altitude), axis=1)  # (W, 4)
+                if self.add_temp:
+                    series = np.concatenate((series, temperature), axis=1)  # (W,3)
+                if self.add_alt:
+                    series = np.concatenate((series, altitude), axis=1)  # (W, 4)
             else:
                 series = ppg[:, :, np.newaxis]  # shape (W, 200, 1)
                 if self.use_dynamic_features:
@@ -79,6 +78,17 @@ class WildPPGDataset(HRDataset):
                     )
 
             arrays.append(series)
+
+        if self.shift and self.use_dynamic_features:
+            processed_arrays: list[NDArray[np.float32]] = []
+            for array in arrays:
+                hr_shifted = array[:-1, : self.target_channel_dim]
+                imu_shifted = array[1:, self.target_channel_dim :]
+                processed_arrays.append(
+                    np.concatenate([hr_shifted, imu_shifted], axis=1)
+                )
+
+            arrays = processed_arrays
 
         combined = np.concatenate(arrays, axis=0)
         mean = np.mean(combined, axis=0)
@@ -96,8 +106,9 @@ class WildPPGDataModule(BaseDataModule):
         train_participants: List[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: List[int] = [10, 11],
         test_participants: List[int] = [9, 12, 13, 14, 15],
-        add_temp: bool = False,
+        shift: bool = False,
         add_alt: bool = False,
+        add_temp: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -108,8 +119,9 @@ class WildPPGDataModule(BaseDataModule):
         self.val_participants = val_participants
         self.test_participants = test_participants
 
-        self.add_temp = add_temp
+        self.shift = shift
         self.add_alt = add_alt
+        self.add_temp = add_temp
 
     def setup(self, stage: str):
         common_args = {
@@ -123,8 +135,9 @@ class WildPPGDataModule(BaseDataModule):
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
-            "add_temp": self.add_temp,
+            "shift": self.shift,
             "add_alt": self.add_alt,
+            "add_temp": self.add_temp,
         }
         if stage == "fit":
             self.train_dataset = WildPPGDataset(

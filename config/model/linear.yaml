@@ -9,6 +9,9 @@ model:
   prediction_window: ${prediction_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
+  model_type: "elastic_net"
+  alpha: 1.0 # ridge alpha
+
 pl_model: 
   _target_: src.models.linear.Linear
   loss: ${loss_fn}

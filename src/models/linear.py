@@ -1,7 +1,7 @@
 import torch
 
 from torch import Tensor
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge, ElasticNet
 from typing import Any
 from einops import rearrange
 
@@ -15,13 +15,19 @@ class Model(torch.nn.Module):
         look_back_window: int,
         prediction_window: int,
         target_channel_dim: int = 1,
+        model_type: str = "linear_regression",
+        alpha: float = 1.0,
     ):
         super().__init__()
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.target_channel_dim = target_channel_dim
-
-        self.model = LinearRegression()
+        if model_type == "linear_regression":
+            self.model = LinearRegression()
+        elif model_type == "ridge":
+            self.model = Ridge(alpha=alpha)
+        elif model_type == "elastic_net":
+            self.model = ElasticNet()
 
     def forward(self, look_back_window: Tensor) -> Tensor:
         device = look_back_window.device
