@@ -6,7 +6,8 @@ from typing import List
 
 from src.wandb_results.utils import get_metrics
 from src.constants import (
-    model_to_name,
+    model_to_abbr,
+    dataset_to_name,
     MODELS,
 )
 
@@ -15,33 +16,31 @@ def plot_normalization_table(
     datasets: list[str],
     prediction_window: list[int] = [3],
     start_time: str = "2025-8-21",
-    models: list[str] = [],
+    models: list[str] = MODELS,
     use_std: bool = False,
+    metric: str = "MASE",
 ):
     assert len(prediction_window) == 1
     pw = prediction_window[0]
-    metric = "ND"
-    factor = 100 if metric in ["ND", "NRMSE"] else 1
-    if len(models) == 0:
-        models = MODELS
 
     cols: dict[str, list[float]] = dict()
 
     model_col: List[str] = ["Normalization"]
     for model_name in models:
-        model_name = model_to_name[model_name]
+        model_name = model_to_abbr[model_name]
         model_col.append(model_name)
 
     cols["Models"] = model_col
 
     experiments = [
-        "no_norm",
+        # "no_norm",
         "global_z_norm",
-        "min_max_norm",
+        # "min_max_norm",
         "local_z_norm",
         "difference",
     ]
-    abbr_exp_names = ["NN", "GZ", "MM", "LZ", "DF"]
+    # abbr_exp_names = ["NN", "GZ", "MM", "LZ", "DF"]
+    abbr_exp_names = ["GZ", "LZ", "DF"]
 
     for dataset in datasets:
         print(f"DATASET: {dataset}")
@@ -53,7 +52,9 @@ def plot_normalization_table(
                     {"state": "finished"},
                     {"created_at": {"$gte": start_time}},
                     {"tags": dataset},  # dataset tag must be present
-                    {"tags": experiment},  # experiment tag must be present
+                    {
+                        "config.experiment.experiment_name": experiment
+                    },  # experiment tag must be present
                     {"tags": model_name},
                 ]
                 filters = {"$and": conditions}
@@ -71,8 +72,8 @@ def plot_normalization_table(
                         lbw = None
 
                     if lbw and metric in mean_dict[model_name][lbw][pw]:
-                        mean = factor * mean_dict[model_name][lbw][pw][metric]
-                        std = factor * std_dict[model_name][lbw][pw][metric]
+                        mean = mean_dict[model_name][lbw][pw][metric]
+                        std = std_dict[model_name][lbw][pw][metric]
                     else:
                         print(
                             f"Metric {metric} not in mean_dict[{model_name}][{lbw}][{pw}]"
@@ -93,12 +94,27 @@ def plot_normalization_table(
             cols[f"{dataset} {name}"] = col
 
     df = pd.DataFrame(cols)
+    df = df.T
+    df = df.reset_index(drop=True)
+    df.columns = df.iloc[0]
+    df = df.iloc[1:].reset_index(drop=True)
+
+    n = len(experiments)
+    dataset_col = []
+    for dataset in datasets:
+        dataset_col.extend(
+            [
+                rf"\multirow{{{n}}}{{*}}{{\rotatebox[origin=c]{{90}}{{{dataset_to_name[dataset]}}}}}"
+            ]
+            + [""] * (n - 1)
+        )
+    df.insert(0, "Dataset", dataset_col)
 
     latex_str = df.to_latex(
         index=False,
         escape=False,
         header=True,
-        # column_format=column_format,
+        column_format="|".join(["c"] * len(df.columns)),
         bold_rows=False,
     )
     print(latex_str)

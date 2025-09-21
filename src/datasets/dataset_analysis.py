@@ -30,20 +30,29 @@ from src.normalization import local_z_norm_numpy, min_max_norm_numpy
 from src.constants import dataset_to_name
 
 from src.utils import (
+    get_optuna_name,
     compute_square_window,
     compute_input_channel_dims,
-    get_optuna_name,
+    get_min,
+    resolve_str,
+    ensemble_epochs,
+    exo_channels_wildppg,
 )
 
 
-def main():
-    OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
-    OmegaConf.register_new_resolver("eval", eval)
-    OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
-    OmegaConf.register_new_resolver(
-        "compute_input_channel_dims", compute_input_channel_dims
-    )
+OmegaConf.register_new_resolver("compute_square_window", compute_square_window)
+OmegaConf.register_new_resolver("eval", eval)
+OmegaConf.register_new_resolver("optuna_name", get_optuna_name)
+OmegaConf.register_new_resolver(
+    "compute_input_channel_dims", compute_input_channel_dims
+)
+OmegaConf.register_new_resolver("min", get_min)
+OmegaConf.register_new_resolver("str", resolve_str)
+OmegaConf.register_new_resolver("ensemble_epochs", ensemble_epochs)
+OmegaConf.register_new_resolver("exo_channels_wildppg", exo_channels_wildppg)
 
+
+def main():
     parser = argparse.ArgumentParser(description="WandB Results")
 
     def list_of_strings(arg):
@@ -434,7 +443,8 @@ def max_pearson_corr(y, x, max_lag=20):
     return float(max_cor), int(max_lag)
 
 
-def max_pearson(datamodules: List[LightningDataModule]):
+def max_pearson(datamodules: List[LightningDataModule], differencing: bool = True):
+    print(f"Differencing = {differencing}")
     for datamodule in datamodules:
         print(f"Start computing Pearson for {datamodule.name}")
         dataset = datamodule.train_dataset.data
@@ -444,6 +454,9 @@ def max_pearson(datamodules: List[LightningDataModule]):
         for i, series in tqdm(enumerate(dataset)):
             heartrate = series[:, 0]
             activity = series[:, 1]
+            if differencing:
+                heartrate = np.diff(heartrate, n=1)
+                activity = np.diff(activity, n=1)
             max_corr, best_lag = max_pearson_corr(heartrate, activity)
             pearsons.append(max_corr)
             best_lags.append(best_lag)
@@ -555,14 +568,21 @@ def scatter_plots(datamodules: List[LightningDataModule]):
     fig.show()
 
 
-def mutual_information(datamodules: List[LightningDataModule]):
+def mutual_information(
+    datamodules: List[LightningDataModule], differencing: bool = True
+):
     for datamodule in datamodules:
         print(f"Mutual Information Statistics for {datamodule.name}")
         dataset = datamodule.train_dataset.data
         mis = []
         for i, series in enumerate(dataset):
             heartrate = series[:, 0]
-            activity = series[:, 1].reshape(-1, 1)
+            activity = series[:, 1]
+            if differencing:
+                heartrate = np.diff(heartrate, n=1)
+                activity = np.diff(activity, n=1)
+
+            activity = activity.reshape(-1, 1)
             mi = mutual_info_regression(activity, heartrate)
             mis.append(mi[0])
 

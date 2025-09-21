@@ -122,6 +122,14 @@ def get_index_and_gt_exo(
     exo_metrics = np.array(loaded_exo[best_model[dataset]]["metrics"])
     diff = exo_metrics - endo_metrics
     imprv = diff / endo_metrics
+
+    fig = go.Figure()
+    fig.add_histogram(
+        x=imprv,
+        nbinsx=30,
+        opacity=0.75,
+    )
+    fig.show()
     sorted_idx = np.argsort(imprv if use_imprv else diff)
     if plot_type == "worst":
         worst_idx = sorted_idx[-1]

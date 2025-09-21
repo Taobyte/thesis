@@ -1,7 +1,7 @@
 import torch
 
 from torch import Tensor
-from sklearn.linear_model import LinearRegression, Ridge, ElasticNet
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
 from typing import Any
 from einops import rearrange
 
@@ -26,6 +26,8 @@ class Model(torch.nn.Module):
             self.model = LinearRegression()
         elif model_type == "ridge":
             self.model = Ridge(alpha=alpha)
+        elif model_type == "lasso":
+            self.model = Lasso(alpha=alpha)
         elif model_type == "elastic_net":
             self.model = ElasticNet()
 

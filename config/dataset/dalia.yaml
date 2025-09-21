@@ -11,7 +11,7 @@ datamodule:
   test_participants: ${folds.dalia.test_participants} 
 
   freq: 25
-  window_statistic: "var" # can be "mean" "var" or "power"
+  window_statistic: "mean" # can be "mean" "var" or "power"
 
   target_channel_dim: 1 
   dynamic_exogenous_variables: 1 # dynamic activity information is locally normalized

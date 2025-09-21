@@ -99,7 +99,7 @@ model_to_name = {
 
 model_to_abbr = {
     "timesnet": "TNET",
-    "gpt4ts": "GPT4TS",
+    "gpt4ts": "GPT",
     "adamshyper": "AMSH",
     "simpletm": "STM",
     "patchtst": "PTST",
