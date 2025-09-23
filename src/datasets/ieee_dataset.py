@@ -39,6 +39,12 @@ class IEEEDataset(HRDataset):
 
             loaded_series.append(series)
 
+        #  np.savez(
+        #      self.data_dir + f"IEEE_{participant}_R.npz",
+        #      imu=imu_mean[:, 0],
+        #      bpm=bpm[:, 0],
+        #  )
+
         combined = np.concatenate(loaded_series, axis=0)
         mean = np.mean(combined, axis=0)
         std = np.std(combined, axis=0)

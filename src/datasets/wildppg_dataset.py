@@ -43,9 +43,15 @@ class WildPPGDataset(HRDataset):
             ppg = data_all["data_ppg_ankle"][participant, 0]
             hr = data_all["data_bpm_values"][participant][0].astype(float)
             activity = data_all["data_imu_ankle"][participant][0]
-            # activity = data_all["data_imu_wrist"][participant][0]
+            # ankle = data_all["data_imu_ankle"][participant][0]
+            # wrist = data_all["data_imu_wrist"][participant][0]
+            # chest = data_all["data_imu_chest"][participant][0]
+            # activity = (1 / 3) * (ankle + wrist + chest)
             temperature = data_all["data_temp_chest"][participant][0]
             altitude = data_all["data_altitude_values"][participant][0]
+
+            # if (altitude < 100).any():
+            #     print("altitude < 100")
 
             # impute the values for hr and activity
             hr[hr < 30] = np.nan
@@ -56,6 +62,14 @@ class WildPPGDataset(HRDataset):
             activity[mask_activity] = np.nan
             nans, x = nan_helper(activity)
             activity[nans] = np.interp(x(nans), x(~nans), activity[~nans])
+
+            temperature[temperature < 30] = np.nan
+            nans, x = nan_helper(temperature)
+            temperature[nans] = np.interp(x(nans), x(~nans), temperature[~nans])
+
+            altitude[altitude < 100] = np.nan
+            nans, x = nan_helper(altitude)
+            altitude[nans] = np.interp(x(nans), x(~nans), altitude[~nans])
 
             mask_ppg = ~np.isnan(ppg).any(axis=1) & ~np.isinf(ppg).any(axis=1)
             ppg = ppg[mask_ppg]

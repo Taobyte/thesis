@@ -1,7 +1,8 @@
+import pandas as pd
 import numpy as np
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional, Dict, Any
 from tqdm import tqdm
 from numpy.typing import NDArray
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -11,13 +12,20 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from lightning import LightningDataModule
 from collections import defaultdict
-from scipy.signal import lfilter
+from scipy.signal import coherence as sp_coherence
+from sklearn.feature_selection import mutual_info_regression
+
+from statsmodels.tsa.stattools import adfuller, kpss
+from statsmodels.tools.sm_exceptions import InterpolationWarning
 
 from plotly.subplots import make_subplots
 
 import plotly.graph_objects as go
 import xgboost as xgb
 from collections import Counter
+
+from statsmodels.tsa.api import VAR
+
 
 from src.utils import (
     get_optuna_name,
@@ -42,6 +50,7 @@ OmegaConf.register_new_resolver("ensemble_epochs", ensemble_epochs)
 OmegaConf.register_new_resolver("exo_channels_wildppg", exo_channels_wildppg)
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
+warnings.filterwarnings("ignore", category=InterpolationWarning)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -253,7 +262,6 @@ def statistical_performance_difference(datamodules: List[LightningDataModule]):
 
             X = _make_lag_matrix(x, IMU_LAGS)
 
-            # rolling-origin CV compare ARIMA vs ARIMAX
             res, best_coeffs = _rolling_origin_eval(
                 y, X, ORDERS, n_folds=3, min_train=2000, val_len=200
             )
@@ -261,7 +269,6 @@ def statistical_performance_difference(datamodules: List[LightningDataModule]):
             if res:
                 series_results.append(res)
 
-        # Aggregate over series
         if not series_results:
             print("No successful fits.")
             continue
@@ -274,7 +281,6 @@ def statistical_performance_difference(datamodules: List[LightningDataModule]):
         for k, v in agg.items():
             print(f"  {k:>12}: {v:8.4f}")
 
-        # A nice single number to track:
         if "RMSE_Δrel%" in agg:
             print(
                 f"→ Relative RMSE change (HR+EXO vs HR-only): {agg['RMSE_Δrel%']:.2f}% "
@@ -298,144 +304,10 @@ def statistical_performance_difference(datamodules: List[LightningDataModule]):
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-def _fit_best_arima_aic_with_order(y: NDArray, orders: List[Tuple[int, int, int]]):
-    """
-    Like _fit_best_arima_aic but also returns the chosen (p,d,q).
-    """
-    best_res = None
-    best_aic = np.inf
-    best_order = None
-    for p, d, q in orders:
-        try:
-            m = SARIMAX(
-                y,
-                exog=None,
-                order=(p, d, q),
-                enforce_stationarity=True,
-                enforce_invertibility=True,
-            )
-            r = m.fit(disp=False)
-            if np.isfinite(r.aic) and r.aic < best_aic:
-                best_aic = r.aic
-                best_res = r
-                best_order = (p, d, q)
-        except Exception:
-            continue
-    return best_res, best_order
-
-
-def _bj_prewhiten_filter_xy(
-    x: NDArray, y: NDArray, orders_grid: Optional[List[Tuple[int, int, int]]] = None
-) -> Tuple[NDArray, NDArray, Tuple[int, int, int]]:
-    """
-    Fit ARIMA(p,d,q) to X, then apply the SAME filter Φ/Θ to both X and Y.
-    Returns (x_pw, y_pw, (p,d,q)), where x_pw ~ innovations of X.
-    Statsmodels parameterization:
-        (1 - φ1 B - ... - φp B^p) y_t = (1 + θ1 B + ... + θq B^q) ε_t
-    Whiten with lfilter(b=Φ, a=Θ), where Φ=[1, -φ], Θ=[1, θ].
-    Differencing d is applied to BOTH series before filtering.
-    """
-    if orders_grid is None:
-        orders_grid = [
-            (1, 0, 0),
-            (2, 0, 0),
-            (1, 0, 1),
-            (2, 0, 1),
-            (1, 0, 2),
-            (1, 1, 0),
-            (1, 1, 1),
-            (2, 1, 1),
-        ]
-
-    x = np.asarray(x, float)
-    y = np.asarray(y, float)
-
-    res, order = _fit_best_arima_aic_with_order(x, orders_grid)
-    if res is None:
-        # Fallback: difference once as a crude prewhitening; then identity filter
-        x_d = np.diff(x, n=1)
-        y_d = np.diff(y, n=1)
-        # pad to equal length
-        n = min(len(x_d), len(y_d))
-        return x_d[:n], y_d[:n], (0, 1, 0)
-
-    p, d, q = order
-
-    # Apply SAME differencing to both series
-    xd = np.diff(x, n=d) if d > 0 else x.copy()
-    yd = np.diff(y, n=d) if d > 0 else y.copy()
-
-    # Build Φ and Θ from fitted ARIMA on X
-    # res.arparams -> φ (size p), res.maparams -> θ (size q)
-    ar = getattr(res, "arparams", np.array([], dtype=float))
-    ma = getattr(res, "maparams", np.array([], dtype=float))
-    phi = np.r_[1.0, -ar]  # 1 - φ1 B - ... - φp B^p
-    theta = np.r_[1.0, ma]  # 1 + θ1 B + ... + θq B^q
-
-    # Filter BOTH series with SAME (Φ, Θ)
-    x_pw = lfilter(phi, theta, xd)
-    y_pw = lfilter(phi, theta, yd)
-
-    # Drop a short burn-in to reduce filter transients
-    burn = max(p, q, d, 0)
-    x_pw = x_pw[burn:]
-    y_pw = y_pw[burn:]
-    n = min(len(x_pw), len(y_pw))
-    return x_pw[:n], y_pw[:n], order
-
-
-def max_pearson_corr_prewhitened_bj(
-    y: NDArray,
-    x: NDArray,
-    max_lag: int = 20,
-    orders_grid: Optional[List[Tuple[int, int, int]]] = None,
-) -> Tuple[float, int]:
-    """
-    Box–Jenkins prewhitening: fit ARIMA to X, filter X and Y with same filter, then max Pearson across lags.
-    Note: your max_pearson_corr expects (y, x) order.
-    """
-    x_pw, y_pw, _ = _bj_prewhiten_filter_xy(x, y, orders_grid=orders_grid)
-
-    # Standardize (optional, helps stability across series)
-    x_pw = (x_pw - x_pw.mean()) / (x_pw.std() + 1e-12)
-    y_pw = (y_pw - y_pw.mean()) / (y_pw.std() + 1e-12)
-
-    return max_pearson_corr(y_pw, x_pw, max_lag=max_lag)
-
-
-def max_pearson_prewhitened_bj(
-    datamodules: List[LightningDataModule],
-    max_lag: int = 20,
-    orders_grid: Optional[List[Tuple[int, int, int]]] = None,
-):
-    print(
-        "Box–Jenkins prewhitening: ARIMA on IMU (X), filter both IMU and HR with same Φ/Θ, then Pearson across lags"
-    )
-    for datamodule in datamodules:
-        print(f"Start BJ-prewhitened Pearson for {datamodule.name}")
-        dataset = datamodule.train_dataset.data
-
-        pearsons = []
-        best_lags = []
-        for i, series in tqdm(enumerate(dataset)):
-            hr = series[:, 0].astype(float)
-            imu = series[:, 1].astype(float)
-
-            max_corr, best_lag = max_pearson_corr_prewhitened_bj(
-                hr, imu, max_lag=max_lag, orders_grid=orders_grid
-            )
-            pearsons.append(max_corr)
-            best_lags.append(best_lag)
-
-        print(list(zip(pearsons, best_lags)))
-        mean_pearson = float(np.nanmean(pearsons)) if len(pearsons) else np.nan
-        median_lag = float(np.nanmedian(best_lags)) if len(best_lags) else np.nan
-        print(f"[BJ-Prewhitened] Mean pearson {mean_pearson} | median lag {median_lag}")
-
-
 def max_pearson_corr(y, x, max_lag=20):
     lags = np.arange(-max_lag, max_lag + 1)
     corr = []
+
     for lag in lags:
         if lag < 0:
             corr.append(np.corrcoef(x[:lag], y[-lag:])[0, 1])
@@ -465,14 +337,13 @@ def max_pearson(datamodules: List[LightningDataModule], differencing: bool = Tru
             max_corr, best_lag = max_pearson_corr(heartrate, activity)
             pearsons.append(max_corr)
             best_lags.append(best_lag)
-        print(list(zip(pearsons, best_lags)))
+        # print(list(zip(pearsons, best_lags)))
         mean_pearson = np.mean(pearsons)
         median_lag = np.median(best_lags)
         print(f"Mean pearson {mean_pearson} | median lag {median_lag} ")
 
 
 def cross_correlation(datamodules):
-    max_pearson_prewhitened_bj(datamodules, max_lag=20)
     max_pearson(datamodules, differencing=False)
     max_pearson(datamodules, differencing=True)
 
@@ -480,22 +351,56 @@ def cross_correlation(datamodules):
 # ---------------------------------------------------------------------------------------------------------------------
 # GRANGER CAUSALITY TEST
 # ---------------------------------------------------------------------------------------------------------------------
-import numpy as np
-import pandas as pd
-from typing import List, Any, Optional
-from statsmodels.tsa.api import VAR
-from statsmodels.tsa.stattools import adfuller
 
 
-def _adf_diff_once_if_needed(x: np.ndarray, p_thresh: float = 0.05):
+def _stationarity_votes(x: np.ndarray, alpha: float = 0.05):
+    """
+    Returns (all_agree_stationary, details_dict) where 'all_agree_stationary' is True
+    iff ADF and PP both reject unit root (p<alpha) AND KPSS fails to reject stationarity (p>=alpha).
+    """
     x = np.asarray(x, float)
-    try:
-        p = adfuller(x, autolag="AIC")[1]
-    except Exception:
-        p = 1.0
-    if p > p_thresh and len(x) > 2:
-        return np.diff(x), 1
-    return x, 0
+    x = x[np.isfinite(x)]
+    if x.size < 10:  # too short to be confident
+        return False, {"adf_p": np.nan, "pp_p": np.nan, "kpss_p": np.nan}
+
+    adf_p = adfuller(x, autolag="AIC", regression="c")[1]
+    pp_p = phillips_perron(x, trend="c")[1]
+    kpss_p = kpss(x, regression="c", nlags="auto")[1]
+
+    adf_stationary = (not np.isnan(adf_p)) and (adf_p < alpha)
+    pp_stationary = (not np.isnan(pp_p)) and (pp_p < alpha)
+    kpss_stationary = (not np.isnan(kpss_p)) and (kpss_p >= alpha)
+
+    all_agree = adf_stationary and pp_stationary and kpss_stationary
+    return all_agree, {"adf_p": adf_p, "pp_p": pp_p, "kpss_p": kpss_p}
+
+
+def _adf_kpss_pp_diff_once_if_needed(
+    x: np.ndarray,
+    p_thresh: float = 0.05,
+    return_details: bool = False,
+):
+    """
+    Difference once only if the three-test vote does NOT agree on stationarity.
+    Returns (series, d) or (series, d, details) if return_details=True.
+    """
+    x = np.asarray(x, float)
+    x = x[np.isfinite(x)]
+    if x.size <= 2:
+        return (
+            (x, 0, {"adf_p": np.nan, "pp_p": np.nan, "kpss_p": np.nan})
+            if return_details
+            else (x, 0)
+        )
+
+    agree_stationary, details = _stationarity_votes(x, alpha=p_thresh)
+
+    if agree_stationary:
+        out = (x, 0, details) if return_details else (x, 0)
+    else:
+        dx = np.diff(x)
+        out = (dx, 1, details) if return_details else (dx, 1)
+    return out
 
 
 def _fdr_bh(pvals: np.ndarray, alpha: float = 0.05) -> np.ndarray:
@@ -515,7 +420,7 @@ def _fdr_bh(pvals: np.ndarray, alpha: float = 0.05) -> np.ndarray:
 
 def granger_imu_to_hr(
     datamodules: List[Any],
-    maxlags: int = 40,
+    maxlags: int = 30,
     do_stationarity_check: bool = True,
     alpha: float = 0.05,
 ) -> pd.DataFrame:
@@ -532,16 +437,20 @@ def granger_imu_to_hr(
             hr_raw = series[:, 0].astype(float)
             imu_raw = series[:, 1].astype(float)
 
-            # Optional: light stationarity fix (difference at most once)
             if do_stationarity_check:
-                hr, d_hr = _adf_diff_once_if_needed(hr_raw)
-                imu, d_imu = _adf_diff_once_if_needed(imu_raw)
+                hr, d_hr, hr_tests = _adf_kpss_pp_diff_once_if_needed(
+                    hr_raw, p_thresh=0.05, return_details=True
+                )
+                imu, d_imu, imu_tests = _adf_kpss_pp_diff_once_if_needed(
+                    imu_raw, p_thresh=0.05, return_details=True
+                )
+                # print("HR tests:", hr_tests, "IMU tests:", imu_tests)
+                print("d_hr", d_hr, "d_imu", d_imu)
             else:
                 hr, imu, d_hr, d_imu = hr_raw, imu_raw, 0, 0
 
-            # Align lengths after differencing
             n = min(len(hr), len(imu))
-            if n < max(50, maxlags + 10):  # too short for a reliable VAR
+            if n < max(50, maxlags + 10):
                 continue
             df = (
                 pd.DataFrame({"HR": hr[:n], "IMU": imu[:n]})
@@ -554,8 +463,9 @@ def granger_imu_to_hr(
             # Select lag by AIC and fit VAR
             try:
                 sel = VAR(df).select_order(maxlags=maxlags)
-                k_ar = int(sel.aic) if np.isfinite(sel.aic) else min(maxlags, 4)
+                k_ar = int(sel.hqic) if np.isfinite(sel.aic) else min(maxlags, 4)
                 k_ar = max(1, min(k_ar, maxlags))
+                print(f"aic: {sel.aic}, bic: {sel.bic}, hqic: {sel.hqic}")
             except Exception:
                 k_ar = min(maxlags, 4)
             try:
@@ -609,7 +519,7 @@ def granger_imu_to_hr(
             continue
         sig_mask = _fdr_bh(pvals, alpha=alpha)
         frac_sig = float(sig_mask.mean())
-        print(f"\n{ds} — VAR AIC lag (median): {np.median(sub['lag_order']):.0f}")
+        print(f"\n{ds} — VAR HQIC lag (median): {np.median(sub['lag_order']):.0f}")
         print(
             f"IMU ⇒ HR: median p={np.median(pvals):.3g} | FDR α={alpha}: {100 * frac_sig:.1f}% series significant"
         )
@@ -618,7 +528,7 @@ def granger_imu_to_hr(
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# XGBOOST FEATURE IMPORTANCE & ARIMA PARAMETERS
+# XGBOOST FEATURE IMPORTANCE
 # ---------------------------------------------------------------------------------------------------------------------
 
 
@@ -642,7 +552,7 @@ def _build_supervised_hr_imu(
     exo_names = [f"imu_level_lag{l}" for l in exo_lags]
 
     # Target is future HR
-    y_target = np.roll(y, -horizon)
+    y_target = np.column_stack([np.roll(y, -horizon) for h in range(1, horizon + 1)])
 
     # Align: we must drop the last `horizon` rows because target is rolled
     T = len(y)
@@ -756,7 +666,8 @@ def xgb_feature_importance(
             X, y_target, feat_names = _build_supervised_hr_imu(
                 y, x, hr_lags=hr_lags, exo_lags=exo_lags, horizon=horizon
             )
-            if len(y_target) < 100:
+
+            if len(y_target) < 70:
                 continue
             (X_tr, y_tr), (X_va, y_va), (X_te, y_te) = _temporal_split(X, y_target)
 
@@ -794,6 +705,89 @@ def xgb_feature_importance(
         print("\nImportance by lag (aggregated over HR+IMU):")
         for lag, g in sorted(agg_gain_by_lag.items()):
             print(f"  lag {lag:>2}: {g:.4f}  ({pct(g):5.1f}%)")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# COHERENCE
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def summarize_coherence(
+    datamodules,
+    fs=0.5,
+    nperseg=256,
+    bands_hz=None,  # list of (lo, hi) in Hz; clipped to Nyquist
+    dataset_attr_name="name",
+):
+    """
+    datamodules: iterable of objects with .train_dataset.data shaped (N_series, T, C)
+                 HR assumed at channel 0, IMU at channel 1
+    fs: sampling rate in Hz (0.5 Hz => Nyquist 0.25 Hz)
+    nperseg: window length for Welch coherence (auto-capped by series length)
+    bands_hz: list of (low, high) in Hz for band-averaged coherence
+              If None, uses bands suited for fs=0.5: [(0.00,0.05), (0.05,0.15), (0.15, fs/2)]
+    dataset_attr_name: attribute to pull a readable dataset name from the datamodule
+    Returns:
+      per_series_df: one row per (dataset, series_idx) with band averages
+      per_dataset_df: aggregated (nanmean) coherence per band across series
+    """
+    nyq = fs / 2.0
+    if bands_hz is None:
+        # fs=0.5 -> Nyquist=0.25. Split into very-low, low, mid bands.
+        bands_hz = [(0.00, 0.05), (0.05, 0.15), (0.15, nyq)]
+    # Clip band highs to Nyquist and drop empty/invalid bands
+    bands_hz = [(lo, min(hi, nyq)) for (lo, hi) in bands_hz if lo < min(hi, nyq)]
+    band_names = [f"{lo:.2f}-{hi:.2f}Hz" for lo, hi in bands_hz]
+
+    per_series_rows = []
+
+    for dm_i, dm in enumerate(datamodules):
+        ds_name = getattr(dm, dataset_attr_name, f"dataset_{dm_i}")
+        data = dm.train_dataset.data  # expected shape: (N, T, C)
+        N = len(data)
+
+        for s_idx, series in enumerate(data):
+            # series: (T, C), HR in col 0, IMU in col 1
+            hr = np.asarray(series[:, 0], dtype=float)
+            imu = np.asarray(series[:, 1], dtype=float)
+
+            # clean
+            keep = np.isfinite(hr) & np.isfinite(imu)
+            hr = hr[keep]
+            imu = imu[keep]
+            if hr.size < 8:  # too short to say anything
+                row = {"dataset": ds_name, "series_idx": s_idx, "n_used": int(hr.size)}
+                row.update({bn: np.nan for bn in band_names})
+                per_series_rows.append(row)
+                continue
+
+            seg = int(min(nperseg, hr.size))  # cap by series length
+            # Compute coherence (returns f up to Nyquist)
+            f, Cxy = sp_coherence(hr, imu, fs=fs, nperseg=seg)
+
+            row = {"dataset": ds_name, "series_idx": s_idx, "n_used": int(hr.size)}
+            for (lo, hi), bn in zip(bands_hz, band_names):
+                mask = (f >= lo) & (f < hi) if hi < nyq else (f >= lo) & (f <= hi)
+                row[bn] = float(np.nanmean(Cxy[mask])) if np.any(mask) else np.nan
+            # overall mean coherence across all bins
+            row["overall_mean"] = float(np.nanmean(Cxy)) if Cxy.size else np.nan
+            per_series_rows.append(row)
+
+    per_series_df = pd.DataFrame(per_series_rows)
+
+    # Aggregate per dataset
+    agg_cols = band_names + ["overall_mean"]
+    per_dataset_df = per_series_df.groupby("dataset", as_index=False)[agg_cols].mean(
+        numeric_only=True
+    )
+
+    return per_series_df, per_dataset_df
+
+
+def coherence_fn(datamodules):
+    per_series_df, per_dataset_df = summarize_coherence(datamodules, fs=0.5)
+
+    print(per_dataset_df)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -903,6 +897,89 @@ def plot_scatter(datamodules):
     fig.show()
 
 
+# Conditional Mutual Information
+
+
+def make_supervised_windows(hr, imu, L=30, H=3, imu_lags=1):
+    """
+    hr, imu: 1D numpy arrays (same length) for a single subject/sequence
+    L: lookback length used as HR_past
+    H: forecast horizon steps ahead (e.g., H=1,3,5,...)
+    imu_lags: number of causal IMU lags to include (1 => current t)
+
+    Returns:
+      Z: (N, L)   HR past (t-L+1 ... t)
+      X: (N, imu_lags)  IMU lags (t, t-1, ..., t-imu_lags+1)
+      y: (N,)  HR future at t+H
+    """
+    assert hr.ndim == 1 and imu.ndim == 1 and len(hr) == len(imu)
+    T = len(hr)
+    max_lag = max(L, imu_lags - 1)
+    # last usable t is T-H-1 ; first usable t is max_lag
+    t_start = max_lag
+    t_end = T - H - 1
+    if t_end < t_start:
+        return np.empty((0, L)), np.empty((0, imu_lags)), np.empty((0,))
+
+    idx = np.arange(t_start, t_end + 1)
+    N = len(idx)
+
+    # HR past Z
+    Z = np.stack([hr[idx - k] for k in range(L, 0, -1)], axis=1)  # shape (N, L)
+
+    # IMU lags X (current to past)
+    X = np.stack([imu[idx - k] for k in range(imu_lags)], axis=1)  # (N, imu_lags)
+
+    # target y = future HR at t+H
+    y = hr[idx + H]
+    return Z, X, y
+
+
+def conditional_mutual_info(
+    hr, imu, L=30, H=3, imu_lags=1, n_neighbors=5, random_state=0
+):
+    """
+    Estimate I(IMU ; HR_future | HR_past) via difference of mutual infos:
+      I([IMU,Z]; y) - I(Z; y)
+    using sklearn's mutual_info_regression (kNN estimator).
+    Returns: cmi_estimate (nats), N_effective
+    """
+    Z, X, y = make_supervised_windows(hr, imu, L=L, H=H, imu_lags=imu_lags)
+    if len(y) == 0:
+        return np.nan, 0
+
+    # Concatenate features
+    ZX = np.concatenate([Z, X], axis=1)
+
+    # sklearn returns MI in nats (natural log base)
+    I_ZY = mutual_info_regression(
+        Z, y, n_neighbors=n_neighbors, random_state=random_state
+    )
+    I_ZY_total = float(np.sum(I_ZY))  # sum over Z dims approximates I(Z; y)
+
+    I_ZX_Y = mutual_info_regression(
+        ZX, y, n_neighbors=n_neighbors, random_state=random_state
+    )
+    I_ZX_Y_total = float(np.sum(I_ZX_Y))  # approximates I([Z,X]; y)
+
+    cmi = I_ZX_Y_total - I_ZY_total
+    # CMI can't be < 0 theoretically; clip tiny negatives due to estimation noise
+    return max(0.0, cmi), len(y)
+
+
+def cmi_averaged(datamodules):
+    for dm in datamodules:
+        data = dm.train_dataset.data
+        cmis = []
+        for series in tqdm(data):
+            hr = series[:, 0]
+            imu = series[:, 1]
+            cmi, _ = conditional_mutual_info(hr, imu)
+            cmis.append(cmi)
+        print(f"Dataset: {dm.name}")
+        print(f"Average CMI: {np.mean(cmis)}")
+
+
 def main():
     datamodules: List[LightningDataModule] = []
     for dataset in ["dalia", "wildppg", "ieee"]:
@@ -925,10 +1002,14 @@ def main():
     # cross_correlation(datamodules)
     # granger_imu_to_hr(datamodules)
 
-    HR_LAGS = [1, 2, 3, 4, 5, 10, 15, 20, 30, 45, 60]
-    IMU_LAGS = [0, 1, 2, 3, 5, 10]
-    # xgb_feature_importance(datamodules, hr_lags=HR_LAGS, exo_lags=IMU_LAGS, horizon=5, max_series=10)
-    plot_scatter(datamodules)
+    HR_LAGS = [1, 2, 3, 4, 5, 10, 15, 20, 30]
+    IMU_LAGS = [1, 2, 3, 5, 10]
+    # xgb_feature_importance(
+    #     datamodules, hr_lags=HR_LAGS, exo_lags=IMU_LAGS, horizon=3, max_series=20
+    # )
+    # plot_scatter(datamodules)
+    # coherence_fn(datamodules)
+    cmi_averaged(datamodules)
 
 
 if __name__ == "__main__":
