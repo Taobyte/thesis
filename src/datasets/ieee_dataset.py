@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Tuple, Any, List
+from typing import Any, List
 from numpy.typing import NDArray
 
 from src.datasets.utils import BaseDataModule
@@ -13,7 +13,7 @@ class IEEEDataset(HRDataset):
 
     def __read_data__(
         self,
-    ) -> Tuple[List[NDArray[np.float32]], List[NDArray[np.float32]]]:
+    ) -> List[NDArray[np.float32]]:
         loaded_series = []
 
         for participant in self.participants:
@@ -45,13 +45,7 @@ class IEEEDataset(HRDataset):
         #      bpm=bpm[:, 0],
         #  )
 
-        combined = np.concatenate(loaded_series, axis=0)
-        mean = np.mean(combined, axis=0)
-        std = np.std(combined, axis=0)
-        min = np.min(combined, axis=0)
-        max = np.max(combined, axis=0)
-
-        return loaded_series, [mean, std, min, max]
+        return loaded_series
 
 
 class IEEEDataModule(BaseDataModule):

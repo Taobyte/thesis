@@ -39,6 +39,7 @@ class WildPPGDataset(HRDataset):
         shift: bool,
         add_alt: bool,
         add_temp: bool,
+        catch22: bool,
         **kwargs: Any,
     ):
         self.shift = shift
@@ -51,13 +52,15 @@ class WildPPGDataset(HRDataset):
         self.add_cadence = add_cadence
         self.add_rmse_last2 = add_rmse_last2
 
+        self.catch22 = catch22
+
         self.add_alt = add_alt
         self.add_temp = add_temp
         super().__init__(**kwargs)
 
     def __read_data__(
         self,
-    ) -> Tuple[list[NDArray[np.float32]], list[NDArray[np.float32]]]:
+    ) -> list[NDArray[np.float32]]:
         data_all = loadmat(self.data_dir + "WildPPG.mat")
         arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
@@ -70,6 +73,7 @@ class WildPPGDataset(HRDataset):
             jerk = data_all["jerk"][participant][0]
             cadence = data_all["cadence"][participant][0]
             rmse_last2 = data_all["rmse_last2"][participant][0]
+            catch22 = data_all["catch22"][participant][0]
             # ankle = data_all["data_imu_ankle"][participant][0]
             # wrist = data_all["data_imu_wrist"][participant][0]
             # chest = data_all["data_imu_chest"][participant][0]
@@ -103,28 +107,30 @@ class WildPPGDataset(HRDataset):
             if self.use_heart_rate:
                 series = hr  # (W, 1)
                 # IMU features
-                if self.use_dynamic_features:
+                if self.use_dynamic_features and self.catch22:
+                    series = np.concatenate((series, catch22), axis=1)
+                elif self.use_dynamic_features and not self.catch22:
                     series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
-                if self.add_rmse:
-                    series = np.concatenate((series, rmse), axis=1)  # (W, 4)
-                if self.add_enmo:
-                    series = np.concatenate((series, enmo), axis=1)  # (W, 4)
-                if self.add_mad:
-                    series = np.concatenate((series, mad), axis=1)  # (W, 4)
-                if self.add_perc:
-                    series = np.concatenate((series, perc), axis=1)  # (W, 4)
-                if self.add_jerk:
-                    series = np.concatenate((series, jerk), axis=1)  # (W, 4)
-                if self.add_rmse_last2:
-                    series = np.concatenate((series, rmse_last2), axis=1)  # (W, 4)
-                if self.add_cadence:
-                    series = np.concatenate((series, cadence), axis=1)  # (W, 4)
+                    if self.add_rmse:
+                        series = np.concatenate((series, rmse), axis=1)  # (W, 4)
+                    if self.add_enmo:
+                        series = np.concatenate((series, enmo), axis=1)  # (W, 4)
+                    if self.add_mad:
+                        series = np.concatenate((series, mad), axis=1)  # (W, 4)
+                    if self.add_perc:
+                        series = np.concatenate((series, perc), axis=1)  # (W, 4)
+                    if self.add_jerk:
+                        series = np.concatenate((series, jerk), axis=1)  # (W, 4)
+                    if self.add_rmse_last2:
+                        series = np.concatenate((series, rmse_last2), axis=1)  # (W, 4)
+                    if self.add_cadence:
+                        series = np.concatenate((series, cadence), axis=1)  # (W, 4)
 
-                # other exogenous covariates
-                if self.add_temp:
-                    series = np.concatenate((series, temperature), axis=1)  # (W,3)
-                if self.add_alt:
-                    series = np.concatenate((series, altitude), axis=1)  # (W, 4)
+                    # other exogenous covariates
+                    if self.add_temp:
+                        series = np.concatenate((series, temperature), axis=1)  # (W,3)
+                    if self.add_alt:
+                        series = np.concatenate((series, altitude), axis=1)  # (W, 4)
 
             arrays.append(series)
 
@@ -139,13 +145,7 @@ class WildPPGDataset(HRDataset):
 
             arrays = processed_arrays
 
-        combined = np.concatenate(arrays, axis=0)
-        mean = np.mean(combined, axis=0)
-        std = np.std(combined, axis=0)
-        min = np.min(combined, axis=0)
-        max = np.max(combined, axis=0)
-
-        return arrays, [mean, std, min, max]
+        return arrays
 
 
 class WildPPGDataModule(BaseDataModule):
@@ -165,6 +165,7 @@ class WildPPGDataModule(BaseDataModule):
         shift: bool = False,
         add_alt: bool = False,
         add_temp: bool = False,
+        catch22: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -182,6 +183,7 @@ class WildPPGDataModule(BaseDataModule):
         self.add_jerk = add_jerk
         self.add_cadence = add_cadence
         self.add_rmse_last2 = add_rmse_last2
+        self.catch22 = catch22
 
         self.shift = shift
         self.add_alt = add_alt
@@ -209,6 +211,7 @@ class WildPPGDataModule(BaseDataModule):
             "shift": self.shift,
             "add_alt": self.add_alt,
             "add_temp": self.add_temp,
+            "catch22": self.catch22,
         }
         if stage == "fit":
             self.train_dataset = WildPPGDataset(

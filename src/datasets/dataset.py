@@ -34,7 +34,20 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         self.target_channel_dim = target_channel_dim
         self.return_whole_series = return_whole_series
 
-        self.data, [self.mean, self.std, self.min, self.max] = self.__read_data__()
+        self.data = self.__read_data__()
+        combined_series = np.concatenate(self.data, axis=0)
+        self.mean = np.mean(combined_series, axis=0)
+        self.std = np.std(combined_series, axis=0)
+        self.min = np.min(combined_series, axis=0)
+        self.max = np.max(combined_series, axis=0)
+        hr = combined_series[:, 0]
+        self.hr_diff_quantile = np.array(
+            np.quantile(
+                np.abs(np.diff(hr, prepend=hr[0])),
+                0.8,
+            )
+        )
+
         if test_local:
             transformed_data: list[NDArray[np.float32]] = []
             for series in self.data:
@@ -68,5 +81,5 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
 
     def __read_data__(
         self,
-    ) -> Tuple[list[NDArray[np.float32]], list[NDArray[np.float32]]]:
+    ) -> list[NDArray[np.float32]]:
         raise NotImplementedError()

@@ -192,10 +192,13 @@ class BaseLightningModule(L.LightningModule):
     def test_step(
         self, batch: Tuple[Tensor, Tensor], batch_idx: int
     ) -> dict[str, float]:
-        metrics, current_metrics = self.evaluate(batch, batch_idx)
+        metrics, current_metrics, transition_metrics = self.evaluate(batch, batch_idx)
 
         for k, v in current_metrics.items():
             self.metric_full[k] += [float(val) for val in v]
+
+        for k, v in transition_metrics.items():
+            self.transition_specific_metrics[k].extend(v)
         return metrics
 
     def on_test_epoch_start(self):
@@ -203,12 +206,20 @@ class BaseLightningModule(L.LightningModule):
         self.batch_size: list[int] = []
 
         self.metric_full: defaultdict[str, list[float]] = defaultdict(list[float])
+        self.transition_specific_metrics: defaultdict[str, list[float]] = defaultdict(
+            list[float]
+        )
 
     def on_test_epoch_end(self):
         # log the average metrics to wandb
         avg_metrics = self.calculate_weighted_average(
             self.metrics_dict, self.batch_size
         )
+
+        for metric in ["MAE", "MSE"]:
+            avg_metrics[f"T{metric}"] = np.mean(
+                self.transition_specific_metrics[metric]
+            )
 
         avg_metrics["RMSE"] = avg_metrics["MSE"] ** 0.5
         avg_metrics["NRMSE"] = avg_metrics["RMSE"] / avg_metrics["abs_target_mean"]
@@ -260,7 +271,20 @@ class BaseLightningModule(L.LightningModule):
         )
         self.update_metrics(metrics)
 
-        return metrics, current_metrics
+        # transition specific metrics
+        device = preds.device
+        train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
+        hr_diff_quantile = train_dataset.hr_diff_quantile
+        q = torch.from_numpy(hr_diff_quantile).to(device).float()
+        diff = torch.abs(prediction_window[:, 0, 0] - look_back_window[:, -1, 0])
+        mask = (diff >= q).bool()
+        transition_metric: defaultdict[str, list[float]] = defaultdict(list[float])
+        for k, v in current_metrics.items():
+            v_t = torch.as_tensor(v, device=mask.device, dtype=torch.float32)
+            v_trans = v_t[mask]
+            transition_metric[k].extend(v_trans.detach().cpu().tolist())
+
+        return metrics, current_metrics, transition_metric
 
     def update_metrics(self, new_metrics: Dict):
         for metric_name, metric_value in new_metrics.items():

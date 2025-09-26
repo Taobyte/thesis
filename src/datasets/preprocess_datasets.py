@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import scipy
+import pycatch22
 
 from pathlib import Path
 from tqdm import tqdm
@@ -220,6 +221,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None:
+    stride = 2  # 2s stride
     for winsize in winsizes:
         all_hrs = []
         all_imus = []
@@ -230,6 +232,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
         all_jerks = []
         all_rmse_last2 = []
         all_cadences = []
+        all_catch22 = []
         for pidx, p in enumerate(Path(datadir).iterdir()):
             print(pidx, " load ", p)
             part_data = load_wildppg_participant(p.absolute())
@@ -254,7 +257,8 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
             jerks = []
             rmse_last2s = []
             cadences = []
-            for win_s in tqdm(range(0, max(ecgpks_filt), winsize * fs)):
+            catch22_vals = []
+            for win_s in tqdm(range(0, max(ecgpks_filt), stride * fs)):
                 rr_in_win = rrs[
                     np.logical_and(
                         rrxs > win_s,
@@ -285,6 +289,12 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
                     f[band_loco][np.argmax(Pxx[band_loco])] if band_loco.any() else 0.0
                 )
 
+                vals = np.asarray(
+                    pycatch22.catch22_all(window, catch24=True)["values"], dtype=float
+                )
+                catch22_val = np.nan_to_num(vals, nan=0.0)
+                catch22_vals.append(catch22_val)
+
                 imus.append(mean)
                 rmses.append(rmse)
                 enmos.append(enmo)
@@ -303,6 +313,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
             jerk_col = np.asarray(jerks, dtype=np.float32)[:, None]
             rmse_last2_col = np.asarray(rmse_last2s, dtype=np.float32)[:, None]
             cadence_col = np.asarray(cadences, dtype=np.float32)[:, None]
+            catch22_col = np.stack(catch22_vals)
 
             all_hrs.append(hrs_col)
             all_imus.append(imus_col)
@@ -313,6 +324,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
             all_jerks.append(jerk_col)
             all_rmse_last2.append(rmse_last2_col)
             all_cadences.append(cadence_col)
+            all_catch22.append(catch22_col)
 
         data_bpm_values = np.empty((len(all_hrs), 1), dtype=object)
         data_imu_ankle = np.empty((len(all_imus), 1), dtype=object)
@@ -323,6 +335,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
         jerk = np.empty((len(all_imus), 1), dtype=object)
         rmse_last2 = np.empty((len(all_imus), 1), dtype=object)
         cadence = np.empty((len(all_imus), 1), dtype=object)
+        catch22 = np.empty((len(all_imus), 1), dtype=object)
         for i in range(len(all_hrs)):
             data_bpm_values[i, 0] = all_hrs[i]
             data_imu_ankle[i, 0] = all_imus[i]
@@ -333,6 +346,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
             jerk[i, 0] = all_jerks[i]
             rmse_last2[i, 0] = all_rmse_last2[i]
             cadence[i, 0] = all_cadences[i]
+            catch22[i, 0] = all_catch22[i]
         outdict = {
             "data_bpm_values": data_bpm_values,
             "data_imu_ankle": data_imu_ankle,
@@ -343,6 +357,7 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
             "jerk": jerk,
             "rmse_last2": rmse_last2,
             "cadence": cadence,
+            "catch22": catch22,
         }
 
         scipy.io.savemat(f"./data/WildPPG_{winsize}.mat", outdict)

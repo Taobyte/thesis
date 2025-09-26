@@ -23,6 +23,8 @@ datamodule:
   add_cadence: False 
   add_rmse_last2: False
 
+  catch22: False
+
   add_temp: False
   add_alt: False
 

@@ -17,7 +17,7 @@ class DaLiADataset(HRDataset):
 
     def __read_data__(
         self,
-    ) -> Tuple[list[NDArray[np.float32]], list[NDArray[np.float32]]]:
+    ) -> list[NDArray[np.float32]]:
         loaded_series: list[NDArray[np.float32]] = []
         for i in self.participants:
             label = "S" + str(i)
@@ -74,13 +74,7 @@ class DaLiADataset(HRDataset):
 
             loaded_series.append(series)
 
-        combined = np.concatenate(loaded_series, axis=0)
-        mean = np.mean(combined, axis=0)
-        std = np.std(combined, axis=0)
-        min = np.min(combined, axis=0)
-        max = np.max(combined, axis=0)
-
-        return loaded_series, [mean, std, min, max]
+        return loaded_series
 
     def _read_activity_data_(self) -> list[NDArray[np.int32]]:
         participant_activity_labels: list[NDArray[np.int32]] = []
