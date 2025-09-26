@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from src.metrics import Evaluator
 from src.normalization import global_z_denorm, min_max_denorm
 from src.datasets.utils import BaseDataModule
-from src.feature_engineering import transform_imu
 
 
 @dataclass
@@ -102,7 +101,6 @@ class BaseLightningModule(L.LightningModule):
         _, _, C = lbw.shape
 
         x = lbw.clone()
-        # x = transform_imu(x, imu_channel=1)
 
         min_channels = self.target_channel_dim if self.local_norm_endo_only else C
 

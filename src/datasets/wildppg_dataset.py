@@ -27,8 +27,30 @@ def nan_helper(y):
 
 
 class WildPPGDataset(HRDataset):
-    def __init__(self, shift: bool, add_alt: bool, add_temp: bool, **kwargs: Any):
+    def __init__(
+        self,
+        add_rmse: bool,
+        add_enmo: bool,
+        add_mad: bool,
+        add_perc: bool,
+        add_jerk: bool,
+        add_cadence: bool,
+        add_rmse_last2: bool,
+        shift: bool,
+        add_alt: bool,
+        add_temp: bool,
+        **kwargs: Any,
+    ):
         self.shift = shift
+
+        self.add_rmse = add_rmse
+        self.add_enmo = add_enmo
+        self.add_mad = add_mad
+        self.add_perc = add_perc
+        self.add_jerk = add_jerk
+        self.add_cadence = add_cadence
+        self.add_rmse_last2 = add_rmse_last2
+
         self.add_alt = add_alt
         self.add_temp = add_temp
         super().__init__(**kwargs)
@@ -39,16 +61,19 @@ class WildPPGDataset(HRDataset):
         data_all = loadmat(self.data_dir + "WildPPG.mat")
         arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
-            # Load PPG signal and heart rate values
-            ppg = data_all["data_ppg_ankle"][participant, 0]
             hr = data_all["data_bpm_values"][participant][0].astype(float)
             activity = data_all["data_imu_ankle"][participant][0]
+            rmse = data_all["rmse"][participant][0]
+            enmo = data_all["enmo"][participant][0]
+            mad = data_all["mad"][participant][0]
+            perc = data_all["perc"][participant][0]
+            jerk = data_all["jerk"][participant][0]
+            cadence = data_all["cadence"][participant][0]
+            rmse_last2 = data_all["rmse_last2"][participant][0]
             # ankle = data_all["data_imu_ankle"][participant][0]
             # wrist = data_all["data_imu_wrist"][participant][0]
             # chest = data_all["data_imu_chest"][participant][0]
             # activity = (1 / 3) * (ankle + wrist + chest)
-            temperature = data_all["data_temp_chest"][participant][0]
-            altitude = data_all["data_altitude_values"][participant][0]
 
             # if (altitude < 100).any():
             #     print("altitude < 100")
@@ -63,34 +88,43 @@ class WildPPGDataset(HRDataset):
             nans, x = nan_helper(activity)
             activity[nans] = np.interp(x(nans), x(~nans), activity[~nans])
 
-            temperature[temperature < 30] = np.nan
-            nans, x = nan_helper(temperature)
-            temperature[nans] = np.interp(x(nans), x(~nans), temperature[~nans])
+            if self.add_temp:
+                temperature = data_all["data_temp_chest"][participant][0]
+                temperature[temperature < 30] = np.nan
+                nans, x = nan_helper(temperature)
+                temperature[nans] = np.interp(x(nans), x(~nans), temperature[~nans])
 
-            altitude[altitude < 100] = np.nan
-            nans, x = nan_helper(altitude)
-            altitude[nans] = np.interp(x(nans), x(~nans), altitude[~nans])
+            if self.add_alt:
+                altitude = data_all["data_altitude_values"][participant][0]
+                altitude[altitude < 100] = np.nan
+                nans, x = nan_helper(altitude)
+                altitude[nans] = np.interp(x(nans), x(~nans), altitude[~nans])
 
-            mask_ppg = ~np.isnan(ppg).any(axis=1) & ~np.isinf(ppg).any(axis=1)
-            ppg = ppg[mask_ppg]
             if self.use_heart_rate:
                 series = hr  # (W, 1)
+                # IMU features
                 if self.use_dynamic_features:
                     series = np.concatenate((series, activity), axis=1)  # shape (W, 2)
+                if self.add_rmse:
+                    series = np.concatenate((series, rmse), axis=1)  # (W, 4)
+                if self.add_enmo:
+                    series = np.concatenate((series, enmo), axis=1)  # (W, 4)
+                if self.add_mad:
+                    series = np.concatenate((series, mad), axis=1)  # (W, 4)
+                if self.add_perc:
+                    series = np.concatenate((series, perc), axis=1)  # (W, 4)
+                if self.add_jerk:
+                    series = np.concatenate((series, jerk), axis=1)  # (W, 4)
+                if self.add_rmse_last2:
+                    series = np.concatenate((series, rmse_last2), axis=1)  # (W, 4)
+                if self.add_cadence:
+                    series = np.concatenate((series, cadence), axis=1)  # (W, 4)
+
+                # other exogenous covariates
                 if self.add_temp:
                     series = np.concatenate((series, temperature), axis=1)  # (W,3)
                 if self.add_alt:
                     series = np.concatenate((series, altitude), axis=1)  # (W, 4)
-            else:
-                series = ppg[:, :, np.newaxis]  # shape (W, 200, 1)
-                if self.use_dynamic_features:
-                    repeated_activity = np.repeat(activity, repeats=200, axis=1)[
-                        :, :, np.newaxis
-                    ]  # shape (W, 200, 1)
-
-                    series = np.concatenate(
-                        (series, repeated_activity[mask_ppg]), axis=-1
-                    )
 
             arrays.append(series)
 
@@ -117,10 +151,17 @@ class WildPPGDataset(HRDataset):
 class WildPPGDataModule(BaseDataModule):
     def __init__(
         self,
-        use_heart_rate: bool = False,
+        use_heart_rate: bool = True,
         train_participants: List[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: List[int] = [10, 11],
         test_participants: List[int] = [9, 12, 13, 14, 15],
+        add_rmse: bool = False,
+        add_enmo: bool = False,
+        add_mad: bool = False,
+        add_perc: bool = False,
+        add_jerk: bool = False,
+        add_cadence: bool = False,
+        add_rmse_last2: bool = False,
         shift: bool = False,
         add_alt: bool = False,
         add_temp: bool = False,
@@ -133,6 +174,14 @@ class WildPPGDataModule(BaseDataModule):
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        self.add_rmse = add_rmse
+        self.add_enmo = add_enmo
+        self.add_mad = add_mad
+        self.add_perc = add_perc
+        self.add_jerk = add_jerk
+        self.add_cadence = add_cadence
+        self.add_rmse_last2 = add_rmse_last2
 
         self.shift = shift
         self.add_alt = add_alt
@@ -150,6 +199,13 @@ class WildPPGDataModule(BaseDataModule):
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
+            "add_rmse": self.add_rmse,
+            "add_enmo": self.add_enmo,
+            "add_mad": self.add_mad,
+            "add_perc": self.add_perc,
+            "add_jerk": self.add_jerk,
+            "add_cadence": self.add_cadence,
+            "add_rmse_last2": self.add_rmse_last2,
             "shift": self.shift,
             "add_alt": self.add_alt,
             "add_temp": self.add_temp,

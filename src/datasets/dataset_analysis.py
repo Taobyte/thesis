@@ -62,7 +62,7 @@ def main():
         "--datasets",
         type=list_of_strings,
         required=False,
-        default=["dalia", "wildppg", "ieee"],
+        default=["dalia", "wildppg8", "ieee"],
         help="Dataset to plot. Must be one or more (separated by,) of 'ieee', 'dalia', 'wildppg' ",
     )
 
@@ -147,30 +147,42 @@ def viz_exo_wildppg():
         cfg = compose(
             config_name="config",
             overrides=[
-                "dataset=wildppg",
+                "dataset=wildppg8",
                 "folds=all",
                 "use_dynamic_features=True",
                 "use_heart_rate=True",
-                "dataset.datamodule.add_temp=True",
-                "dataset.datamodule.add_alt=True",
+                "dataset.datamodule.add_rmse=True",
+                "dataset.datamodule.add_enmo=True",
+                "dataset.datamodule.add_mad=True",
+                "dataset.datamodule.add_perc=True",
+                "dataset.datamodule.add_jerk=True",
+                "dataset.datamodule.add_cadence=True",
+                "dataset.datamodule.add_rmse_last2=True",
             ],
         )
     datamodule = instantiate(cfg.dataset.datamodule)
     datamodule.setup("fit")
 
-    n_series = 2
-    names = ["Heart Rate", "IMU Wrist", "IMU Ankle", "IMU Chest"]
+    n_series = 1
+    names = ["HR", "Mean", "RMSE", "ENMO", "MAD", "PERC", "JERK", "LAST2", "CAD"]
 
-    fig = make_subplots(rows=len(names) * n_series, cols=1, row_titles=names * n_series)
+    fig = make_subplots(
+        rows=len(names) * n_series,
+        cols=1,
+        row_titles=names * n_series,
+        shared_xaxes=True,
+    )
 
     dataset = datamodule.train_dataset.data
     dataset = dataset[:n_series]
+    cov_mats = []
     for i, series in tqdm(enumerate(dataset)):
+        cov_mats.append(np.corrcoef(series[:, 1:], rowvar=False))
         for j, name in enumerate(names):
             trace = series[:, j]
             fig.add_trace(
                 go.Scatter(
-                    x=list(range(len(trace))) * 2,
+                    x=list(range(len(trace))) * 8,
                     y=trace,
                     # showlegend=(i==0),
                     name=name,
@@ -179,7 +191,9 @@ def viz_exo_wildppg():
                 row=i * len(names) + 1 + j,
                 col=1,
             )
+    import pdb
 
+    pdb.set_trace()
     fig.show()
 
 
@@ -478,7 +492,10 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
             row_names.append(name + " ACT")
 
     fig = make_subplots(
-        rows=2 * n_series_per_dataset * n_datasets, cols=1, row_titles=row_names
+        rows=2 * n_series_per_dataset * n_datasets,
+        cols=1,
+        row_titles=row_names,
+        shared_xaxes=True,
     )
     for j, datamodule in enumerate(datamodules):
         dataset = datamodule.train_dataset.data

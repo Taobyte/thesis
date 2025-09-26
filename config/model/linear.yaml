@@ -9,7 +9,7 @@ model:
   prediction_window: ${prediction_window}
   target_channel_dim: ${dataset.datamodule.target_channel_dim}
 
-  model_type: "elastic_net"
+  model_type: "ols"
   alpha: 1.0 # ridge alpha
 
 pl_model: 

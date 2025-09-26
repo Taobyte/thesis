@@ -22,7 +22,7 @@ class Model(torch.nn.Module):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.target_channel_dim = target_channel_dim
-        if model_type == "linear_regression":
+        if model_type == "ols":
             self.model = LinearRegression()
         elif model_type == "ridge":
             self.model = Ridge(alpha=alpha)
