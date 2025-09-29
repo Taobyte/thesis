@@ -70,7 +70,7 @@ class Linear(BaseLightningModule):
 
         # we need this for the optuna tuner
         preds = self.model(torch.tensor(X_val))
-        preds = torch.tensor(preds, dtype=torch.float32, device=self.device)
+        preds = torch.as_tensor(preds, dtype=torch.float32, device=self.device)
         targets = torch.tensor(y_val, dtype=torch.float32, device=self.device)
 
         if self.tune:

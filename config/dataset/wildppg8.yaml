@@ -20,7 +20,7 @@ datamodule:
   add_mad: False
   add_perc: False
   add_jerk: False
-  add_cadence: False 
+  add_cadence: False
   add_rmse_last2: False
 
   catch22: False

@@ -19,11 +19,9 @@ from src.callbacks import EfficiencyCallback, PredictionCallback
 def delete_checkpoint(trainer: Trainer, checkpoint_callback: ModelCheckpoint):
     if trainer.is_global_zero:
         best_checkpoint_path: str = checkpoint_callback.best_model_path  # ignore:type
-        try:
+        if best_checkpoint_path and os.path.isfile(best_checkpoint_path):
             os.remove(best_checkpoint_path)
             print(f"Successfully deleted best checkpoint: {best_checkpoint_path}")
-        except OSError as e:
-            print(f"Error deleting checkpoint {best_checkpoint_path}: {e}")
 
 
 def setup(
@@ -80,12 +78,12 @@ def setup(
         logger=wandb_logger,
         max_epochs=config.model.trainer.max_epochs,
         callbacks=callbacks,
-        enable_progress_bar=True,
         enable_model_summary=False,
         overfit_batches=1 if config.overfit else 0.0,
         limit_test_batches=10 if config.overfit else None,
         default_root_dir=config.path.checkpoint_path,
         num_sanity_val_steps=0,
+        enable_progress_bar=config.progress_bar,
     )
 
     return datamodule, pl_model, trainer, callbacks

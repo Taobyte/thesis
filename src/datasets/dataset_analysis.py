@@ -6,7 +6,8 @@ import plotly.express as px
 import antropy as ant
 import pycatch22
 import math
-
+import ruptures as rpt  # our package
+import matplotlib.pyplot as plt  # for display purposes
 
 from lightning import LightningDataModule
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -89,6 +90,8 @@ def main():
             "adfuller",
             "chaos",
             "wildppg_exo",
+            "cp_detection",
+            "downsample",
         ],
         required=True,
     )
@@ -140,6 +143,58 @@ def main():
         chaos_script(datamodules)
     elif args.type == "scatter":
         scatter_plots(datamodules)
+    elif args.type == "cp_detection":
+        change_point_detection(datamodules)
+    elif args.type == "downsample":
+        downsample_series(datamodules)
+
+
+def downsample_series(datamodules):
+    N_SERIES = 1
+    factor = 30
+    fig = make_subplots(rows=len(datamodules) * N_SERIES * 2, cols=1)
+    for k, dm in enumerate(datamodules):
+        data = dm.train_dataset.data[:N_SERIES]
+        for j, series in enumerate(data):
+            y = series[:, 0]
+            imu = series[:, 1]
+            n = (len(y) // factor) * factor
+            y60 = y[:n].reshape(-1, factor).mean(axis=1)
+            imu60 = imu[:n].reshape(-1, factor).mean(axis=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(y60))),
+                    y=y60,
+                ),
+                row=k * 2 * N_SERIES + 2 * j + 1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(y60))),
+                    y=imu60,
+                ),
+                row=k * 2 * N_SERIES + 2 * j + 2,
+                col=1,
+            )
+
+    fig.show()
+
+
+def change_point_detection(datamodules):
+    N_SERIES = 1
+    for dm in datamodules:
+        data = dm.train_dataset.data[:N_SERIES]
+        for series in data:
+            y = series[:, 0]
+            model = "l2"
+            algo = rpt.Pelt(model=model, min_size=20).fit(y)
+            bkps = algo.predict(pen=10.0)  # tune 'pen' (see tips below)
+            print(
+                f"Number of CP: {len(bkps)}, Relative Score (len(bkps) / len(y)): {len(bkps) / len(y):.4}"
+            )
+            rpt.display(y, bkps)
+            plt.show()
 
 
 def viz_exo_wildppg():

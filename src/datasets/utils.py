@@ -264,9 +264,9 @@ class BaseDataModule(L.LightningDataModule):
         pw_gb = pws_dataset.nbytes / (1024**3)
         total_gb = lbw_gb + pw_gb
 
-        print(f"[{mode}] look_back_window: {lbws_dataset.shape}, {lbw_gb:.5f} GB")
-        print(f"[{mode}] prediction_window: {pws_dataset.shape}, {pw_gb:.5f} GB")
-        print(f"[{mode}] total size: {total_gb:.5f} GB")
+        # print(f"[{mode}] look_back_window: {lbws_dataset.shape}, {lbw_gb:.5f} GB")
+        # print(f"[{mode}] prediction_window: {pws_dataset.shape}, {pw_gb:.5f} GB")
+        # print(f"[{mode}] total size: {total_gb:.5f} GB")
 
         return lbws_dataset, pws_dataset
 

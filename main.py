@@ -12,7 +12,6 @@ from src.train_test_tune import (
     tune_local,
     train_test_global,
     train_test_local,
-    train_test_global_ensemble,
 )
 from src.utils import (
     setup_wandb_logger,
@@ -54,10 +53,7 @@ def main(config: DictConfig) -> Optional[float]:
         return avg_val_loss
     else:
         if config.dataset.name in config.global_datasets:
-            if config.model.name == "ensemble":
-                train_test_global_ensemble(config, wandb_logger, run_name)
-            else:
-                train_test_global(config, wandb_logger, run_name)
+            train_test_global(config, wandb_logger, run_name)
         elif config.dataset.name in config.local_datasets:
             train_test_local(config, wandb_logger, run_name)
         else:

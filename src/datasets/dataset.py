@@ -35,6 +35,15 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         self.return_whole_series = return_whole_series
 
         self.data = self.__read_data__()
+        factor = 1
+        downsampled_data: list[NDArray[np.float32]] = []
+        for x in self.data:
+            T, C = x.shape  # C should be 2
+            n = (T // factor) * factor
+            y60 = x[:n].reshape(-1, factor, C).mean(axis=1)
+            downsampled_data.append(y60)
+        self.data = downsampled_data
+
         combined_series = np.concatenate(self.data, axis=0)
         self.mean = np.mean(combined_series, axis=0)
         self.std = np.std(combined_series, axis=0)
@@ -44,9 +53,10 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         self.hr_diff_quantile = np.array(
             np.quantile(
                 np.abs(np.diff(hr, prepend=hr[0])),
-                0.8,
+                0.9,
             )
         )
+        # print(f"HR Diff 0.9 Quantile: {self.hr_diff_quantile:.4f}")
 
         if test_local:
             transformed_data: list[NDArray[np.float32]] = []

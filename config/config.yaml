@@ -55,6 +55,7 @@ wandb:
 
 # training 
 min_delta: 0.001
+progress_bar: False
 
 # callbacks
 use_efficiency_callback: False # compute efficiency related metrics
