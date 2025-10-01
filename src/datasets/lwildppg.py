@@ -81,27 +81,23 @@ class LWildPPG(WildPPGDataModule):
         self.participant = participant
 
     def setup(self, stage: str):
-        common_args = dict(
-            train_frac=self.train_frac,
-            val_frac=self.val_frac,
-            data_dir=self.data_dir,
-            participants=[self.participant],
-            use_heart_rate=self.use_heart_rate,
-            look_back_window=self.look_back_window,
-            prediction_window=self.prediction_window,
-            normalization=self.normalization,
-            use_dynamic_features=self.use_dynamic_features,
-        )
         if stage == "fit":
             self.train_dataset = LWildPPGDataset(
                 flag="train",
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                participants=[self.participant],
+                **self.common_args,
             )
             self.val_dataset = LWildPPGDataset(
-                flag="val", return_whole_series=self.return_whole_series, **common_args
+                flag="val",
+                return_whole_series=self.return_whole_series,
+                participants=[self.participant],
+                **self.common_args,
             )
         if stage == "test":
             self.test_dataset = LWildPPGDataset(
-                flag="test", return_whole_series=False, **common_args
+                flag="test",
+                return_whole_series=False,
+                participants=[self.participant],
+                **self.common_args,
             )

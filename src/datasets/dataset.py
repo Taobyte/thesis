@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from sklearn.cluster import KMeans
 from torch import Tensor
 from torch.utils.data import Dataset
 from numpy.typing import NDArray

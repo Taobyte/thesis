@@ -189,8 +189,7 @@ class WildPPGDataModule(BaseDataModule):
         self.add_alt = add_alt
         self.add_temp = add_temp
 
-    def setup(self, stage: str):
-        common_args = {
+        self.common_args: dict[str, Any] = {
             "data_dir": self.data_dir,
             "use_dynamic_features": self.use_dynamic_features,
             "use_static_features": self.use_static_features,
@@ -213,20 +212,22 @@ class WildPPGDataModule(BaseDataModule):
             "add_temp": self.add_temp,
             "catch22": self.catch22,
         }
+
+    def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = WildPPGDataset(
                 participants=self.train_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
             self.val_dataset = WildPPGDataset(
                 participants=self.val_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
         if stage == "test":
             self.test_dataset = WildPPGDataset(
                 participants=self.test_participants,
                 return_whole_series=False,
-                **common_args,
+                **self.common_args,
             )

@@ -223,8 +223,9 @@ def train_test_local(
     )
 
     row = means.iloc[0]
+    std_row = stds.iloc[0]
     for k, v in row.items():
-        print(f"{k:<15} {v:>10.4f}")
+        print(f"{k:<15} {v:>10.4f} ± {std_row[k]:.4f}")
 
     # Global results
     total_windows = sum(n_test_windows)

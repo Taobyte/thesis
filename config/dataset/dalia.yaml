@@ -5,15 +5,23 @@ name: "dalia"
 
 datamodule:
   _target_: src.datasets.dalia_dataset.DaLiADataModule
-  data_dir: "${path.datadir}/dalia_preprocessed"
+  data_dir:  "${path.datadir}/dalia_filtered_preprocessed" # "${path.datadir}/dalia_preprocessed"
   train_participants: ${folds.dalia.train_participants} 
   val_participants: ${folds.dalia.val_participants} 
   test_participants: ${folds.dalia.test_participants} 
 
-  freq: 25
-  window_statistic: "mean" # can be "mean" "var" or "power"
+
+  # IMU FEATURES
+  imu_features:
+    - wrist_rms
+    - wrist_last2s_rms
+    - wrist_centroid
+    - wrist_jerk
+    - chest_rms
+    - chest_last2s_rms
+    - chest_centroid
+    - chest_jerk
 
   target_channel_dim: 1 
-  dynamic_exogenous_variables: 1 # dynamic activity information is locally normalized
-  # static_exogenous_variables: 12 # Continuous: AGE, HEIGHT, WEIGHT Binary: GENDER Categorical: SKIN, SPORT
+  dynamic_exogenous_variables: ${len:${.imu_features}} 
   static_exogenous_variables: 9 # we have 9 different activity types the participants perform

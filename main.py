@@ -35,6 +35,7 @@ OmegaConf.register_new_resolver("min", get_min)
 OmegaConf.register_new_resolver("str", resolve_str)
 OmegaConf.register_new_resolver("ensemble_epochs", ensemble_epochs)
 OmegaConf.register_new_resolver("exo_channels_wildppg", exo_channels_wildppg)
+OmegaConf.register_new_resolver("len", lambda x: len(x))
 
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")

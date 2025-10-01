@@ -10,8 +10,12 @@ import pycatch22
 from pathlib import Path
 from tqdm import tqdm
 from numpy.lib.stride_tricks import sliding_window_view
-from scipy import signal
+from numpy.typing import NDArray
 from scipy.io import loadmat
+
+
+from scipy.signal import butter, filtfilt, sosfiltfilt
+from sklearn.preprocessing import MinMaxScaler
 
 
 # -------------------------------------------------------------------
@@ -214,7 +218,7 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     return sos
 
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
     sos = butter_bandpass(lowcut, highcut, fs, order=order)
     y = scipy.signal.sosfiltfilt(sos, data)
     return y
@@ -368,6 +372,19 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
 # -------------------------------------------------------------------
 
 
+def filter_butter(x: NDArray[np.float32], fs: int):
+    f1 = 0.5
+    f2 = 4
+    Wn = [f1, f2]
+    N = 4
+    b, a = butter(N, Wn, btype="bandpass", fs=fs)
+    filtered = filtfilt(b, a, x)
+    # Normalize to range [0, 1]
+    scaler = MinMaxScaler()
+    filtered = scaler.fit_transform(filtered.reshape(-1, 1)).flatten()
+    return filtered
+
+
 def create_ieee_npz_files(datadir: str):
     ieee_preprocessed = os.path.join(datadir, "ieee_preprocessed")
     os.makedirs(ieee_preprocessed, exist_ok=True)
@@ -377,21 +394,6 @@ def create_ieee_npz_files(datadir: str):
     fs = 125  # sampling rate
     window_duration = 8
     overlap_duration = 6
-
-    from scipy.signal import butter, filtfilt
-    from sklearn.preprocessing import MinMaxScaler
-
-    def filter_butter(x, fs):
-        f1 = 0.5
-        f2 = 4
-        Wn = [f1, f2]
-        N = 4
-        b, a = butter(N, Wn, btype="bandpass", fs=fs)
-        filtered = filtfilt(b, a, x)
-        # Normalize to range [0, 1]
-        scaler = MinMaxScaler()
-        filtered = scaler.fit_transform(filtered.reshape(-1, 1)).flatten()
-        return filtered
 
     def preprocess_signal(signal: np.ndarray):
         # create windows
@@ -446,46 +448,110 @@ def create_ieee_npz_files(datadir: str):
 # -------------------------------------------------------------------
 # DALIA
 # -------------------------------------------------------------------
+def filter_butter_dalia(
+    x: NDArray[np.float32], fs: int, f1: float = 0.5, f2: float = 5.0, order: int = 4
+) -> NDArray[np.float32]:
+    Wn = [f1, f2]
+    sos = butter(order, Wn, btype="bandpass", fs=fs, output="sos")
+    filtered = sosfiltfilt(sos, x)
+    return filtered
+
+
+def process_acc_signal(
+    signal: NDArray[np.float32],
+    window_size: int = 8,
+    stride_size: int = 2,
+    fs: int = 32,
+    filter: bool = True,
+    f2: float = 5.0,
+    feature_name: str = "mean",
+) -> NDArray[np.float32]:
+    window = window_size * fs
+    stride = stride_size * fs
+    filtered = (
+        np.column_stack(
+            [filter_butter_dalia(signal[:, i], fs=fs, f2=f2) for i in range(3)]
+        )
+        if filter
+        else signal
+    )
+    acc_norm = np.linalg.norm(filtered, axis=1)
+    windows = sliding_window_view(acc_norm, window_shape=window)[::stride]
+    if feature_name == "mean":
+        res = np.mean(windows, axis=1)
+    elif feature_name == "std":
+        res = np.std(windows, axis=1)
+    elif feature_name == "rms":
+        res = np.sqrt(np.mean(windows**2, axis=1))
+    elif feature_name == "jerk":
+        dx = np.diff(windows, axis=1, prepend=windows[:, :1])
+        res = np.sqrt((dx**2).mean(axis=1)) * fs
+    elif feature_name == "last2s_rms":
+        res = np.sqrt((windows[:, -2 * fs :] ** 2).mean(axis=1))
+    elif feature_name == "centroid":
+        _, W = windows.shape
+        T = W / fs
+        t = (np.arange(W, dtype=float) / fs)[None, :]
+        e = windows**2
+        E = e.sum(axis=1) + 1e-12
+        t_centroid = (e * t).sum(axis=1) / E
+        res = t_centroid / T
+    else:
+        raise NotImplementedError()
+
+    return res
+
+
+FEATURES = ["rms", "jerk", "last2s_rms", "centroid"]
+
+
+def get_all_features(
+    signal: NDArray[np.float32],
+    window_size: int = 8,
+    stride_size: int = 2,
+    fs: int = 32,
+    filter: bool = True,
+    f2: float = 5.0,
+    prefix: str = "",
+) -> dict[str, NDArray[np.float32]]:
+    traces: dict[str, NDArray[np.float32]] = {}
+    for feature in FEATURES:
+        processed_trace = process_acc_signal(
+            signal,
+            window_size=window_size,
+            stride_size=stride_size,
+            fs=fs,
+            filter=filter,
+            f2=f2,
+            feature_name=feature,
+        )
+        traces[prefix + feature] = processed_trace
+
+    return traces
 
 
 def create_dalia_npy_files(datadir: str):
-    dalia_preprocessed_dir = os.path.join(datadir, "dalia_preprocessed")
+    dalia_preprocessed_dir = os.path.join(datadir, "dalia_filtered_preprocessed")
     os.makedirs(dalia_preprocessed_dir, exist_ok=True)
 
     print("Start processing dalia files.")
     for path in tqdm(Path(datadir).glob("**/S*.pkl")):
         with open(path, "rb") as f:
             data = pickle.load(f, encoding="latin1")
-            bvp = data["signal"]["wrist"]["BVP"]
-            heart_rate = data["label"]
-            wrist_acc = data["signal"]["wrist"]["ACC"]
-            acc_norm = np.linalg.norm(wrist_acc, axis=1)  # 32Hz
-            acc_norm_ppg = signal.resample(acc_norm, len(bvp))  # 64Hz
-
-            window_size = 256  # 8 seconds at 32Hz
-            stride = 64  # 2 seconds at 32Hz
-
-            windows = sliding_window_view(acc_norm, window_shape=window_size)[::stride]
-            acc_norm_heart_rate = np.mean(windows, axis=1)
-            imu_var = np.var(windows, axis=1)
-            imu_power = np.mean(windows**2, axis=1)
-            imu_energy = np.sum(windows**2, axis=1)
-            imu_rms = np.sqrt(np.mean(windows**2, axis=1))
-
-            assert heart_rate.shape == acc_norm_heart_rate.shape
-
+            hr = data["label"]
             activity = data["activity"]
+            wrist_acc = data["signal"]["wrist"]["ACC"]
+            chest_acc = data["signal"]["chest"]["ACC"]
+
+            wrist_imu_dict = get_all_features(wrist_acc, fs=32, prefix="wrist_")
+            chest_imu_dict = get_all_features(chest_acc, fs=700, prefix="chest_")
+            combined = {**wrist_imu_dict, **chest_imu_dict}
+
             np.savez(
                 dalia_preprocessed_dir + "/" + (str(path).split("\\")[-2]),
-                bvp=bvp,
-                heart_rate=heart_rate,
-                acc_norm_ppg=acc_norm_ppg,
-                acc_norm_heart_rate=acc_norm_heart_rate,
-                imu_var=imu_var,
-                imu_power=imu_power,
-                imu_energy=imu_energy,
-                imu_rms=imu_rms,
+                hr=hr,
                 activity=activity,
+                **combined,
             )
 
     print("Finished processing dalia files.")

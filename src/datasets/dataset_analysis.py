@@ -550,7 +550,7 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
         rows=2 * n_series_per_dataset * n_datasets,
         cols=1,
         row_titles=row_names,
-        shared_xaxes=True,
+        shared_xaxes=False,
     )
     for j, datamodule in enumerate(datamodules):
         dataset = datamodule.train_dataset.data
@@ -560,13 +560,15 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
         for i, series in tqdm(enumerate(dataset)):
             heartrate = series[:, 0]
             activity = series[:, 1]
+            r1 = 2 * i + 1 + offset  # HR row
+            r2 = r1 + 1  # ACT row
             fig.add_trace(
                 go.Scatter(
                     x=list(range(len(series))) * 2,
                     y=heartrate,
                     showlegend=False,  # Legend redundant here
                 ),
-                row=2 * i + 1 + offset,
+                row=r1,
                 col=1,
             )
             fig.add_trace(
@@ -575,9 +577,11 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
                     y=activity,
                     showlegend=False,  # Legend redundant here
                 ),
-                row=2 * i + 2 + offset,
+                row=r2,
                 col=1,
             )
+            parent_axis_id = "x" if r1 == 1 else f"x{r1}"
+            fig.update_xaxes(matches=parent_axis_id, row=r2, col=1)
     fig.update_xaxes(
         title_text="Seconds", row=2 * n_series_per_dataset * n_datasets, col=1
     )

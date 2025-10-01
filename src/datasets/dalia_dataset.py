@@ -2,7 +2,6 @@ import numpy as np
 
 from numpy.typing import NDArray
 from pathlib import Path
-from typing import Tuple
 from sklearn.preprocessing import OneHotEncoder
 from typing import Any
 
@@ -11,8 +10,10 @@ from src.datasets.dataset import HRDataset
 
 
 class DaLiADataset(HRDataset):
-    def __init__(self, window_statistic: str = "var", **kwargs: Any):
-        self.window_statistic = window_statistic
+    def __init__(
+        self, imu_features: list[str] = ["wrist_mean", "wrist_std"], **kwargs: Any
+    ):
+        self.imu_features = imu_features
         super().__init__(**kwargs)
 
     def __read_data__(
@@ -23,25 +24,16 @@ class DaLiADataset(HRDataset):
             label = "S" + str(i)
             data_path = Path(self.data_dir) / (label + ".npz")
             data = np.load(data_path)
-            series = (
-                data["heart_rate"][:, np.newaxis]
-                if self.use_heart_rate
-                else data["bvp"]
-            )
+            series = data["hr"][:, np.newaxis]
 
             if self.use_dynamic_features:
-                activity = data["acc_norm_ppg"][:, np.newaxis]
-                if self.use_heart_rate:
-                    if self.window_statistic == "mean":
-                        activity = data["acc_norm_heart_rate"][:, np.newaxis]
-                    elif self.window_statistic == "var":
-                        activity = data["imu_var"][:, np.newaxis]
-                    elif self.window_statistic == "power":
-                        activity = data["imu_power"][:, np.newaxis]
-                    else:
-                        raise NotImplementedError()
-
-                series = np.concatenate((series, activity), axis=1)
+                features: list[NDArray[np.float32]] = []
+                for feature in self.imu_features:
+                    features.append(data[feature][:, np.newaxis])
+                assert len(features) > 0, (
+                    "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
+                )
+                series = np.concatenate([series] + features, axis=1)
 
             if self.use_static_features:
                 activity = data["activity"]
@@ -105,7 +97,7 @@ class DaLiADataModule(BaseDataModule):
         train_participants: list[int] = [2, 3, 4, 5, 6, 7, 8, 12, 15],
         val_participants: list[int] = [9, 10, 11],
         test_participants: list[int] = [1, 13, 14],
-        window_statistic: str = "mean",
+        imu_features: list[str] = ["wrist_mean", "wrist_std"],
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -115,7 +107,7 @@ class DaLiADataModule(BaseDataModule):
         self.val_participants = val_participants
         self.test_participants = test_participants
 
-        self.window_statistic = window_statistic
+        self.imu_features = imu_features
 
     def setup(self, stage: str = "fit"):
         common_args = {
@@ -126,7 +118,7 @@ class DaLiADataModule(BaseDataModule):
             "look_back_window": self.look_back_window,
             "prediction_window": self.prediction_window,
             "target_channel_dim": self.target_channel_dim,
-            "window_statistic": self.window_statistic,
+            "imu_features": self.imu_features,
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
