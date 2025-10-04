@@ -2,7 +2,6 @@ experiment_name: "endo_exo"
 normalization: global
 loss_fn: "MSE"
 
-use_heart_rate: True 
 use_dynamic_features: True
 use_static_features: False 
 

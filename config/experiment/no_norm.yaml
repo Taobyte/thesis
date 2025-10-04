@@ -1,7 +1,6 @@
 experiment_name: "no_norm"
 normalization: "none"
 
-use_heart_rate: True 
 use_dynamic_features: True
 use_static_features: False 
 

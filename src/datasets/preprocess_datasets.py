@@ -12,10 +12,94 @@ from tqdm import tqdm
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
 from scipy.io import loadmat
+from scipy.signal import butter, sosfiltfilt
 
 
-from scipy.signal import butter, filtfilt, sosfiltfilt
-from sklearn.preprocessing import MinMaxScaler
+def filter_butter(
+    x: NDArray[np.float32], fs: int, f1: float = 0.5, f2: float = 5.0, order: int = 4
+) -> NDArray[np.float32]:
+    Wn = [f1, f2]
+    sos = butter(order, Wn, btype="bandpass", fs=fs, output="sos")
+    filtered = sosfiltfilt(sos, x)
+    return filtered
+
+
+def process_acc_signal(
+    signal: NDArray[np.float32],
+    window_size: int = 8,
+    stride_size: int = 2,
+    fs: int = 32,
+    filter: bool = True,
+    f2: float = 5.0,
+    feature_name: str = "mean",
+) -> NDArray[np.float32]:
+    window = window_size * fs
+    stride = stride_size * fs
+    filtered = (
+        np.column_stack([filter_butter(signal[:, i], fs=fs, f2=f2) for i in range(3)])
+        if filter
+        else signal
+    )
+    acc_norm = np.linalg.norm(filtered, axis=1)
+    windows = sliding_window_view(acc_norm, window_shape=window)[::stride]
+    if feature_name == "mean":
+        res = np.mean(windows, axis=1, keepdims=True)
+    elif feature_name == "std":
+        res = np.std(windows, axis=1, keepdims=True)
+    elif feature_name == "rms":
+        res = np.sqrt(np.mean(windows**2, axis=1, keepdims=True))
+    elif feature_name == "jerk":
+        dx = np.diff(windows, axis=1, prepend=windows[:, :1])
+        res = np.sqrt((dx**2).mean(axis=1, keepdims=True)) * fs
+    elif feature_name == "last2s_rms":
+        res = np.sqrt((windows[:, -2 * fs :] ** 2).mean(axis=1, keepdims=True))
+    elif feature_name == "centroid":
+        _, W = windows.shape
+        T = W / fs
+        t = (np.arange(W, dtype=float) / fs)[None, :]
+        e = windows**2
+        E = e.sum(axis=1) + 1e-12
+        t_centroid = (e * t).sum(axis=1) / E
+        res = t_centroid / T
+        res = res[:, None]
+    elif feature_name == "catch22":
+        catch22_features: list[NDArray[np.float32]] = []
+        for w in windows:
+            w_f = pycatch22.catch22_all(w, catch24=True)
+            catch22_features.append(np.array(w_f["values"]))
+
+        res = np.vstack(catch22_features)  # (W,24)
+
+    else:
+        raise NotImplementedError(f"{feature_name} not implemented")
+
+    return res
+
+
+def get_all_features(
+    signal: NDArray[np.float32],
+    window_size: int = 8,
+    stride_size: int = 2,
+    fs: int = 32,
+    filter: bool = True,
+    f2: float = 5.0,
+    prefix: str = "",
+    features: list[str] = ["mean", "std"],
+) -> dict[str, NDArray[np.float32]]:
+    traces: dict[str, NDArray[np.float32]] = {}
+    for feature in features:
+        processed_trace = process_acc_signal(
+            signal,
+            window_size=window_size,
+            stride_size=stride_size,
+            fs=fs,
+            filter=filter,
+            f2=f2,
+            feature_name=feature,
+        )
+        traces[prefix + feature] = processed_trace
+
+    return traces
 
 
 # -------------------------------------------------------------------
@@ -23,7 +107,23 @@ from sklearn.preprocessing import MinMaxScaler
 # -------------------------------------------------------------------
 
 
-def load_wildppg_participant(path):
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    sos = scipy.signal.butter(
+        order, [low, high], analog=False, btype="band", output="sos"
+    )
+    return sos
+
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    sos = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = scipy.signal.sosfiltfilt(sos, data)
+    return y
+
+
+def load_wildppg_participant(path: Path):
     """
     Loads the data of a WildPPG participant and cleans it to receive nested dictionaries
     """
@@ -50,7 +150,7 @@ def load_wildppg_participant(path):
     return loaded_data
 
 
-def panPeakDetect(detection, fs):
+def panPeakDetect(detection, fs: int):
     """
     Jiapu Pan and Willis J. Tompkins.
     A Real-Time QRS Detection Algorithm.
@@ -208,163 +308,79 @@ def quotient_filter(hbpeaks, outlier_over=5, sampling_rate=128, tol=0.8):
     return np.array(good_hbeats), np.array(good_rrs), np.array(good_rrs_x)
 
 
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    sos = scipy.signal.butter(
-        order, [low, high], analog=False, btype="band", output="sos"
-    )
-    return sos
-
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-    sos = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = scipy.signal.sosfiltfilt(sos, data)
-    return y
-
-
-def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None:
+def preprocess_wildppg_mat_file(
+    datadir: str, imu_features: list[str] = ["ankle_rms"]
+) -> None:
+    winsize = 8  # 8s window size
     stride = 2  # 2s stride
-    for winsize in winsizes:
-        all_hrs = []
-        all_imus = []
-        all_enmos = []
-        all_mads = []
-        all_rmses = []
-        all_percs = []
-        all_jerks = []
-        all_rmse_last2 = []
-        all_cadences = []
-        all_catch22 = []
-        for pidx, p in enumerate(Path(datadir).iterdir()):
-            print(pidx, " load ", p)
-            part_data = load_wildppg_participant(p.absolute())
-            r_peaks = pan_tompkins_detector(
-                part_data["sternum"]["ecg"]["v"], part_data["sternum"]["ecg"]["fs"]
-            )
-            ecgpks_filt, rrs, rrxs = quotient_filter(r_peaks, outlier_over=5, tol=0.75)
+    all_hrs = []
+    all_imus = []
+    for pidx, p in enumerate(Path(datadir).iterdir()):
+        print(pidx, " load ", p)
+        part_data = load_wildppg_participant(p.absolute())
 
-            x = part_data["ankle"]["acc_x"]["v"]
-            y = part_data["ankle"]["acc_y"]["v"]
-            z = part_data["ankle"]["acc_z"]["v"]
-            imu = np.sqrt(x**2 + y**2 + z**2)
+        r_peaks = pan_tompkins_detector(
+            part_data["sternum"]["ecg"]["v"], part_data["sternum"]["ecg"]["fs"]
+        )
+        ecgpks_filt, rrs, rrxs = quotient_filter(r_peaks, outlier_over=5, tol=0.75)
 
-            fs = part_data["sternum"]["ecg"]["fs"]
+        def get_imu_by_location(location: str):
+            assert location in ["wrist", "sternum", "ankle", "head"]
+            x = part_data[location]["acc_x"]["v"]
+            y = part_data[location]["acc_y"]["v"]
+            z = part_data[location]["acc_z"]["v"]
+            imu = np.stack([x, y, z], axis=-1)
+            return imu
 
-            hrs = []
-            imus = []
-            enmos = []
-            mads = []
-            percs = []
-            rmses = []
-            jerks = []
-            rmse_last2s = []
-            cadences = []
-            catch22_vals = []
-            for win_s in tqdm(range(0, max(ecgpks_filt), stride * fs)):
-                rr_in_win = rrs[
-                    np.logical_and(
-                        rrxs > win_s,
-                        rrxs < win_s + winsize * fs,
-                    )
-                ]
-                if len(rr_in_win) > 1:  # at least 2
-                    hrs.append(60 * len(rr_in_win) / (np.sum(rr_in_win) / fs))
-                else:
-                    hrs.append(0)  # invalid / noisy ecg
+        wrist_imu = get_imu_by_location("wrist")
+        chest_imu = get_imu_by_location("sternum")
+        ankle_imu = get_imu_by_location("ankle")
 
-                window = imu[win_s : win_s + winsize * fs]
-                mean = np.mean(window)
-                rmse = np.sqrt(np.mean(np.square(window)))
-                enmo = np.mean(np.maximum(window - 1.0, 0.0))
-                mad = np.mean(np.abs(window - mean))
-                p90 = np.percentile(window, 90)
-                jerk = np.sqrt(np.mean(np.diff(window) ** 2)) * fs
-                rmse_last2 = np.sqrt(np.mean(window[-2 * fs :] ** 2))
+        fs = part_data["sternum"]["ecg"]["fs"]
 
-                f, Pxx = scipy.signal.welch(
-                    window, fs=fs, nperseg=min(len(window), 512)
+        ankle_dict = get_all_features(
+            ankle_imu, fs=128, prefix="ankle_", features=imu_features
+        )
+        chest_dict = get_all_features(
+            chest_imu, fs=128, prefix="chest_", features=imu_features
+        )
+        wrist_dict = get_all_features(
+            wrist_imu, fs=128, prefix="wrist_", features=imu_features
+        )
+        combined = {**ankle_dict, **chest_dict, **wrist_dict}
+
+        hrs = []
+        for win_s in tqdm(range(0, max(ecgpks_filt), stride * fs)):
+            rr_in_win = rrs[
+                np.logical_and(
+                    rrxs > win_s,
+                    rrxs < win_s + winsize * fs,
                 )
-                Pxx = Pxx / (np.trapezoid(Pxx, f) + 1e-12)
+            ]
+            if len(rr_in_win) > 1:  # at least 2
+                hrs.append(60 * len(rr_in_win) / (np.sum(rr_in_win) / fs))
+            else:
+                hrs.append(0)  # invalid / noisy ecg
 
-                band_loco = (f >= 0.5) & (f <= 3.0)
-                cadence = (
-                    f[band_loco][np.argmax(Pxx[band_loco])] if band_loco.any() else 0.0
-                )
+        ankle_length = len(ankle_dict["ankle_rms"])
+        chest_length = len(chest_dict["chest_rms"])
+        wrist_length = len(wrist_dict["wrist_rms"])
+        assert ankle_length == chest_length and ankle_length == wrist_length
+        hrs = np.array(hrs[:ankle_length])
 
-                vals = np.asarray(
-                    pycatch22.catch22_all(window, catch24=True)["values"], dtype=float
-                )
-                catch22_val = np.nan_to_num(vals, nan=0.0)
-                catch22_vals.append(catch22_val)
+        all_hrs.append(hrs)
+        all_imus.append(combined)
 
-                imus.append(mean)
-                rmses.append(rmse)
-                enmos.append(enmo)
-                mads.append(mad)
-                percs.append(p90)
-                jerks.append(jerk)
-                rmse_last2s.append(rmse_last2)
-                cadences.append(cadence)
+    data_bpm_values = np.empty((len(all_hrs), 1), dtype=object)
+    for i in range(len(all_hrs)):
+        data_bpm_values[i, 0] = all_hrs[i]
 
-            hrs_col = np.asarray(hrs, dtype=np.float32)[:, None]
-            imus_col = np.asarray(imus, dtype=np.float32)[:, None]
-            rmse_col = np.asarray(rmses, dtype=np.float32)[:, None]
-            enmo_col = np.asarray(enmos, dtype=np.float32)[:, None]
-            mad_col = np.asarray(mads, dtype=np.float32)[:, None]
-            perc_col = np.asarray(percs, dtype=np.float32)[:, None]
-            jerk_col = np.asarray(jerks, dtype=np.float32)[:, None]
-            rmse_last2_col = np.asarray(rmse_last2s, dtype=np.float32)[:, None]
-            cadence_col = np.asarray(cadences, dtype=np.float32)[:, None]
-            catch22_col = np.stack(catch22_vals)
+    hr_arr = np.array(all_hrs, dtype=object)  # shape: (N_participants,)
+    imus_arr = np.array(all_imus, dtype=object)  # shape: (N_participants,)
 
-            all_hrs.append(hrs_col)
-            all_imus.append(imus_col)
-            all_rmses.append(rmse_col)
-            all_enmos.append(enmo_col)
-            all_mads.append(mad_col)
-            all_percs.append(perc_col)
-            all_jerks.append(jerk_col)
-            all_rmse_last2.append(rmse_last2_col)
-            all_cadences.append(cadence_col)
-            all_catch22.append(catch22_col)
-
-        data_bpm_values = np.empty((len(all_hrs), 1), dtype=object)
-        data_imu_ankle = np.empty((len(all_imus), 1), dtype=object)
-        rmse = np.empty((len(all_imus), 1), dtype=object)
-        enmo = np.empty((len(all_imus), 1), dtype=object)
-        mad = np.empty((len(all_imus), 1), dtype=object)
-        perc = np.empty((len(all_imus), 1), dtype=object)
-        jerk = np.empty((len(all_imus), 1), dtype=object)
-        rmse_last2 = np.empty((len(all_imus), 1), dtype=object)
-        cadence = np.empty((len(all_imus), 1), dtype=object)
-        catch22 = np.empty((len(all_imus), 1), dtype=object)
-        for i in range(len(all_hrs)):
-            data_bpm_values[i, 0] = all_hrs[i]
-            data_imu_ankle[i, 0] = all_imus[i]
-            rmse[i, 0] = all_rmses[i]
-            enmo[i, 0] = all_enmos[i]
-            mad[i, 0] = all_mads[i]
-            perc[i, 0] = all_percs[i]
-            jerk[i, 0] = all_jerks[i]
-            rmse_last2[i, 0] = all_rmse_last2[i]
-            cadence[i, 0] = all_cadences[i]
-            catch22[i, 0] = all_catch22[i]
-        outdict = {
-            "data_bpm_values": data_bpm_values,
-            "data_imu_ankle": data_imu_ankle,
-            "rmse": rmse,
-            "enmo": enmo,
-            "mad": mad,
-            "perc": perc,
-            "jerk": jerk,
-            "rmse_last2": rmse_last2,
-            "cadence": cadence,
-            "catch22": catch22,
-        }
-
-        scipy.io.savemat(f"./data/WildPPG_{winsize}.mat", outdict)
+    np.savez(
+        f"./data/WildPPG_{winsize}.npz", hr=hr_arr, imus=imus_arr, allow_pickle=True
+    )
 
 
 # -------------------------------------------------------------------
@@ -372,75 +388,25 @@ def preprocess_wildppg_mat_file(datadir: str, winsizes: list[int] = [8]) -> None
 # -------------------------------------------------------------------
 
 
-def filter_butter(x: NDArray[np.float32], fs: int):
-    f1 = 0.5
-    f2 = 4
-    Wn = [f1, f2]
-    N = 4
-    b, a = butter(N, Wn, btype="bandpass", fs=fs)
-    filtered = filtfilt(b, a, x)
-    # Normalize to range [0, 1]
-    scaler = MinMaxScaler()
-    filtered = scaler.fit_transform(filtered.reshape(-1, 1)).flatten()
-    return filtered
-
-
-def create_ieee_npz_files(datadir: str):
-    ieee_preprocessed = os.path.join(datadir, "ieee_preprocessed")
+def create_ieee_npz_files(datadir: str, features: list[str] = ["mean"]):
+    ieee_preprocessed = os.path.join(datadir, "ieee_filtered")
     os.makedirs(ieee_preprocessed, exist_ok=True)
     signal_files = Path(datadir).glob("*[12].mat")
     bpm_files = Path(datadir).glob("*_BPMtrace.mat")
 
-    fs = 125  # sampling rate
-    window_duration = 8
-    overlap_duration = 6
-
-    def preprocess_signal(signal: np.ndarray):
-        # create windows
-        windows = sliding_window_view(signal, window_shape=window_duration * fs)[
-            :: (window_duration - overlap_duration) * fs
-        ]
-        # downsample from 125Hz => 25Hz
-        downsampled_windows = windows[:, ::5]
-
-        return downsampled_windows
-
     print("Start processing IEEE files...")
     for i, (signal_file, bpm_file) in enumerate(zip(signal_files, bpm_files)):
         signals = loadmat(signal_file)["sig"]
-        bpm = loadmat(bpm_file)["BPM0"]
+        bpm = loadmat(bpm_file)["BPM0"]  # (H, 1)
 
-        ppg1 = filter_butter(signals[1], fs)
-        ppg2 = filter_butter(signals[2], fs)
-        acc_x = filter_butter(signals[3], fs)
-        acc_y = filter_butter(signals[4], fs)
-        acc_z = filter_butter(signals[5], fs)
+        acc_xyz = np.vstack([signals[3], signals[4], signals[5]]).T
 
-        avg_ppg = (ppg1 + ppg2) / 2
-        acc = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
-        ppg = preprocess_signal(avg_ppg)[:, :, np.newaxis]  # add concatenation axis
-        acc = preprocess_signal(acc)[:, :, np.newaxis]
+        imu_features = get_all_features(acc_xyz, fs=125, features=features)
 
-        ppg_final = ppg[:-1]
-        acc_final = acc[:-1]
-        if len(ppg_final) != len(bpm):
-            ppg_final = ppg[:]
-            acc_final = acc[:]
+        for _, v in imu_features.items():
+            assert len(v) == len(bpm)
 
-        assert len(ppg_final) == len(acc_final), (
-            f"signal_length: {len(ppg)} | bpm_length: {len(bpm)}"
-        )
-
-        assert len(ppg) == len(bpm), (
-            f"signal_length: {len(ppg)} | bpm_length: {len(bpm)}"
-        )
-
-        np.savez(
-            ieee_preprocessed + "/" + f"IEEE_{i}",
-            ppg=ppg_final,
-            acc=acc_final,
-            bpms=bpm,
-        )
+        np.savez(ieee_preprocessed + "/" + f"IEEE_{i}", bpms=bpm, **imu_features)
 
     print("End processing IEEE files.")
 
@@ -448,86 +414,6 @@ def create_ieee_npz_files(datadir: str):
 # -------------------------------------------------------------------
 # DALIA
 # -------------------------------------------------------------------
-def filter_butter_dalia(
-    x: NDArray[np.float32], fs: int, f1: float = 0.5, f2: float = 5.0, order: int = 4
-) -> NDArray[np.float32]:
-    Wn = [f1, f2]
-    sos = butter(order, Wn, btype="bandpass", fs=fs, output="sos")
-    filtered = sosfiltfilt(sos, x)
-    return filtered
-
-
-def process_acc_signal(
-    signal: NDArray[np.float32],
-    window_size: int = 8,
-    stride_size: int = 2,
-    fs: int = 32,
-    filter: bool = True,
-    f2: float = 5.0,
-    feature_name: str = "mean",
-) -> NDArray[np.float32]:
-    window = window_size * fs
-    stride = stride_size * fs
-    filtered = (
-        np.column_stack(
-            [filter_butter_dalia(signal[:, i], fs=fs, f2=f2) for i in range(3)]
-        )
-        if filter
-        else signal
-    )
-    acc_norm = np.linalg.norm(filtered, axis=1)
-    windows = sliding_window_view(acc_norm, window_shape=window)[::stride]
-    if feature_name == "mean":
-        res = np.mean(windows, axis=1)
-    elif feature_name == "std":
-        res = np.std(windows, axis=1)
-    elif feature_name == "rms":
-        res = np.sqrt(np.mean(windows**2, axis=1))
-    elif feature_name == "jerk":
-        dx = np.diff(windows, axis=1, prepend=windows[:, :1])
-        res = np.sqrt((dx**2).mean(axis=1)) * fs
-    elif feature_name == "last2s_rms":
-        res = np.sqrt((windows[:, -2 * fs :] ** 2).mean(axis=1))
-    elif feature_name == "centroid":
-        _, W = windows.shape
-        T = W / fs
-        t = (np.arange(W, dtype=float) / fs)[None, :]
-        e = windows**2
-        E = e.sum(axis=1) + 1e-12
-        t_centroid = (e * t).sum(axis=1) / E
-        res = t_centroid / T
-    else:
-        raise NotImplementedError()
-
-    return res
-
-
-FEATURES = ["rms", "jerk", "last2s_rms", "centroid"]
-
-
-def get_all_features(
-    signal: NDArray[np.float32],
-    window_size: int = 8,
-    stride_size: int = 2,
-    fs: int = 32,
-    filter: bool = True,
-    f2: float = 5.0,
-    prefix: str = "",
-) -> dict[str, NDArray[np.float32]]:
-    traces: dict[str, NDArray[np.float32]] = {}
-    for feature in FEATURES:
-        processed_trace = process_acc_signal(
-            signal,
-            window_size=window_size,
-            stride_size=stride_size,
-            fs=fs,
-            filter=filter,
-            f2=f2,
-            feature_name=feature,
-        )
-        traces[prefix + feature] = processed_trace
-
-    return traces
 
 
 def create_dalia_npy_files(datadir: str):
@@ -591,8 +477,8 @@ def create_dalia_npy_files(datadir: str):
 def main():
     parser = argparse.ArgumentParser()
 
-    def list_of_ints(arg: str) -> list[int]:
-        return [int(i) for i in arg.split(",")]
+    def list_of_strings(arg: str) -> list[str]:
+        return arg.split(",")
 
     parser.add_argument(
         "--dataset",
@@ -606,11 +492,11 @@ def main():
     )
 
     parser.add_argument(
-        "--winsizes",
-        type=list_of_ints,
+        "--features",
+        type=list_of_strings,
         required=False,
-        default=[8],
-        help="Sliding window size for WildPPG",
+        default=["rms", "last2s_rms", "centroid", "jerk"],
+        help="IMU Features to create from the raw IMU signal.(See process_acc_signal() for the different features to choose from)",
     )
 
     args = parser.parse_args()
@@ -620,10 +506,10 @@ def main():
         create_dalia_npy_files(args.datadir)
     elif args.dataset == "ieee":
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
-        create_ieee_npz_files(args.datadir)
+        create_ieee_npz_files(args.datadir, features=args.features)
     elif args.dataset == "wildppg":
         # C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data
-        preprocess_wildppg_mat_file(args.datadir, args.winsizes)
+        preprocess_wildppg_mat_file(args.datadir)
     else:
         raise NotImplementedError()
 

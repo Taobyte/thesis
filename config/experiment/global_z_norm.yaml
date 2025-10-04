@@ -2,7 +2,6 @@ experiment_name: "global_z_norm"
 normalization: "global"
 loss_fn: "MSE"
 
-use_heart_rate: True 
 use_dynamic_features: True
 use_static_features: False 
 

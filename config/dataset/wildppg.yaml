@@ -11,15 +11,8 @@ datamodule:
   val_participants: ${folds.wildppg.val_participants}
   test_participants: ${folds.wildppg.test_participants} 
 
-  freq: 25
-
-  shift: False
-
-  add_temp: False
-  add_alt: False
-
   target_channel_dim: 1 
-  dynamic_exogenous_variables: ${exo_channels_wildppg:${.add_temp}, ${.add_alt}}
+  dynamic_exogenous_variables: 1 
   static_exogenous_variables: 0 
 
 

@@ -23,5 +23,5 @@ datamodule:
     - chest_jerk
 
   target_channel_dim: 1 
-  dynamic_exogenous_variables: ${len:${.imu_features}} 
+  dynamic_exogenous_variables: ${number_of_exo_vars:${.imu_features}} 
   static_exogenous_variables: 9 # we have 9 different activity types the participants perform

@@ -2,7 +2,6 @@ experiment_name: "lbw_mitbih"
 normalization: "global"
 loss_fn: "MSE"
 
-use_heart_rate: True 
 use_dynamic_features: False
 use_static_features: False 
 

@@ -8,42 +8,30 @@ from src.datasets.dataset import HRDataset
 
 
 class IEEEDataset(HRDataset):
-    def __init__(self, **kwargs: Any):
+    def __init__(self, imu_features: list[str] = ["mean", "std"], **kwargs: Any):
+        self.imu_features = imu_features
         super().__init__(**kwargs)
 
     def __read_data__(
         self,
     ) -> List[NDArray[np.float32]]:
-        loaded_series = []
+        loaded_series: list[NDArray[np.float32]] = []
 
         for participant in self.participants:
-            data = np.load(self.data_dir + f"IEEE_{participant}.npz")
-            ppg = data["ppg"]  # shape (W, 200, 1)
-            acc = data["acc"]  # shape (W, 200, 1)
-            bpm = data["bpms"]  # shape (W, 1)
+            data = np.load(self.data_dir + f"IEEE_{participant}.npz", allow_pickle=True)
+            bpm = data["bpms"]
+            series = bpm
 
-            if self.use_heart_rate and self.use_dynamic_features:
-                imu_mean = np.mean(acc, axis=1, keepdims=True).squeeze(
-                    -1
-                )  # shape (W, 1)
-                imu_var = np.var(acc, axis=1, keepdims=True).squeeze(-1)
-                imu_power = np.mean(acc**2, axis=1, keepdims=True).squeeze(-1)
-                imu_energy = np.sum(acc**2, axis=1, keepdims=True).squeeze(-1)
-                series = np.concatenate((bpm, imu_mean), axis=1)
-            elif self.use_heart_rate and not self.use_dynamic_features:
-                series = bpm
-            elif not self.use_heart_rate and self.use_dynamic_features:
-                series = np.concatenate((ppg, acc), axis=2)
-            else:
-                series = ppg
+            if self.use_dynamic_features:
+                features: list[NDArray[np.float32]] = []
+                for feature in self.imu_features:
+                    features.append(data[feature])
+                assert len(features) > 0, (
+                    "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
+                )
+                series = np.concatenate([series] + features, axis=1)
 
             loaded_series.append(series)
-
-        #  np.savez(
-        #      self.data_dir + f"IEEE_{participant}_R.npz",
-        #      imu=imu_mean[:, 0],
-        #      bpm=bpm[:, 0],
-        #  )
 
         return loaded_series
 
@@ -54,28 +42,28 @@ class IEEEDataModule(BaseDataModule):
         train_participants: list[int] = [1, 2, 3, 4, 5, 6, 7],
         val_participants: list[int] = [8, 9],
         test_participants: list[int] = [10, 11, 12],
-        use_heart_rate: bool = False,
+        imu_features: list[str] = ["mean"],
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
-        self.use_heart_rate = use_heart_rate
-
         self.train_participants = train_participants
         self.val_participants = val_participants
         self.test_participants = test_participants
+
+        self.imu_features = imu_features
 
     def setup(self, stage: str):
         common_args = dict(
             data_dir=self.data_dir,
             look_back_window=self.look_back_window,
             prediction_window=self.prediction_window,
-            use_heart_rate=self.use_heart_rate,
             use_dynamic_features=self.use_dynamic_features,
             target_channel_dim=self.target_channel_dim,
             test_local=self.test_local,
             train_frac=self.train_frac,
             val_frac=self.val_frac,
+            imu_features=self.imu_features,
         )
         if stage == "fit":
             self.train_dataset = IEEEDataset(

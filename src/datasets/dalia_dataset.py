@@ -2,7 +2,6 @@ import numpy as np
 
 from numpy.typing import NDArray
 from pathlib import Path
-from sklearn.preprocessing import OneHotEncoder
 from typing import Any
 
 from src.datasets.utils import BaseDataModule
@@ -34,35 +33,6 @@ class DaLiADataset(HRDataset):
                     "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
                 )
                 series = np.concatenate([series] + features, axis=1)
-
-            if self.use_static_features:
-                activity = data["activity"]
-                if self.use_heart_rate:
-                    encoder = OneHotEncoder(
-                        categories=[list(range(0, 9))], sparse_output=False
-                    )
-                    window_size = 8
-                    stride = 2
-                    argmax_activities: list[int] = []
-                    activity_label_1hz = activity[::4].astype(
-                        np.int32
-                    )  # activity is 4Hz
-                    for i in range(
-                        0, len(activity_label_1hz) - window_size + 1, stride
-                    ):
-                        window = activity_label_1hz[i : i + window_size, :]
-                        counts = np.bincount(window[:, 0], minlength=9)
-                        argmax_activities.append(int(np.argmax(counts)))
-
-                    processed_activity = np.array(argmax_activities)[:, np.newaxis]
-                    assert len(processed_activity) == len(series)
-
-                    processed_activity_onehot = encoder.fit_transform(
-                        processed_activity
-                    )
-                else:
-                    processed_activity = 0  # TODO
-                series = np.concatenate((series, processed_activity_onehot), axis=1)
 
             loaded_series.append(series)
 
@@ -114,7 +84,6 @@ class DaLiADataModule(BaseDataModule):
             "data_dir": self.data_dir,
             "use_dynamic_features": self.use_dynamic_features,
             "use_static_features": self.use_static_features,
-            "use_heart_rate": self.use_heart_rate,
             "look_back_window": self.look_back_window,
             "prediction_window": self.prediction_window,
             "target_channel_dim": self.target_channel_dim,

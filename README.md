@@ -26,83 +26,186 @@ Current research heavily focusses on public datasets. For long-term forecasting 
 |-------------|--------------------------|---------------------------|-----------------------------------| -------- |
 | [WildPPG](https://arxiv.org/abs/2412.17540)    | PPG / HR                    | 1          | Accelerometer                  |25 Hz |
 | [DaLiA](https://archive.ics.uci.edu/dataset/495/ppg+dalia)      | PPG / HR | 1            | Accelerometer   | 32 Hz|
-| [IEEE](https://ieeexplore.ieee.org/document/6905737)         | PPG / HR           | 1            | Accelerometer  | 25 Hz|
+| [IEEE SPC](https://ieeexplore.ieee.org/document/6905737)         | PPG / HR           | 1            | Accelerometer  | 25 Hz|
+
+
+
+
+
+<details>
+  <summary>WildPPG</summary>
+
+  ### WildPPG
+</details>
+<details>
+  <summary>DaLia</summary>
+
+  ### WildPPG
+</details>
+<details>
+  <summary>IEEE SPC</summary>
+
+  ### WildPPG
+</details>
+
+
+
 
 ## Complex Deep Learning Models 
 
 | Model        | Description | Supports Short Seq | Link |
 |--------------|-------------|---------| ----- |
-| TimesNet     | Transformer-based model tailored for long-term time series forecasting. Excels in multivariate settings.| No | [GitHub](https://github.com/thuml/Time-Series-Library/) |
-| SimpleTM    | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | Yes| [GitHub](https://github.com/vsingh-group/SimpleTM/) |
-| ElasTST   | Patch-based transformer with rotary embeddings and elastic structure, effective for non-stationary series. | No| [GitHub](https://github.com/microsoft/ProbTS/tree/elastst) |
-| Ada-MSHyper  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | No | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
-| GPT4TS      | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
-Pattn | Simple baseline forecasting model based on patching and the transfomer architecture | Yes | [GitHub](https://github.com/BennyTMT/LLMsForTimeSeries/tree/main)  
-TimeLLM |  LLM-based timeseries forecasting model using a reprogramming layer and using a frozen LLM as backbone. | Yes | [GitHub](https://github.com/ngruver/llmtime) |
+| [TimesNet](https://arxiv.org/abs/2210.02186)     | Transformer-based model tailored for long-term time series forecasting. Excels in multivariate settings.| No | [GitHub](https://github.com/thuml/Time-Series-Library/) |
+| [SimpleTM](https://openreview.net/forum?id=oANkBaVci5)    | Lightweight and simple transformer with minimal changes, offering strong performance on time series tasks. | Yes| [GitHub](https://github.com/vsingh-group/SimpleTM/) |
+| [Ada-MSHyper](https://arxiv.org/abs/2410.23992)  | Adaptive multi-scale hypernetwork that dynamically generates model weights based on input resolution. | No | [GitHub](https://github.com/shangzongjiang/Ada-MSHyper) |
+| [PatchTST](https://arxiv.org/abs/2211.14730) | Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
+| [TimeXer](https://arxiv.org/abs/2402.19072)| Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
+| [GPT4TS](https://arxiv.org/abs/2302.11939)| Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
+| [NBeatsX](https://arxiv.org/abs/2104.05522)| Unified GPT-based model that performs multiple time series tasks without retraining ("one fits all"). | Yes | [GitHub](https://github.com/DAMO-DI-ML/)
 
-# TODO ADD THIS INFORMATION TO THE README
-\subsubsection{TimesNet}
-The Timesnet model \cite{wu2023timesnettemporal2dvariationmodeling} works by stacking so-called TimesBlocks on top of each other. 
-Each TimesBlock uses the Fast Fourier Transform to extract relevant periods from the multivariate timeseries input. Next, these timeseries are transformed into 2D tensors based on the $k$ periods extracted in the previous stage and fed into a parameter efficient inception block that uses 2D convolutions. Lastly, adaptive aggregation is used, where the $k$ amplitudes are used for weighting the corresponding series representation. For an overview, consider the Figure \ref{sota_timesnet_overview}.The authors claim that this architecture enables extracting multi-scale temporal 2D-variations simultaneously. 
+<details>
+  <summary>TimesNet</summary>
 
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures/related_work/timesnet_architecture_overview.png}
-    \caption{\textbf{TimesNet Architecture Overview}}
-    \label{sota_timesnet_overview}
-\end{figure}
+  ### TimesNet
+  <p align="center">
+    <img src="assets/dl/timesnet_architecture_overview.png" alt="TimesNet Architecture Overview">
+  </p>
 
-\subsubsection{SimpleTM}
-The SimpleTM model \cite{chen2025simpletm} is composed of three stages. In the first stage, the multivariate timeseries is tokenized by a learnable stationary wavelet transform. In the second stage, the authors then futrher process the tokens by introducing a geometric product attention, a concept derived from geometric algebra. In the last stage, the transformed token representation is transformed back to a 1D timeseries representation by now using a learnable inverse stationary wavelet transform. In summary, the authors propose to use a wavelet transform to extract multi-scale features and introduce the geometric attention mechanism. The reader can find an overview in Figure \ref{sota_simpletm_overview}. 
+</details>
+
+<details>
+  <summary>SimpleTM</summary>
+
+  ### SimpleTM
+  
+  <p align="center">
+    <img src="assets/dl/simpletm_architecture_overview.png" alt="SimpleTM Architecture Overview">
+  </p>
+
+</details>
+
+<details>
+  <summary>AdaMSHyper</summary>
+
+  ### AdaMSHyper
+
+  <p align="center">
+    <img src="assets/dl/adamshyper_architecture_overview.png" alt="AdaMSHyper Architecture Overview">
+  </p>
+
+</details>
+<details>
+  <summary>PatchTST</summary>
+
+  ### PatchTST
+
+  <p align="center">
+    <img src="assets/dl/patchtst_architecture_overview.png" alt="PatchTST Architecture Overview">
+  </p>
+
+</details>
+<details>
+  <summary>TimeXer</summary>
+
+  ### TimeXer
+
+  <p align="center">
+    <img src="assets/dl/timexer_overview.png" alt="TimeXer Architecture Overview">
+  </p>
 
 
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures/related_work/simpletm_architecture_overview.png}
-    \caption{\textbf{SimpleTM Architecture Overview}}
-    \label{sota_simpletm_overview}
-\end{figure}
+
+</details>
+<details>
+  <summary>GPT4TS</summary>
+
+  ### GPT4TS
+
+  <p align="center">
+    <img src="assets/dl/gpt4ts_architecture_overview.png" alt="GPT4TS Architecture Overview">
+  </p>
 
 
-\subsubsection{AdaMSHyper}
-AdaMSHyper \cite{shang2024adamshyperadaptivemultiscalehypergraph} stands for Adaptive Multi-Scale Hypergraph Transformer and is based on hypergraphs and graph neural networks. This architecture contains four modules \ref{sota_adamshyper_overview}. In the first module, multiple convolutions are used to transform the 1D timeseries into nodes in the hypergraph. This is done iteratively creating nodes that contain fine-grained and coarse-grained information. The second module is used to learn the hyperedges for each scale and nodes created in the first module. The module creates incidence matrices at each scale to model implicit groud-wise node interactions. The authors also implement a node an hyperedge constraint mechanism that clusters nodes with similar semantic information. The goal in the third module is to extract intra-scale and inter-scale interactions. For the inter-scale interactions, the authors propose a novel hypergraph convolution attention mechanism to capture group-wise interactions among nodes with similar semantic information. For the inter-scale interactions, they use plain attention mechanism with the learnt hyperedges. The last module uses a simple feed-forward network, that takes as input the concatenated node and hyperedge features and predicts the 1D timeseries.  
+</details>
+<details>
+  <summary>NBeatsX</summary>
 
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures//related_work/adamshyper_architecture_overview.png}
-    \caption{\textbf{AdaMSHyper Architecture Overview}}
-    \label{sota_adamshyper_overview}
-\end{figure}
+  ### NBeatsX
 
-%\subsubsection{PAttn}
-\subsubsection{TimeXer}
-The TimeXer model \cite{wang2024timexerempoweringtransformerstime} specifically design to distinguish between endogenous and exogenous variables. The model is again divide into four stages. In the beginning, the endogenous 1D timeseries is split up into non-overlapping patches with patch length $p > 1$. In contrast, the exogenous variables are not transformed into a patched representation, each channel is compressed into variat tokens. Since the two representations are not the same, the authors introduce a global token that bridges the gap between the endogenous and exogenous representations. TimeXer now adopts the transformer architecture in the following way. The first attention block is the standard self-attention mechanism for the endogenous patches. The second attention block is replaced by a cross attention block where the endogenous patches serve as the queries and the variat tokens as the keys. The resulting representation is then concatenated with the global token and fed into the feed-forward network. For a visual overview, we refer to Figure \ref{sota_timexer_overview}
-
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures//related_work/timexer_overview.png}
-    \caption{\textbf{TimeXer Architecture Overview}}
-    \label{sota_timexer_overview}
-\end{figure}
-
-\subsubsection{GPT4TS}
-The authors from \cite{zhouOneFitsAll2023} propose to use a pretrained GPT2 language model for timeseries forecasting. The reader can find an overview of the architecture in Figure \ref{sota_gpt4ts_overview}. At the start, the timeseries is fed into an instance normalization layer, followed by transforming it into a patched representation. Next, an learnable input embedding layer is applied to transform the patched timeseries into the required dimension of the pretrained GPT2 model. The GPT2 model contains a stack of transformer blocks and positional embeddings. The authors freeze the multi-head attention mechanism and feed forward networks in the transformer blocks and only finetune the positional embeddings and layer norms in the transformer blocks.  
+  <p align="center">
+    <img src="assets/dl/nbeatsx_architecture_overview.png" alt="NBeatsX Architecture Overview">
+  </p>
 
 
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures//related_work/gpt4ts_architecture_overview.png}
-    \caption{\textbf{GPT4TS Architecture Overview}}
-    \label{sota_gpt4ts_overview}
-\end{figure}
+</details>
+
+
+
 
 
 ## Baselines
-- Linear Models
+### Overview
+- [Linear Models](https://scikit-learn.org/stable/modules/linear_model.html)
+- [Markov Switching Autoregressive (MSAR)](https://www.statsmodels.org/dev/examples/notebooks/generated/markov_autoregression.html#Hamilton-(1989)-switching-model-of-GNP)
 - [Kalman Filters](https://www.quantstart.com/articles/State-Space-Models-and-the-Kalman-Filter/)
 - [Gaussian Processes](https://gpytorch.ai/)
 - [Bayesian Neural Networks](https://docs.pyro.ai/en/dev/contrib.bnn.html)
 - [XGBoost](https://xgboost.readthedocs.io/en/stable/)
+
+<details>
+  <summary>Linear Models</summary>
+
+  ### Linear Regression 
+The simplest model one can think of is a linear model. We define the design matrix $X \in \mathbb{R}^{N \times L}$, where $N \in \mathbb{N}$ is the number of extracted windows from the time series and $L \in \mathbb{N}$ is the lookback window length. Let $Y \in \mathbb{R}^{N \times T}$ be the target or ground truth prediction windows. The assumed linear model is then written down as 
+$$X \Beta^* + \boldsymbol{W} = Y$$
+where $\boldsymbol{W}_{i,j} \sim \mathcal{N}(0, \sigma^{2})$ is a random matrix with i.i.d standard gaussian noise. 
+
+The  maximum likelihood estimator of $\Beta^*$ is 
+$$\hat{\Beta} = (X^{\top}X)^{-1}X^{\top}Y$$
+
+In this work, we use plain old linear regression, but there are more powerful approaches such as 
+- Ridge Regression 
+- LASSO 
+- Elastic Net 
+
+</details>
+
+<details>
+  <summary>Markov Switching Autoregressive Models</summary>
+
+  ### Markov Switching Autoregressive Models 
+
+</details>
+
+<details>
+  <summary>Kalman Filter</summary>
+
+  ### Markov Switching Autoregressive Models 
+
+</details>
+
+<details>
+  <summary>Gaussian Processes</summary>
+
+  ### Markov Switching Autoregressive Models 
+
+</details>
+
+<details>
+  <summary>Extreme Gradient Boosting Trees</summary>
+
+  ### Markov Switching Autoregressive Models 
+
+</details>
+
+<details>
+  <summary>Multi-layered Perceptron</summary>
+
+  ### Markov Switching Autoregressive Models 
+
+</details>
+
+
 
 ## Installation 
 This project uses [miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install#quickstart-install-instructions) for dependencies management. Use the following commands in your favourit shell. 
@@ -114,6 +217,27 @@ cd t-mt-2025-NonstationaryForecasting-ClemensKeusch
 conda env create -f environment.yaml
 conda activate thesis 
 ```
+
+## Codebase
+
+```text
+.
+├── assets                    # assets for the README file 
+├── configs                   # directory in which all experiment '.yaml' configs are stored
+├── scripts                   # bash scripts to launch training and evaluation
+│   ├── train.sh              #   training script
+│   └── eval.sh               #   evaluation script
+├── src                       # the package
+│   ├── plotting.py           #   plotting function to training tracking
+│   ├── utils.py              #   helper functions for init of models & opt/loading checkpoint
+│   ├── dataset               #   datasets, data loaders, ...
+│   └── model                 #   models, training loops, ...
+├── tools                     # scripts to compute PCA prior to training
+├── main.py                   # entrypoint for launch PMAE pretraining locally on your machine
+└── requirements.txt          # requirements file
+```
+
+
 
 ## Running Experiments 
 This project uses [Hydra](https://hydra.cc/) and  [WandB](https://wandb.ai/)  for experiment tracking. In the following, I explain how to run the code locally or on a SLURM cluster (all models in this project were trained on the [Euler cluster](https://scicomp.ethz.ch/wiki/Euler)). Make sure to always activate the conda environment. 
@@ -163,3 +287,16 @@ pip install hydra-optuna-sweeper --upgrade
 
 This plugin does not natively support WandB. Thus, I added the `optuna.integration.WeightsAndBiasesCallback` to the `_imp.py` file and added three parameters to the sweeper, namely `use_wandb, metric_name, wandb_kwargs`. 
 For now, I just copy the changes I made locally to the cluster, but later I may have to create a package to install it properly. 
+
+
+## Resources
+
+### Books
+
+- [Forecasting: Principles and Practice](https://otexts.com/fpp3/) 
+- [Time Series Analysis and Its Applications](http://www.stat.ucla.edu/~frederic/415/S23/tsa4.pdf)
+
+### Papers
+
+- [Forecasting: theory and practice](https://forecasting-encyclopedia.com/)
+- [A Comprehensive Survey of Deep Learning for Time Series Forecasting](https://arxiv.org/abs/2411.05793)

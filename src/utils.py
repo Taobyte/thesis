@@ -92,7 +92,6 @@ def setup(
 def create_group_run_name(
     dataset_name: str,
     model_name: str,
-    use_heart_rate: bool,
     look_back_window: int,
     prediction_window: int,
     fold_nr: int = 0,
@@ -124,7 +123,6 @@ def create_group_run_name(
 
 def get_optuna_name(
     dataset_name: str,
-    model_name: str,
     use_heart_rate: bool,
     look_back_window: int,
     prediction_window: int,
@@ -136,7 +134,6 @@ def get_optuna_name(
     group_name, _, tags = create_group_run_name(
         dataset_name,
         model_name,
-        use_heart_rate,
         look_back_window,
         prediction_window,
         fold_nr,
@@ -156,7 +153,6 @@ def setup_wandb_logger(
     group_name, run_name, tags = create_group_run_name(
         config.dataset.name,
         config.model.name,
-        config.use_heart_rate,
         config.look_back_window,
         config.prediction_window,
         config.folds.fold_nr,
@@ -217,6 +213,12 @@ def compute_square_window(seq_len: int, max_window: int = 4) -> list[int]:
     return [max_k, max_k]
 
 
+def number_of_exo_vars(features: list[str]) -> int:
+    n_catch22 = len(["catch22" in f for f in features])
+
+    return len(features) - n_catch22 + 24 * n_catch22
+
+
 def compute_input_channel_dims(
     target_channel_dim: int,
     dynamic_exogenous_variables: int,
@@ -231,20 +233,3 @@ def compute_input_channel_dims(
         dims += static_exogenous_variables
 
     return dims
-
-
-def ensemble_epochs(strategy: str, base_epochs: int = 0) -> int:
-    """
-    Return how many epochs to run based on ensemble strategy.
-    - Fixed reducers ('mean', 'median') => min_epochs (default 0)
-    - Anything else => base_max_epochs
-    """
-
-    if strategy in {"mean", "median", "fixed"}:
-        return 0
-    return base_epochs
-
-
-def exo_channels_wildppg(add_temp: bool, add_alt: bool) -> int:
-    base = 1
-    return base + add_temp + add_alt

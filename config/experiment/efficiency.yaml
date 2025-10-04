@@ -2,7 +2,6 @@ experiment_name: "efficiency"
 normalization: "global" # norm is set individually for each model in bash file
 loss_fn: "MSE"
 
-use_heart_rate: True 
 use_dynamic_features: True # use exogenous variables
 use_static_features: False 
 

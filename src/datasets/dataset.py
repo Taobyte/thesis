@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-from sklearn.cluster import KMeans
 from torch import Tensor
 from torch.utils.data import Dataset
 from numpy.typing import NDArray
@@ -15,7 +14,6 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         participants: list[int],
         use_dynamic_features: bool = False,
         use_static_features: bool = False,
-        use_heart_rate: bool = False,
         look_back_window: int = 32,
         prediction_window: int = 10,
         target_channel_dim: int = 1,
@@ -25,7 +23,6 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         return_whole_series: bool = False,
     ):
         self.data_dir = data_dir
-        self.use_heart_rate = use_heart_rate
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
         self.window_length = look_back_window + prediction_window

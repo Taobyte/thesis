@@ -20,8 +20,7 @@ from src.utils import (
     compute_input_channel_dims,
     get_min,
     resolve_str,
-    ensemble_epochs,
-    exo_channels_wildppg,
+    number_of_exo_vars,
 )
 
 
@@ -33,9 +32,7 @@ OmegaConf.register_new_resolver(
 )
 OmegaConf.register_new_resolver("min", get_min)
 OmegaConf.register_new_resolver("str", resolve_str)
-OmegaConf.register_new_resolver("ensemble_epochs", ensemble_epochs)
-OmegaConf.register_new_resolver("exo_channels_wildppg", exo_channels_wildppg)
-OmegaConf.register_new_resolver("len", lambda x: len(x))
+OmegaConf.register_new_resolver("number_of_exo_vars", number_of_exo_vars)
 
 
 @hydra.main(version_base="1.2", config_path="config", config_name="config.yaml")

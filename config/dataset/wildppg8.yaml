@@ -11,25 +11,14 @@ datamodule:
   val_participants: ${folds.wildppg.val_participants}
   test_participants: ${folds.wildppg.test_participants} 
 
-  freq: 25
-
-  shift: False
-
-  add_rmse: False
-  add_enmo: False
-  add_mad: False
-  add_perc: False
-  add_jerk: False
-  add_cadence: False
-  add_rmse_last2: False
-
-  catch22: False
-
-  add_temp: False
-  add_alt: False
+  imu_features:
+    - ankle_rms
+    - ankle_centroid
+    - ankle_jerk
+    - ankle_last2s_rms
 
   target_channel_dim: 1 
-  dynamic_exogenous_variables: ${eval:"${use_dynamic_features} + ${.add_rmse} + ${.add_enmo} + ${.add_mad} + ${.add_perc} + ${.add_jerk} + ${.add_cadence} + ${.add_rmse_last2}"}  
+  dynamic_exogenous_variables: ${number_of_exo_vars:${.imu_features}}
   static_exogenous_variables: 0 
 
 

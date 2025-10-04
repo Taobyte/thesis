@@ -27,7 +27,6 @@ class BaseDataModule(L.LightningDataModule):
         batch_size: int,
         num_workers: int,
         name: str,
-        freq: int,
         look_back_window: int,
         prediction_window: int,
         use_dynamic_features: bool = False,
@@ -47,7 +46,6 @@ class BaseDataModule(L.LightningDataModule):
         super().__init__()
 
         self.name = name
-        self.freq = freq
         self.data_dir = data_dir
 
         self.batch_size = batch_size

@@ -5,14 +5,16 @@ name: "ieee"
 
 datamodule:
   _target_: src.datasets.ieee_dataset.IEEEDataModule
-  data_dir: "${path.datadir}/IEEEPPG/Training_data/Training_data/ieee_preprocessed/"
+  data_dir: "${path.datadir}/IEEEPPG/Training_data/Training_data/ieee_filtered/"
   train_participants: ${folds.ieee.train_participants} 
   val_participants: ${folds.ieee.val_participants} 
   test_participants: ${folds.ieee.test_participants}
-
-  freq: 25
+  
+  # IMU FEATURES
+  imu_features:
+    - jerk
 
   target_channel_dim: 1 
-  dynamic_exogenous_variables: 1
+  dynamic_exogenous_variables:  ${number_of_exo_vars:${.imu_features}} 
   static_exogenous_variables: 0 
 

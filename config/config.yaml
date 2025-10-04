@@ -16,7 +16,6 @@ num_workers: 0 # number of workers for pytorch dataloader
 use_plots: False # flag for plotting test predictions and test timeseries 
 
 # data
-use_heart_rate: True
 n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee"] # these datasets have folds defined in config/experiments
 local_datasets: ["lieee", "ldalia", "lwildppg", "lmitbih"]
