@@ -28,9 +28,11 @@ def nan_helper(y):
 class WildPPGDataset(HRDataset):
     def __init__(
         self,
-        imu_features: list[str] = ["ankle_rms", "ankle_mean"],
+        sensor_location: str = "ankle",
+        imu_features: list[str] = ["rms", "mean"],
         **kwargs: Any,
     ):
+        self.sensor_location = sensor_location
         self.imu_features = imu_features
         super().__init__(**kwargs)
 
@@ -42,7 +44,7 @@ class WildPPGDataset(HRDataset):
             imus_arr = data["imus"]
         arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
-            hr = hr_arr[participant][:, np.newaxis].astype(float)
+            hr = hr_arr[participant].astype(float)
 
             hr[hr < 30] = np.nan
             nans, x = nan_helper(hr)
@@ -54,7 +56,9 @@ class WildPPGDataset(HRDataset):
                 imu_participant = imus_arr[participant]
                 features: list[NDArray[np.float32]] = []
                 for feature in self.imu_features:
-                    features.append(imu_participant[feature][: len(hr), np.newaxis])
+                    features.append(
+                        imu_participant[self.sensor_location + "_" + feature]
+                    )
 
                 assert len(features) > 0, (
                     "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
@@ -71,7 +75,8 @@ class WildPPGDataModule(BaseDataModule):
         train_participants: List[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8],
         val_participants: List[int] = [10, 11],
         test_participants: List[int] = [9, 12, 13, 14, 15],
-        imu_features: list[str] = ["ankle_rms"],
+        sensor_location: str = "ankle",
+        imu_features: list[str] = ["rms"],
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -80,6 +85,7 @@ class WildPPGDataModule(BaseDataModule):
         self.val_participants = val_participants
         self.test_participants = test_participants
 
+        self.sensor_location = sensor_location
         self.imu_features = imu_features
 
         self.common_args: dict[str, Any] = {
@@ -92,6 +98,7 @@ class WildPPGDataModule(BaseDataModule):
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
+            "sensor_location": self.sensor_location,
             "imu_features": self.imu_features,
         }
 

@@ -1,7 +1,9 @@
 defaults:
   - _self_
+  - base: base
   - model: linear
   - dataset: ieee
+  - feature: none
   - path: local
   - folds: fold_0
   - experiment: endo_only
@@ -11,18 +13,22 @@ defaults:
   # - optional override hydra/sweeper: ${model}_sweeper
 
 seed: 123
-overfit: False
-num_workers: 0 # number of workers for pytorch dataloader 
-use_plots: False # flag for plotting test predictions and test timeseries 
+overfit: False # overfit on a single batch with lightning
+num_workers: 0
+min_delta: 0.001 # for early stopping callback
+progress_bar: False # toggle progress bar when training
 
 # data
 n_folds: 3
 fold_datasets: ["dalia", "wildppg", "ieee"] # these datasets have folds defined in config/experiments
 local_datasets: ["lieee", "ldalia", "lwildppg", "lmitbih"]
 global_datasets: ["ieee", "dalia", "wildppg"]
-normalization: global # ${experiment.normalization} # can be either "global", "minmax" or  "gnone"
+normalization: global # can be either "global", "minmax" or  "gnone"
 local_norm: "local_z" # can be either "local_z", "difference" or "lnone" 
-local_norm_endo_only: ${experiment.local_norm_endo_only}
+local_norm_endo_only: False # locally normalize only the hr series and leave exogenous variables untouched
+
+look_back_window: 5
+prediction_window: 3
 
 # local settings
 test_local: False # test on test windows from local for the global models
@@ -34,27 +40,10 @@ special_models: ["linear","xgboost", "exactgp", "dummy"] # these models are not 
 probabilistic_models: ["gp", "dklgp", "exactgp"] # these models output the mean & std as the prediction
 return_series_models: ["msar"]
 
-look_back_window: 5
-prediction_window: 3
-
 # Exogenous Variables Experiments
-use_dynamic_features: ${experiment.use_dynamic_features}
-use_static_features: ${experiment.use_static_features}
-loss_fn: ${experiment.loss_fn} # can be "MSE", "SMAPE" or "MAE"
-
-# wandb logging settings
-use_wandb: False
-wandb:
-  save_dir: ${path.checkpoint_path}/wandb_logs
-  entity: "c_keusch"
-  project: "thesis"
-  log_model: False
-  save_code: False
-  reinit: False
-
-# training 
-min_delta: 0.001
-progress_bar: False
+use_dynamic_features: ${feature.use_dynamic_features} 
+use_static_features: False 
+loss_fn: "MSE" # can be "MSE", "SMAPE" or "MAE"
 
 # callbacks
 use_efficiency_callback: False # compute efficiency related metrics
@@ -63,12 +52,4 @@ use_prediction_callback: False # store predictions + metrics in numpy .npz forma
 # tuner flag
 tune: False
 n_trials: 50
-
-hydra:
-  run:
-    dir: ${path.basedir}/outputs
-  sweep:
-    dir: ${path.checkpoint_path}/multiruns # use euler scratch space for multirun outputs
-
-
 

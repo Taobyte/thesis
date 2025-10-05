@@ -64,7 +64,7 @@ def process_acc_signal(
         res = res[:, None]
     elif feature_name == "catch22":
         catch22_features: list[NDArray[np.float32]] = []
-        for w in windows:
+        for w in tqdm(windows):
             w_f = pycatch22.catch22_all(w, catch24=True)
             catch22_features.append(np.array(w_f["values"]))
 
@@ -309,12 +309,12 @@ def quotient_filter(hbpeaks, outlier_over=5, sampling_rate=128, tol=0.8):
 
 
 def preprocess_wildppg_mat_file(
-    datadir: str, imu_features: list[str] = ["ankle_rms"]
+    datadir: str, imu_features: list[str] = ["rms"]
 ) -> None:
     winsize = 8  # 8s window size
     stride = 2  # 2s stride
-    all_hrs = []
-    all_imus = []
+    all_hrs: list[NDArray[np.float32]] = []
+    all_imus: list[dict[str, NDArray[np.float32]]] = []
     for pidx, p in enumerate(Path(datadir).iterdir()):
         print(pidx, " load ", p)
         part_data = load_wildppg_participant(p.absolute())
@@ -332,8 +332,6 @@ def preprocess_wildppg_mat_file(
             imu = np.stack([x, y, z], axis=-1)
             return imu
 
-        wrist_imu = get_imu_by_location("wrist")
-        chest_imu = get_imu_by_location("sternum")
         ankle_imu = get_imu_by_location("ankle")
 
         fs = part_data["sternum"]["ecg"]["fs"]
@@ -341,15 +339,8 @@ def preprocess_wildppg_mat_file(
         ankle_dict = get_all_features(
             ankle_imu, fs=128, prefix="ankle_", features=imu_features
         )
-        chest_dict = get_all_features(
-            chest_imu, fs=128, prefix="chest_", features=imu_features
-        )
-        wrist_dict = get_all_features(
-            wrist_imu, fs=128, prefix="wrist_", features=imu_features
-        )
-        combined = {**ankle_dict, **chest_dict, **wrist_dict}
 
-        hrs = []
+        hrs: list[NDArray[np.float32]] = []
         for win_s in tqdm(range(0, max(ecgpks_filt), stride * fs)):
             rr_in_win = rrs[
                 np.logical_and(
@@ -363,13 +354,18 @@ def preprocess_wildppg_mat_file(
                 hrs.append(0)  # invalid / noisy ecg
 
         ankle_length = len(ankle_dict["ankle_rms"])
-        chest_length = len(chest_dict["chest_rms"])
-        wrist_length = len(wrist_dict["wrist_rms"])
-        assert ankle_length == chest_length and ankle_length == wrist_length
-        hrs = np.array(hrs[:ankle_length])
+        hr_array = np.array(hrs)
+        hr_length = len(hrs)
+        min_length = min(hr_length, ankle_length)
+        hr_array = hr_array[:min_length, None]
+        for k, v in ankle_dict.items():
+            ankle_dict[k] = v[:min_length]
 
-        all_hrs.append(hrs)
-        all_imus.append(combined)
+        for k, v in ankle_dict.items():
+            assert len(v) == len(hrs)
+
+        all_hrs.append(hr_array)
+        all_imus.append(ankle_dict)
 
     data_bpm_values = np.empty((len(all_hrs), 1), dtype=object)
     for i in range(len(all_hrs)):
@@ -401,7 +397,9 @@ def create_ieee_npz_files(datadir: str, features: list[str] = ["mean"]):
 
         acc_xyz = np.vstack([signals[3], signals[4], signals[5]]).T
 
-        imu_features = get_all_features(acc_xyz, fs=125, features=features)
+        imu_features = get_all_features(
+            acc_xyz, fs=125, features=features, prefix="wrist_"
+        )
 
         for _, v in imu_features.items():
             assert len(v) == len(bpm)
@@ -416,7 +414,7 @@ def create_ieee_npz_files(datadir: str, features: list[str] = ["mean"]):
 # -------------------------------------------------------------------
 
 
-def create_dalia_npy_files(datadir: str):
+def create_dalia_npy_files(datadir: str, features: list[str] = ["mean"]):
     dalia_preprocessed_dir = os.path.join(datadir, "dalia_filtered_preprocessed")
     os.makedirs(dalia_preprocessed_dir, exist_ok=True)
 
@@ -424,13 +422,18 @@ def create_dalia_npy_files(datadir: str):
     for path in tqdm(Path(datadir).glob("**/S*.pkl")):
         with open(path, "rb") as f:
             data = pickle.load(f, encoding="latin1")
+
             hr = data["label"]
             activity = data["activity"]
             wrist_acc = data["signal"]["wrist"]["ACC"]
             chest_acc = data["signal"]["chest"]["ACC"]
 
-            wrist_imu_dict = get_all_features(wrist_acc, fs=32, prefix="wrist_")
-            chest_imu_dict = get_all_features(chest_acc, fs=700, prefix="chest_")
+            wrist_imu_dict = get_all_features(
+                wrist_acc, fs=32, prefix="wrist_", features=features
+            )  # Empatica E4 has sampling rate 32Hz
+            chest_imu_dict = get_all_features(
+                chest_acc, fs=700, prefix="chest_", features=features
+            )  # RespiBAN has sampling rate 700Hz
             combined = {**wrist_imu_dict, **chest_imu_dict}
 
             np.savez(
@@ -441,37 +444,6 @@ def create_dalia_npy_files(datadir: str):
             )
 
     print("Finished processing dalia files.")
-
-    print("Start processing static participant features.")
-
-    participant_paths = glob.glob(
-        os.path.join(datadir, "**", "*_quest.csv"), recursive=True
-    )
-    series = []
-    for participant in participant_paths:
-        row = pd.read_csv(participant, header=None).T
-        row.columns = [el.split(" ")[1] for el in row.iloc[0]]
-        row = row.drop(row.index[0])
-        series.append(row)
-
-    df = pd.concat(series, ignore_index=True)
-    df["SUBJECT_ID"] = df["SUBJECT_ID"].str.replace("S", "", regex=True).astype(int)
-    df = df.sort_values("SUBJECT_ID").reset_index(drop=True)
-    # now we normalize the continuous values and create one-hot encodings
-    df[["AGE", "HEIGHT", "WEIGHT"]] = (
-        df[["AGE", "HEIGHT", "WEIGHT"]].astype(float)
-        - df[["AGE", "HEIGHT", "WEIGHT"]].astype(float).mean()
-    ) / (df[["AGE", "HEIGHT", "WEIGHT"]].astype(float).std() + 1e-8)
-    df["GENDER"] = df["GENDER"].str.strip().apply(lambda x: 0 if x == "m" else 1)
-    one_hot_skin = pd.get_dummies(df["SKIN"], prefix="skin") * 1
-    df = pd.concat([df, one_hot_skin], axis=1)
-    one_hot_sport = pd.get_dummies(df["SPORT"], prefix="sport") * 1
-    df = pd.concat([df, one_hot_sport], axis=1)
-    df = df.drop(["SKIN", "SPORT"], axis=1)
-    df["SUBJECT_ID"] = df["SUBJECT_ID"].str.strip()
-    df.to_csv(datadir + "/static_participant_features.csv")
-
-    print("Finished processing static participant features.")
 
 
 def main():
@@ -503,13 +475,13 @@ def main():
 
     if args.dataset == "dalia":
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
-        create_dalia_npy_files(args.datadir)
+        create_dalia_npy_files(args.datadir, features=args.features)
     elif args.dataset == "ieee":
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
         create_ieee_npz_files(args.datadir, features=args.features)
     elif args.dataset == "wildppg":
         # C:/Users/cleme/ETH/Master/Thesis/data/WildPPG/data
-        preprocess_wildppg_mat_file(args.datadir)
+        preprocess_wildppg_mat_file(args.datadir, imu_features=args.features)
     else:
         raise NotImplementedError()
 

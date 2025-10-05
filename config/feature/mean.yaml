@@ -1,0 +1,6 @@
+name: mean
+
+use_dynamic_features: True
+
+imu_features:
+  - mean

@@ -11,8 +11,8 @@ datamodule:
   test_participants: ${folds.ieee.test_participants}
   
   # IMU FEATURES
-  imu_features:
-    - jerk
+  imu_location: wrist
+  imu_features: ${feature.imu_features}
 
   target_channel_dim: 1 
   dynamic_exogenous_variables:  ${number_of_exo_vars:${.imu_features}} 

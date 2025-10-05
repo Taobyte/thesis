@@ -1,0 +1,9 @@
+name: rms_last2s_rms_jerk_centroid 
+
+use_dynamic_features: True
+
+imu_features:
+  - rms 
+  - last2s_rms 
+  - jerk 
+  - centroid

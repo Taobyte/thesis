@@ -1,0 +1,6 @@
+name: catch22
+
+use_dynamic_features: True
+
+imu_features:
+  - catch22

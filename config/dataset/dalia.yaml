@@ -10,17 +10,9 @@ datamodule:
   val_participants: ${folds.dalia.val_participants} 
   test_participants: ${folds.dalia.test_participants} 
 
-
   # IMU FEATURES
-  imu_features:
-    - wrist_rms
-    - wrist_last2s_rms
-    - wrist_centroid
-    - wrist_jerk
-    - chest_rms
-    - chest_last2s_rms
-    - chest_centroid
-    - chest_jerk
+  sensor_location: chest
+  imu_features: ${feature.imu_features}
 
   target_channel_dim: 1 
   dynamic_exogenous_variables: ${number_of_exo_vars:${.imu_features}} 

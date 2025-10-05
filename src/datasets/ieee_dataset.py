@@ -8,7 +8,13 @@ from src.datasets.dataset import HRDataset
 
 
 class IEEEDataset(HRDataset):
-    def __init__(self, imu_features: list[str] = ["mean", "std"], **kwargs: Any):
+    def __init__(
+        self,
+        sensor_location: str = "wrist",
+        imu_features: list[str] = ["mean", "std"],
+        **kwargs: Any,
+    ):
+        self.sensor_location = sensor_location
         self.imu_features = imu_features
         super().__init__(**kwargs)
 
@@ -25,7 +31,7 @@ class IEEEDataset(HRDataset):
             if self.use_dynamic_features:
                 features: list[NDArray[np.float32]] = []
                 for feature in self.imu_features:
-                    features.append(data[feature])
+                    features.append(data[self.sensor_location + "_" + feature])
                 assert len(features) > 0, (
                     "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
                 )
@@ -42,6 +48,7 @@ class IEEEDataModule(BaseDataModule):
         train_participants: list[int] = [1, 2, 3, 4, 5, 6, 7],
         val_participants: list[int] = [8, 9],
         test_participants: list[int] = [10, 11, 12],
+        sensor_location: str = "wrist",
         imu_features: list[str] = ["mean"],
         **kwargs: Any,
     ):
@@ -52,6 +59,7 @@ class IEEEDataModule(BaseDataModule):
         self.test_participants = test_participants
 
         self.imu_features = imu_features
+        self.sensor_location = sensor_location
 
     def setup(self, stage: str):
         common_args = dict(
@@ -64,6 +72,7 @@ class IEEEDataModule(BaseDataModule):
             train_frac=self.train_frac,
             val_frac=self.val_frac,
             imu_features=self.imu_features,
+            sensor_location=self.sensor_location,
         )
         if stage == "fit":
             self.train_dataset = IEEEDataset(

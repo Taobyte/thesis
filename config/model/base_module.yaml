@@ -2,7 +2,6 @@
 pl_model:
   name: ${model.name}
   n_trials: ${n_trials}
-  use_plots: ${use_plots}
   normalization: ${normalization}
   local_norm: ${local_norm}
   local_norm_endo_only: ${local_norm_endo_only} 

@@ -49,7 +49,6 @@ class BaseLightningModule(L.LightningModule):
         name: str,
         local_norm: str,
         n_trials: int,
-        use_plots: bool,
         normalization: str,
         local_norm_endo_only: bool,
         tune: bool,
@@ -63,7 +62,6 @@ class BaseLightningModule(L.LightningModule):
         self.n_trials = n_trials
         self.name = name
         self.tune = tune
-        self.use_plots = use_plots
         self.normalization = normalization
         self.local_norm = local_norm
         self.local_norm_endo_only = local_norm_endo_only

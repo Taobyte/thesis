@@ -1,0 +1,22 @@
+# @package _global_
+
+
+# wandb logging settings
+use_wandb: False
+wandb:
+  save_dir: ${path.checkpoint_path}/wandb_logs
+  entity: "c_keusch"
+  project: "thesis"
+  log_model: False
+  save_code: False
+  reinit: False
+
+# output directories
+hydra:
+  run:
+    dir: ${path.basedir}/outputs
+  sweep:
+    dir: ${path.checkpoint_path}/multiruns # use euler scratch space for multirun outputs
+
+
+

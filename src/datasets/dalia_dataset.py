@@ -10,8 +10,12 @@ from src.datasets.dataset import HRDataset
 
 class DaLiADataset(HRDataset):
     def __init__(
-        self, imu_features: list[str] = ["wrist_mean", "wrist_std"], **kwargs: Any
+        self,
+        sensor_location: str = "chest",
+        imu_features: list[str] = ["wrist_mean", "wrist_std"],
+        **kwargs: Any,
     ):
+        self.sensor_location = sensor_location
         self.imu_features = imu_features
         super().__init__(**kwargs)
 
@@ -28,7 +32,7 @@ class DaLiADataset(HRDataset):
             if self.use_dynamic_features:
                 features: list[NDArray[np.float32]] = []
                 for feature in self.imu_features:
-                    features.append(data[feature][:, np.newaxis])
+                    features.append(data[self.sensor_location + "_" + feature])
                 assert len(features) > 0, (
                     "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
                 )
@@ -67,6 +71,7 @@ class DaLiADataModule(BaseDataModule):
         train_participants: list[int] = [2, 3, 4, 5, 6, 7, 8, 12, 15],
         val_participants: list[int] = [9, 10, 11],
         test_participants: list[int] = [1, 13, 14],
+        sensor_location: str = "chest",
         imu_features: list[str] = ["wrist_mean", "wrist_std"],
         **kwargs: Any,
     ):
@@ -77,6 +82,7 @@ class DaLiADataModule(BaseDataModule):
         self.val_participants = val_participants
         self.test_participants = test_participants
 
+        self.sensor_location = sensor_location
         self.imu_features = imu_features
 
     def setup(self, stage: str = "fit"):
@@ -91,6 +97,7 @@ class DaLiADataModule(BaseDataModule):
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
+            "sensor_location": self.sensor_location,
         }
 
         if stage == "fit":
