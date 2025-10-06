@@ -42,6 +42,7 @@ class WildPPGDataset(HRDataset):
         with np.load(self.data_dir + "WildPPG.npz", allow_pickle=True) as data:
             hr_arr = data["hr"]
             imus_arr = data["imus"]
+
         arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
             hr = hr_arr[participant].astype(float)

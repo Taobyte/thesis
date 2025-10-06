@@ -95,28 +95,33 @@ def create_group_run_name(
     look_back_window: int,
     prediction_window: int,
     fold_nr: int = 0,
-    fold_datasets: list[str] = ["dalia", "wildppg", "ieee"],
     normalization: str = "global",
-    experiment_name: str = "endo_only",
     seed: int = 0,
     local_norm: str = "l_none",
     local_norm_endo_only: bool = False,
+    feature_name: str = "mean",
 ) -> Tuple[str, str, list[str]]:
-    fold = ""
-    if dataset_name in fold_datasets:
-        fold = f"fold_{fold_nr}_"
+    fold = f"f{fold_nr}"
 
-    ln_endo_only_tag = "ln_endo_only" if local_norm_endo_only else "ln_endo_exo"
-    group_name = f"{normalization}_{local_norm}_{ln_endo_only_tag}_{dataset_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
-    run_name = f"{normalization}_{local_norm}_{ln_endo_only_tag}_{fold}{dataset_name}_{model_name}_{experiment_name}_{look_back_window}_{prediction_window}_seed_{seed}"
+    ln_endo_only_tag = "ln_eo" if local_norm_endo_only else "ln_ee"
+    group_name = (
+        f"{normalization}-{local_norm}-{ln_endo_only_tag}"
+        f"-{dataset_name}-imu_{feature_name}"
+    )
+    run_name = (
+        group_name
+        + f"-{model_name}-lb{look_back_window}"
+        + f"-pw{prediction_window}-{fold}-s{seed}"
+    )
 
-    tags: list[str] = [dataset_name, model_name, normalization, experiment_name]
-    if dataset_name in fold_datasets:
-        tags.append(fold)
+    tags: list[str] = [dataset_name, model_name, normalization, fold]
 
     if local_norm in ["local_z", "difference"]:
         tags.append(local_norm)
         tags.append(ln_endo_only_tag)
+
+    if feature_name != "none":
+        tags.append(feature_name)
 
     return group_name, run_name, tags
 
@@ -129,7 +134,6 @@ def get_optuna_name(
     fold_nr: int = 0,
     fold_datasets: list[str] = ["dalia", "wildppg", "ieee"],
     normalization: str = "global",
-    experiment_name: str = "endo_exo",
 ):
     group_name, _, tags = create_group_run_name(
         dataset_name,
@@ -139,7 +143,6 @@ def get_optuna_name(
         fold_nr,
         fold_datasets,
         normalization,
-        experiment_name,
     )
     # tags[1] stores the models name
     return f"optuna_{tags[1]}_{group_name}"
@@ -156,12 +159,11 @@ def setup_wandb_logger(
         config.look_back_window,
         config.prediction_window,
         config.folds.fold_nr,
-        config.fold_datasets,
         config.normalization,
-        config.experiment.experiment_name,
         seed=config.seed,
         local_norm=config.local_norm,
         local_norm_endo_only=config.local_norm_endo_only,
+        feature_name=config.feature.name,
     )
 
     # print(config_dict)

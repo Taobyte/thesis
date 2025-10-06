@@ -20,7 +20,6 @@ progress_bar: False # toggle progress bar when training
 
 # data
 n_folds: 3
-fold_datasets: ["dalia", "wildppg", "ieee"] # these datasets have folds defined in config/experiments
 local_datasets: ["lieee", "ldalia", "lwildppg", "lmitbih"]
 global_datasets: ["ieee", "dalia", "wildppg"]
 normalization: global # can be either "global", "minmax" or  "gnone"

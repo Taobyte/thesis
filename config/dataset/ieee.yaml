@@ -11,7 +11,7 @@ datamodule:
   test_participants: ${folds.ieee.test_participants}
   
   # IMU FEATURES
-  imu_location: wrist
+  sensor_location: wrist
   imu_features: ${feature.imu_features}
 
   target_channel_dim: 1 
