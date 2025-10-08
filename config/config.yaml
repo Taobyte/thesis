@@ -1,10 +1,10 @@
 defaults:
   - _self_
   - base: base
-  - path: local
+  - path: cluster
   - model: linear
   - dataset: ieee
-  - feature: none
+  - feature: mean
   - folds: fold_0
   - lbw: a # hydra does not like integers for config groups! a:5, b:10, c:20, d:30, e:60
   - pw: a # a: 3, b: 5, c: 10, d: 20, e: 30
