@@ -14,7 +14,8 @@ CMD_CPU="python main.py --multirun \
   folds=fold_0,fold_1,fold_2 \
   model=linear,xgboost \
   lbw=d \
-  local_norm=difference,local_z,lnone"
+  local_norm=difference,local_z,lnone \
+  feature=mean"
 
 sbatch \
   --job-name="cpu" \
@@ -33,7 +34,8 @@ CMD_GPU_SMALL="python main.py --multirun \
   folds=fold_0,fold_1,fold_2 \
   model=mole,msar,kalmanfilter,gp,mlp \
   lbw=d \
-  local_norm=difference,local_z,lnone"
+  local_norm=difference,local_z,lnone \
+  feature=mean"
 
 sbatch \
   --job-name="gpu_small" \
@@ -52,7 +54,8 @@ CMD_GPU_LARGE="python main.py --multirun \
   normalization=global \
   local_norm=difference,local_z,lnone \
   folds=fold_0,fold_1,fold_2 \
-  model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx"
+  model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
+  feature=mean"
 
 sbatch \
   --job-name="gpu_large" \

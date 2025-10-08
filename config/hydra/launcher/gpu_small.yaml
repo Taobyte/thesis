@@ -5,7 +5,7 @@ cpus_per_task: 1
 gpus_per_node: 1 
 mem_per_cpu: 4G
 gres: "gpumem:4g"
-name: ${dataset.name}_${model.name}_${look_back_window}_${prediction_window}_${experiment}
+name: ${dataset.name}_${model.name}_${look_back_window}_${prediction_window}_${feature.name}
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
 setup:
   - module load eth_proxy
