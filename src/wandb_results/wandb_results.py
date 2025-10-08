@@ -30,10 +30,10 @@ from src.wandb_results.qualitative_results import (
 def main():
     parser = argparse.ArgumentParser(description="WandB Results")
 
-    def list_of_ints(arg):
+    def list_of_ints(arg: str) -> list[int]:
         return [int(i) for i in arg.split(",")]
 
-    def list_of_strings(arg):
+    def list_of_strings(arg: str) -> list[str]:
         return arg.split(",")
 
     parser.add_argument(
@@ -67,19 +67,6 @@ def main():
         required=False,
         default=["dalia", "wildppg", "ieee"],
         help="Dataset must be one of the following: dalia, ieee, wildppg, chapman, ucihar, usc, capture24",
-    )
-
-    parser.add_argument(
-        "--normalization",
-        type=str,
-        choices=[
-            "none",
-            "global",
-            "minmax",
-        ],
-        required=False,
-        default=None,
-        help="Normalization must be 'none', 'global' or 'minmax' ",
     )
 
     parser.add_argument(
@@ -169,7 +156,7 @@ def main():
             args.dataset,
             args.look_back_window,
             args.prediction_window,
-            start_time="2025-9-11",
+            start_time="2025-10-08T12:00:00Z",
             save_html=args.save_html,
             use_std=args.use_std,
             models=args.models,
@@ -181,7 +168,7 @@ def main():
             args.look_back_window,
             args.prediction_window,
             metric=args.metric,
-            start_time="2025-09-08",
+            start_time="2025-10-08T12:00:00Z",
             use_std=args.use_std,
         )
     elif args.type == "delta":

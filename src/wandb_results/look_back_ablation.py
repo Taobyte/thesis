@@ -480,7 +480,7 @@ def visualize_look_back_window_difference(
             prediction_window,
             models,
             start_time,
-            experiment_name="endo_exo",
+            feature="mean",
         )
         endo_runs = get_runs(
             dataset,
@@ -488,7 +488,7 @@ def visualize_look_back_window_difference(
             prediction_window,
             models,
             start_time,
-            experiment_name="endo_only",
+            feature="none",
         )
 
         _, exo_mean_dict, exo_std_dict = get_metrics(exo_runs)
@@ -725,7 +725,11 @@ def get_best_value(
     best_val: float = np.inf
     best_std: float = np.inf
     for model in models:
-        val = metric_dict[model][lbw][pw][metric]
+        val = (
+            metric_dict[model][lbw][pw][metric]
+            if metric in metric_dict[model][lbw][pw]
+            else np.nan
+        )
         if val < best_val:
             best_val = val
             best_std = std_dict[model][lbw][pw][metric]
@@ -779,7 +783,7 @@ def best_model_viz_lbw_ablation(
             look_back_window,
             prediction_window,
             models,
-            experiment_name="endo_exo",
+            feature="mean",
             start_time=start_time,
             local_norm_endo_only=False,
         )
@@ -790,7 +794,7 @@ def best_model_viz_lbw_ablation(
             look_back_window,
             prediction_window,
             models,
-            experiment_name="endo_only",
+            feature="none",
             start_time=start_time,
             local_norm_endo_only=False,
         )

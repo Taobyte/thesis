@@ -157,15 +157,14 @@ def get_runs(
     prediction_window: list[int],
     models: list[str],
     start_time: str = "2025-6-12",
-    window_statistic: str = None,
-    experiment_name: str = "endo_exo",
+    feature: str = "mean",
     local_norm_endo_only: bool = False,
     predictions: bool = False,
 ):
     conditions = [
         {"config.use_prediction_callback": predictions},
         {"config.local_norm_endo_only": local_norm_endo_only},
-        {"config.experiment.experiment_name": {"$in": [experiment_name]}},
+        {"config.feature.name": {"$in": [feature]}},
         {"config.dataset.name": {"$in": [dataset]}},
         {"config.look_back_window": {"$in": look_back_window}},
         {"config.prediction_window": {"$in": prediction_window}},
@@ -173,11 +172,6 @@ def get_runs(
         {"state": "finished"},
         {"created_at": {"$gte": start_time}},
     ]
-
-    if window_statistic:
-        conditions.append(
-            {"config.dataset.datamodule.window_statistic": {"$eq": window_statistic}}
-        )
 
     filters = {"$and": conditions}
 
