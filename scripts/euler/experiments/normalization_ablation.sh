@@ -1,41 +1,61 @@
 #!/bin/bash
 
-source ~/.bashrc
-conda activate thesis
-
 TIME="24:00:00"
-GLOBAL_NAME="global_norm_exp"
+OUT_PREFIX="global_norm_exp"
 
-GLOBAL_JOB="python main.py --multirun \
-    hydra/launcher=submitit_slurm \
-    dataset=dalia,wildppg,ieee \
-    lbw=d \
-    pw=a \
-    model=linear,mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
-    use_wandb=True \
-    tune=False \
-    experiment=global_z_norm,local_z_norm,min_max_norm,no_norm,difference \
-    folds=fold_0,fold_1,fold_2 \
-    seed=0,1,2"
 
-sbatch --job-name="$GLOBAL_NAME" \
-       --output="$GLOBAL_NAME".out \
-       --time="$TIME" \
-       --wrap="$GLOBAL_JOB"
+CMD_CPU="python main.py --multirun \
+  hydra/launcher=cpu \
+  dataset=dalia,wildppg,ieee \
+  pw=a \
+  use_wandb=True \
+  tune=False \
+  normalization=global \
+  folds=fold_0,fold_1,fold_2 \
+  model=linear,xgboost \
+  lbw=d \
+  local_norm=difference,local_z,lnone"
 
-LOCAL_NAME="local_norm_exp"
-LOCAL_JOB="python main.py --multirun \
-    hydra/launcher=submitit_slurm \
-    dataset=ldalia,lwildppg,lieee \
-    lbw=d \
-    pw=a \
-    model=linear,mole,msar,kalmanfilter,xgboost,gp,mlp,timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
-    use_wandb=True \
-    tune=False \
-    experiment=global_z_norm,local_z_norm,min_max_norm,no_norm,difference \
-    seed=0,1,2"
+sbatch \
+  --job-name="cpu" \
+  --output="${OUT_PREFIX}_cpu_%j.out" \
+  --time="${TIME}" \
+  --wrap="bash -lc 'source ~/.bashrc && conda activate thesis && ${CMD_CPU}'"
 
-sbatch --job-name="$LOCAL_NAME" \
-       --output="$LOCAL_NAME".out \
-       --time="$TIME" \
-       --wrap="$LOCAL_JOB"
+
+CMD_GPU_SMALL="python main.py --multirun \
+  hydra/launcher=gpu_small \
+  dataset=dalia,wildppg,ieee \
+  pw=a \
+  use_wandb=True \
+  tune=False \
+  normalization=global \
+  folds=fold_0,fold_1,fold_2 \
+  model=mole,msar,kalmanfilter,gp,mlp \
+  lbw=d \
+  local_norm=difference,local_z,lnone"
+
+sbatch \
+  --job-name="gpu_small" \
+  --output="${OUT_PREFIX}_gpu_s_%j.out" \
+  --time="${TIME}" \
+  --wrap="bash -lc 'source ~/.bashrc && conda activate thesis && ${CMD_GPU_SMALL}'"
+
+
+CMD_GPU_LARGE="python main.py --multirun \
+  hydra/launcher=gpu_large \
+  dataset=dalia,wildppg,ieee \
+  pw=a \
+  lbw=d \
+  use_wandb=True \
+  tune=False \
+  normalization=global \
+  local_norm=difference,local_z,lnone \
+  folds=fold_0,fold_1,fold_2 \
+  model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx"
+
+sbatch \
+  --job-name="gpu_large" \
+  --output="${OUT_PREFIX}_gpu_l_%j.out" \
+  --time="${TIME}" \
+  --wrap="bash -lc 'source ~/.bashrc && conda activate thesis && ${CMD_GPU_LARGE}'"

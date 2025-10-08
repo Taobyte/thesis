@@ -53,7 +53,6 @@ class BaseLightningModule(L.LightningModule):
         local_norm_endo_only: bool,
         tune: bool,
         probabilistic_models: list[str],
-        experiment_name: str,
         seed: int,
         return_whole_series: bool,
     ):
@@ -66,7 +65,6 @@ class BaseLightningModule(L.LightningModule):
         self.local_norm = local_norm
         self.local_norm_endo_only = local_norm_endo_only
         self.probabilistic_forecast_models = probabilistic_models
-        self.experiment_name = experiment_name
         self.seed = seed
         self.return_whole_series = return_whole_series
 

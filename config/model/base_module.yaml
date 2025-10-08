@@ -7,5 +7,4 @@ pl_model:
   local_norm_endo_only: ${local_norm_endo_only} 
   tune: ${tune}
   probabilistic_models: ${probabilistic_models} 
-  experiment_name: ${experiment.experiment_name} 
   seed: ${seed}
