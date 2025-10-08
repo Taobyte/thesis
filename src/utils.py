@@ -216,9 +216,9 @@ def compute_square_window(seq_len: int, max_window: int = 4) -> list[int]:
 
 
 def number_of_exo_vars(features: list[str]) -> int:
-    n_catch22 = len(["catch22" in f for f in features])
-
-    return len(features) - n_catch22 + 24 * n_catch22
+    n_catch22 = int(np.sum(["catch22" in f for f in features]))
+    out = len(features) - n_catch22 + 24 * n_catch22
+    return out
 
 
 def compute_input_channel_dims(
