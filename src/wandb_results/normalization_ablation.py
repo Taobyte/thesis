@@ -15,7 +15,7 @@ from src.constants import (
 def plot_normalization_table(
     datasets: list[str],
     prediction_window: list[int] = [3],
-    start_time: str = "2025-8-21",
+    start_time: str = "2025-10-08",
     models: list[str] = MODELS,
     use_std: bool = False,
     metric: str = "MASE",
@@ -25,7 +25,7 @@ def plot_normalization_table(
 
     cols: dict[str, list[float]] = dict()
 
-    model_col: List[str] = ["Normalization"]
+    model_col: List[str] = ["Norm"]
     for model_name in models:
         model_name = model_to_abbr[model_name]
         model_col.append(model_name)
@@ -33,10 +33,8 @@ def plot_normalization_table(
     cols["Models"] = model_col
 
     experiments = [
-        # "no_norm",
-        "global_z_norm",
-        # "min_max_norm",
-        "local_z_norm",
+        "lnone",
+        "local_z",
         "difference",
     ]
     # abbr_exp_names = ["NN", "GZ", "MM", "LZ", "DF"]
@@ -44,8 +42,7 @@ def plot_normalization_table(
 
     for dataset in datasets:
         print(f"DATASET: {dataset}")
-        for experiment, name in zip(experiments, abbr_exp_names):
-            print(f"EXPERIMENT: {experiment}")
+        for local_norm, name in zip(experiments, abbr_exp_names):
             col: List[str] = [name]
             for model_name in models:
                 conditions = [
@@ -53,8 +50,9 @@ def plot_normalization_table(
                     {"created_at": {"$gte": start_time}},
                     {"tags": dataset},  # dataset tag must be present
                     {
-                        "config.experiment.experiment_name": experiment
-                    },  # experiment tag must be present
+                        "config.normalization": "global",
+                        "config.local_norm": local_norm,
+                    },
                     {"tags": model_name},
                 ]
                 filters = {"$and": conditions}
@@ -63,7 +61,7 @@ def plot_normalization_table(
                 runs = api.runs("c_keusch/thesis", filters=filters)
                 print(f"{model_name} length of runs {len(runs)}")
 
-                if len(runs) % 3 == 0 and len(runs) > 0:
+                if len(runs) > 0:
                     _, mean_dict, std_dict = get_metrics(runs)
 
                     if list(mean_dict[model_name].keys()):
@@ -79,14 +77,10 @@ def plot_normalization_table(
                             f"Metric {metric} not in mean_dict[{model_name}][{lbw}][{pw}]"
                         )
                         print(
-                            f"Setting mean = NaN for {model_name} {experiment} {dataset}"
+                            f"Setting mean = NaN for {model_name} {local_norm} {dataset}"
                         )
                         mean = np.nan
 
-                else:
-                    print(f"{model_name} {dataset} {experiment} no 3 runs found")
-                    mean = np.nan
-                    std = np.nan
                 entry = f"{mean:.2f}"
                 if use_std:
                     entry += f" $\pm$ {std:.2f}"

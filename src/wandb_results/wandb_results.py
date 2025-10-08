@@ -40,13 +40,13 @@ def main():
         "--type",
         type=str,
         choices=[
+            "norm_ablation",
             "viz",
             "best_lbw_viz",
             "delta",
             "horizon_ablation",
             "horizon_viz",
             "horizon_exo_diff",
-            "norm_ablation",
             "exo_norm_ablation_table",
             "exo_norm_ablation_heatmap",
             "local_global",
@@ -96,14 +96,6 @@ def main():
         required=False,
         default=[3],
         help="Prediction window size",
-    )
-
-    parser.add_argument(
-        "--experiment",
-        type=str,
-        required=False,
-        default="endo_exo",
-        help="experiment name",
     )
 
     parser.add_argument(
@@ -169,7 +161,8 @@ def main():
             datasets=args.dataset,
             prediction_window=args.prediction_window,
             models=args.models,
-            start_time="2025-08-30",
+            start_time="2025-10-08",
+            use_std=args.use_std,
         )
     elif args.type == "viz":
         visualize_look_back_window_difference(
