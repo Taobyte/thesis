@@ -45,6 +45,8 @@ def get_metrics(
         "ND",
         "NRMSE",
         "SMAPE",
+        "TMAE",
+        "TMSE",
     ],
     artifacts_path: str = "C:/Users/cleme/ETH/Master/Thesis/ns-forecast/artifacts",
 ) -> Tuple[dict, dict, dict]:

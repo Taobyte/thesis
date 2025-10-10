@@ -9,7 +9,6 @@ from src.wandb_results.horizon_ablation import (
 )
 from src.wandb_results.look_back_ablation import (
     visualize_look_back_window_difference,
-    ablation_delta_plot,
     best_model_viz_lbw_ablation,
 )
 from src.wandb_results.exo_norm_ablation import (
@@ -43,7 +42,6 @@ def main():
             "norm_ablation",
             "viz",
             "best_lbw_viz",
-            "delta",
             "horizon_ablation",
             "horizon_viz",
             "horizon_exo_diff",
@@ -170,16 +168,6 @@ def main():
             metric=args.metric,
             start_time="2025-10-08T12:00:00Z",
             use_std=args.use_std,
-        )
-    elif args.type == "delta":
-        ablation_delta_plot(
-            args.dataset,
-            args.look_back_window,
-            args.prediction_window,
-            experiment=args.experiment,
-            models=args.models,
-            start_time="2025-8-23",
-            save_html=args.save_html,
         )
     elif args.type == "horizon_ablation":
         pw_ablation_table(

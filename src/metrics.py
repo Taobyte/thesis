@@ -35,6 +35,7 @@ class Evaluator:
             "MAPE": mape(targets, preds),  # including MAPE for MIT-BIH study
             "abs_target_mean": abs_target_mean(targets),
             "naive_mae": naive_mae(targets, look_back_window),
+            "macro_mase": mase(targets, preds, naive_mae(targets, look_back_window)),
             # "abs_error": abs_error(targets, preds),
             # "abs_target_sum": abs_target_sum(targets),
             # "cross_correlation": correlation(preds, targets),
@@ -292,7 +293,7 @@ def mase(
     """
     diff = np.mean(np.abs(target - forecast), axis=1)
     mase = diff / naive_error
-    # if seasonal_error is 0, set mase to 0
+
     return np.mean(mase)
 
 
