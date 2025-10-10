@@ -13,7 +13,7 @@ CMD_CPU="python main.py --multirun \
   tune=False \
   normalization=global \
   folds=fold_0,fold_1,fold_2 \
-  model=xgboost \
+  model=linear \
   local_norm=difference \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
@@ -34,7 +34,7 @@ CMD_GPU_SMALL="python main.py --multirun \
   normalization=global \
   local_norm=difference\
   folds=fold_0,fold_1,fold_2 \
-  model=mlp \
+  model=gp \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
 sbatch \
@@ -56,7 +56,7 @@ CMD_GPU_LARGE="python main.py --multirun \
   normalization=global \
   local_norm=local_z \
   folds=fold_0,fold_1,fold_2 \
-  model=gpt4ts,nbeatsx \
+  model=timesnet,simpletm \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
 sbatch \

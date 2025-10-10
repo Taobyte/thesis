@@ -15,7 +15,7 @@ from src.wandb_results.exo_norm_ablation import (
     exo_norm_ablation_table,
     exo_norm_ablation_heatmap,
 )
-from local_global_exo_diff import local_global_diff
+from src.wandb_results.wppg_feature_ablation import wppg_feature_ablation
 from src.wandb_results.normalization_ablation import plot_normalization_table
 from src.wandb_results.efficiency import plot_efficiency_table
 from src.wandb_results.utils import create_params_file_from_optuna
@@ -47,7 +47,7 @@ def main():
             "horizon_exo_diff",
             "exo_norm_ablation_table",
             "exo_norm_ablation_heatmap",
-            "local_global",
+            "feature_abl",
             "efficiency",
             "mitbih",
             "predictions",
@@ -199,7 +199,6 @@ def main():
             start_time="2025-09-10",
             use_std=args.use_std,
         )
-
     elif args.type == "exo_norm_ablation_table":
         exo_norm_ablation_table(
             args.dataset,
@@ -220,14 +219,8 @@ def main():
             metric=args.metric,
             start_time="2025-09-10",
         )
-    elif args.type == "local_global":
-        local_global_diff(
-            args.dataset,
-            args.models,
-            args.look_back_window,
-            args.prediction_window,
-            start_time="2025-09-17",
-        )
+    elif args.type == "feature_abl":
+        wppg_feature_ablation()
     elif args.type == "efficiency":
         plot_efficiency_table(
             dataset=args.dataset,
