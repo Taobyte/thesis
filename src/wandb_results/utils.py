@@ -5,16 +5,11 @@ import pandas as pd
 import numpy as np
 import wandb
 import ast
-import plotly.graph_objects as go
 
-from src.utils import create_group_run_name
-from matplotlib import colors
 from tqdm import tqdm
 from collections import defaultdict
 from typing import Tuple
 from pathlib import Path
-
-from src.constants import dataset_to_name
 
 
 os.environ.setdefault(
@@ -187,109 +182,6 @@ def get_runs(
     return runs
 
 
-def add_model_mean_std_to_fig(
-    model: str,
-    model_name: str,
-    model_color: str,
-    mean_dict: dict,
-    std_dict: dict,
-    fig: go.Figure,
-    dataset: str,
-    row_idx: int = None,
-    ablation: bool = False,
-    row_delta: int = 0,
-    col_delta: int = 0,
-    use_std: bool = False,
-):
-    look_back_windows = sorted(list(mean_dict[model].keys()), key=int)
-    prediction_windows = [
-        sorted(list(mean_dict[model][look_back_windows[0]].keys()))[row_delta // 2]
-    ]
-
-    assert len(prediction_windows) == 1
-    assert set(test_metrics) == set(
-        mean_dict[model][look_back_windows[0]][prediction_windows[0]]
-    ), (
-        f"Model {model} has not all test metrics! {mean_dict[model][look_back_windows[0]][prediction_windows[0]]} "
-    )
-
-    x = [int(lbw) for lbw in look_back_windows]
-    mse_upper = {"dalia": 10, "wildppg": 200, "ieee": 100}
-    mae_upper = {"dalia": 5, "wildppg": 20, "ieee": 10}
-    y_axis_ranges = {
-        test_metrics[0]: [0, mse_upper[dataset]],
-        test_metrics[1]: [0, mae_upper[dataset]],
-        test_metrics[2]: [-1, 1],
-        test_metrics[3]: [0, 1],
-    }
-
-    for pw in prediction_windows:
-        for i, metric in enumerate(test_metrics):
-            means = [mean_dict[model][lbw][pw][metric] for lbw in look_back_windows]
-            stds = [std_dict[model][lbw][pw][metric] for lbw in look_back_windows]
-
-            upper = [m + s for m, s in zip(means, stds)]
-            lower = [m - s for m, s in zip(means, stds)]
-
-            if row_idx is None:
-                row, col = divmod(i, 2)
-                row += 1 + row_delta
-                col += 1 + col_delta
-            else:
-                col = i + 1  # plotly indexing starts at 1 not 0
-                row = row_idx
-
-            color = model_color
-            # Mean line
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=means,
-                    mode="lines+markers",
-                    name=f"{dataset_to_name[dataset]} {model_name}"
-                    if not ablation
-                    else model_name[: model_name.find("Activity") + 8],
-                    line=dict(color=color),
-                    showlegend=(i == 0) and (row == 1),
-                    legendgroup=f"{dataset_to_name[dataset]} {model_name}"
-                    if not ablation
-                    else model_name[: model_name.find("Activity") + 8],
-                    # legendgrouptitle_text=model_name if i == 0 else None,
-                ),
-                row=row,
-                col=col,
-            )
-            if use_std:
-                # Std deviation band (fill between)
-                fig.add_trace(
-                    go.Scatter(
-                        x=x + x[::-1],
-                        y=upper + lower[::-1],
-                        fill="toself",
-                        fillcolor=color.replace("1.0", "0.2")
-                        if "rgba" in color
-                        else f"rgba({','.join(str(int(c * 255)) for c in colors.to_rgb(color))},0.2)",
-                        line=dict(color="rgba(255,255,255,0)"),
-                        hoverinfo="skip",
-                        showlegend=False,
-                        name=model_name,
-                        legendgroup=model_name,
-                    ),
-                    row=row,
-                    col=col,
-                )
-            # Set y-axis range for this subplot
-            # ig.update_yaxes(range=y_axis_ranges[metric], row=row, col=col)
-            # Set x-axis to look_back_window values
-            fig.update_xaxes(
-                title_text="Lookback Window",
-                tickmode="array",
-                tickvals=look_back_windows,
-                row=row,
-                col=col,
-            )
-
-
 def unflatten(d, sep="."):
     out = {}
     for k, v in d.items():
@@ -307,8 +199,6 @@ def unflatten(d, sep="."):
 
 
 def create_params_file_from_optuna(models: list[str], start_time: str):
-    import yaml
-
     lbw_to_name = {"3": "f", "5": "a", "10": "b", "20": "c", "30": "d", "60": "e"}
     params_dir = Path("C:/Users/cleme/ETH/Master/Thesis/ns-forecast/config/params")
 

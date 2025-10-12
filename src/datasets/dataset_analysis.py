@@ -36,8 +36,7 @@ from src.utils import (
     compute_input_channel_dims,
     get_min,
     resolve_str,
-    ensemble_epochs,
-    exo_channels_wildppg,
+    number_of_exo_vars,
 )
 
 
@@ -49,14 +48,13 @@ OmegaConf.register_new_resolver(
 )
 OmegaConf.register_new_resolver("min", get_min)
 OmegaConf.register_new_resolver("str", resolve_str)
-OmegaConf.register_new_resolver("ensemble_epochs", ensemble_epochs)
-OmegaConf.register_new_resolver("exo_channels_wildppg", exo_channels_wildppg)
+OmegaConf.register_new_resolver("number_of_exo_vars", number_of_exo_vars)
 
 
 def main():
     parser = argparse.ArgumentParser(description="WandB Results")
 
-    def list_of_strings(arg):
+    def list_of_strings(arg: str) -> list[str]:
         return arg.split(",")
 
     parser.add_argument(
@@ -92,6 +90,7 @@ def main():
             "wildppg_exo",
             "cp_detection",
             "downsample",
+            "svg",
         ],
         required=True,
     )
@@ -105,8 +104,7 @@ def main():
                 overrides=[
                     f"dataset={dataset}",
                     "folds=all",
-                    "use_dynamic_features=True",
-                    "use_heart_rate=True",
+                    "feature=mean",
                 ],
             )
 
@@ -147,6 +145,23 @@ def main():
         change_point_detection(datamodules)
     elif args.type == "downsample":
         downsample_series(datamodules)
+    elif args.type == "svg":
+        ieee_svg(datamodules)
+
+
+def ieee_svg(datamodules):
+    assert len(datamodules) == 1
+    assert datamodules[0].name == "ieee"
+    dm = datamodules[0]
+    data = dm.train_dataset.data
+    for i, series in enumerate(data):
+        hr = series[:, 0]
+        fig = px.line(hr)
+        fig.update_xaxes(visible=False, showgrid=False, zeroline=False)
+        fig.update_yaxes(visible=False, showgrid=False, zeroline=False)
+        fig.update_layout(showlegend=False, template="none")
+        fig.write_image(f"./data/ieee_{i}.svg")
+        fig.show()
 
 
 def downsample_series(datamodules):
@@ -195,61 +210,6 @@ def change_point_detection(datamodules):
             )
             rpt.display(y, bkps)
             plt.show()
-
-
-def viz_exo_wildppg():
-    with initialize(version_base=None, config_path="../../config/"):
-        cfg = compose(
-            config_name="config",
-            overrides=[
-                "dataset=wildppg8",
-                "folds=all",
-                "use_dynamic_features=True",
-                "use_heart_rate=True",
-                "dataset.datamodule.add_rmse=True",
-                "dataset.datamodule.add_enmo=True",
-                "dataset.datamodule.add_mad=True",
-                "dataset.datamodule.add_perc=True",
-                "dataset.datamodule.add_jerk=True",
-                "dataset.datamodule.add_cadence=True",
-                "dataset.datamodule.add_rmse_last2=True",
-            ],
-        )
-    datamodule = instantiate(cfg.dataset.datamodule)
-    datamodule.setup("fit")
-
-    n_series = 1
-    names = ["HR", "Mean", "RMSE", "ENMO", "MAD", "PERC", "JERK", "LAST2", "CAD"]
-
-    fig = make_subplots(
-        rows=len(names) * n_series,
-        cols=1,
-        row_titles=names * n_series,
-        shared_xaxes=True,
-    )
-
-    dataset = datamodule.train_dataset.data
-    dataset = dataset[:n_series]
-    cov_mats = []
-    for i, series in tqdm(enumerate(dataset)):
-        cov_mats.append(np.corrcoef(series[:, 1:], rowvar=False))
-        for j, name in enumerate(names):
-            trace = series[:, j]
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(trace))) * 8,
-                    y=trace,
-                    # showlegend=(i==0),
-                    name=name,
-                    opacity=1.0,
-                ),
-                row=i * len(names) + 1 + j,
-                col=1,
-            )
-    import pdb
-
-    pdb.set_trace()
-    fig.show()
 
 
 def adfuller_test(datamodules: List[LightningDataModule]):
