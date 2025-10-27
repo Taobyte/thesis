@@ -12,7 +12,7 @@ class DaLiADataset(HRDataset):
     def __init__(
         self,
         sensor_location: str = "chest",
-        imu_features: list[str] = ["wrist_mean", "wrist_std"],
+        imu_features: list[str] = ["mean", "std"],
         **kwargs: Any,
     ):
         self.sensor_location = sensor_location
@@ -72,7 +72,7 @@ class DaLiADataModule(BaseDataModule):
         val_participants: list[int] = [9, 10, 11],
         test_participants: list[int] = [1, 13, 14],
         sensor_location: str = "chest",
-        imu_features: list[str] = ["wrist_mean", "wrist_std"],
+        imu_features: list[str] = ["mean", "std"],
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -85,35 +85,35 @@ class DaLiADataModule(BaseDataModule):
         self.sensor_location = sensor_location
         self.imu_features = imu_features
 
-    def setup(self, stage: str = "fit"):
-        common_args = {
+        self.common_args: dict[str, Any] = {
             "data_dir": self.data_dir,
             "use_dynamic_features": self.use_dynamic_features,
             "use_static_features": self.use_static_features,
             "look_back_window": self.look_back_window,
             "prediction_window": self.prediction_window,
             "target_channel_dim": self.target_channel_dim,
-            "imu_features": self.imu_features,
             "test_local": self.test_local,
             "train_frac": self.train_frac,
             "val_frac": self.val_frac,
             "sensor_location": self.sensor_location,
+            "imu_features": self.imu_features,
         }
 
+    def setup(self, stage: str = "fit"):
         if stage == "fit":
             self.train_dataset = DaLiADataset(
                 participants=self.train_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
             self.val_dataset = DaLiADataset(
                 participants=self.val_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
         if stage == "test":
             self.test_dataset = DaLiADataset(
                 participants=self.test_participants,
                 return_whole_series=False,
-                **common_args,
+                **self.common_args,
             )

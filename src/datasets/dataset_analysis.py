@@ -61,7 +61,7 @@ def main():
         "--datasets",
         type=list_of_strings,
         required=False,
-        default=["dalia", "wildppg8", "ieee"],
+        default=["dalia", "wildppg", "ieee"],
         help="Dataset to plot. Must be one or more (separated by,) of 'ieee', 'dalia', 'wildppg' ",
     )
 
@@ -497,7 +497,7 @@ def max_pearson(datamodules: List[LightningDataModule], differencing: bool = Tru
 
 def visualize_timeseries(datamodules: List[LightningDataModule]):
     n_series_per_dataset = 1
-    pos = 1
+    pos = 0
     n_datasets = len(datamodules)
     row_names = []
     for d in datamodules:
@@ -520,6 +520,37 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
         for i, series in tqdm(enumerate(dataset)):
             heartrate = series[:, 0]
             activity = series[:, 1]
+
+            def constant_runs(x: np.ndarray, run_length: int = 4) -> np.ndarray:
+                """
+                Return starting indices where x is constant (same finite value)
+                for at least `run_length` consecutive steps.
+                NaNs or infs break runs.
+                """
+                x = np.asarray(x)
+                if len(x) < run_length:
+                    return np.array([], dtype=int)
+
+                # finite mask
+                finite = np.isfinite(x)
+
+                # consecutive equality mask (both values finite and equal)
+                same = (np.diff(x) == 0) & finite[1:] & finite[:-1]
+
+                # count how many consecutive True values in sliding window
+                window = np.ones(run_length - 1, dtype=int)
+                consecutive_same = np.convolve(same, window, mode="valid")
+
+                # positions where we have (run_length - 1) consecutive equal diffs
+                starts = np.where(consecutive_same == (run_length - 1))[0]
+
+                return starts
+
+            starts = constant_runs(heartrate)
+
+            import pdb
+
+            pdb.set_trace()
             r1 = 2 * i + 1 + offset  # HR row
             r2 = r1 + 1  # ACT row
             fig.add_trace(
@@ -542,6 +573,7 @@ def visualize_timeseries(datamodules: List[LightningDataModule]):
             )
             parent_axis_id = "x" if r1 == 1 else f"x{r1}"
             fig.update_xaxes(matches=parent_axis_id, row=r2, col=1)
+
     fig.update_xaxes(
         title_text="Seconds", row=2 * n_series_per_dataset * n_datasets, col=1
     )

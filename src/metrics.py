@@ -236,6 +236,7 @@ def naive_mae(
 ) -> float:
     last_value = look_back_window[:, -1:, : target.shape[-1]]
     diff = mae(target, last_value)
+
     return diff
 
 
@@ -282,7 +283,7 @@ def abs_target_mean(target) -> float:
 def mase(
     target: NDArray[np.float32],
     forecast: NDArray[np.float32],
-    naive_error: NDArray[np.float32],
+    naive_error: float,
 ) -> float:
     r"""
     .. math::
@@ -291,10 +292,13 @@ def mase(
 
     See [HA21]_ for more details.
     """
-    diff = np.mean(np.abs(target - forecast), axis=1)
-    mase = diff / naive_error
 
-    return np.mean(mase)
+    EPS = 1e-8
+    if naive_error < EPS:
+        return 1.0
+    diff = np.mean(np.abs(target - forecast), axis=1)
+    mase = diff / np.maximum(naive_error, EPS)
+    return float(np.mean(mase))
 
 
 def mape(target: NDArray[np.float32], forecast: NDArray[np.float32]) -> float:

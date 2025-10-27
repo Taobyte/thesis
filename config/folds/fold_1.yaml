@@ -11,7 +11,7 @@ ieee:
   test_participants:  [4, 7, 8, 9]
     
 wildppg:
-  train_participants: [0, 2, 3, 6, 8, 12, 14, 15]
-  val_participants:   [1, 5, 9]
+  train_participants: [0, 1, 2, 6, 7, 9, 11, 13]
+  val_participants:   [4, 8, 10]
   test_participants:  [4, 7, 10, 11, 13]
 

@@ -300,8 +300,8 @@ def quotient_filter(hbpeaks, outlier_over=5, sampling_rate=128, tol=0.8):
                     if len(good_hbeats) > 1:
                         rr = good_hbeats[-1] - good_hbeats[-2]
                         if (
-                            rr < min(hb_intervals) / tol
-                            and rr > max(hb_intervals) * tol
+                            max(hb_intervals) * tol < rr
+                            and rr < min(hb_intervals) / tol
                         ):
                             good_rrs.append(rr)
                             good_rrs_x.append((good_hbeats[-1] + good_hbeats[-2]) / 2)

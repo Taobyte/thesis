@@ -7,24 +7,6 @@ from src.datasets.utils import BaseDataModule
 from src.datasets.dataset import HRDataset
 
 
-def nan_helper(y):
-    """Helper to handle indices and logical indices of NaNs.
-
-    Input:
-        - y, 1d numpy array with possible NaNs
-    Output:
-        - nans, logical indices of NaNs
-        - index, a function, with signature indices= index(logical_indices),
-          to convert logical indices of NaNs to 'equivalent' indices
-    Example:
-        >>> # linear interpolation of NaNs
-        >>> nans, x= nan_helper(y)
-        >>> y[nans]= np.interp(x(nans), x(~nans), y[~nans])
-    """
-
-    return np.isnan(y), lambda z: z.nonzero()[0]
-
-
 class WildPPGDataset(HRDataset):
     def __init__(
         self,
@@ -44,12 +26,10 @@ class WildPPGDataset(HRDataset):
             imus_arr = data["imus"]
 
         arrays: list[NDArray[np.float32]] = []
-        for participant in self.participants:
+        for i, participant in enumerate(self.participants):
             hr = hr_arr[participant].astype(float)
-
+            print(f"Participant {i} contains {sum(hr < 30)}")
             hr[hr < 30] = np.nan
-            nans, x = nan_helper(hr)
-            hr[nans] = np.interp(x(nans), x(~nans), hr[~nans])
 
             series = hr  # (W, 1)
             # IMU features

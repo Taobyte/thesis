@@ -61,8 +61,7 @@ class IEEEDataModule(BaseDataModule):
         self.imu_features = imu_features
         self.sensor_location = sensor_location
 
-    def setup(self, stage: str):
-        common_args = dict(
+        self.common_args: dict[str, Any] = dict(
             data_dir=self.data_dir,
             look_back_window=self.look_back_window,
             prediction_window=self.prediction_window,
@@ -74,20 +73,22 @@ class IEEEDataModule(BaseDataModule):
             imu_features=self.imu_features,
             sensor_location=self.sensor_location,
         )
+
+    def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = IEEEDataset(
                 participants=self.train_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
             self.val_dataset = IEEEDataset(
                 participants=self.val_participants,
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                **self.common_args,
             )
         if stage == "test":
             self.test_dataset = IEEEDataset(
                 participants=self.test_participants,
                 return_whole_series=False,
-                **common_args,
+                **self.common_args,
             )

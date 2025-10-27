@@ -271,7 +271,7 @@ class BaseLightningModule(L.LightningModule):
         device = preds.device
         train_dataset: Dataset = self.trainer.datamodule.train_dataset  # type:ignore
         hr_diff_quantile = train_dataset.hr_diff_quantile
-        q = torch.from_numpy(hr_diff_quantile).to(device).float()
+        q = torch.as_tensor(hr_diff_quantile).to(device).float()
         diff = torch.abs(prediction_window[:, 0, 0] - look_back_window[:, -1, 0])
         mask = (diff >= q).bool()
         transition_metric: defaultdict[str, list[float]] = defaultdict(list[float])

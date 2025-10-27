@@ -5,9 +5,9 @@ import argparse
 import os
 import re
 
-from pathlib import Path
-from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
-from scipy.io import loadmat
+from typing import Union
+
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 def get_dalia_folds(datadir: str, test_size: int = 5):
@@ -70,15 +70,24 @@ def get_dalia_folds(datadir: str, test_size: int = 5):
         print(f"test_participants:  {fold['test_participants']}")
 
 
-def get_folds(datadir: str, n_participants: int, train_size: int, test_size: int):
+def get_folds(
+    n_participants: int,
+    train_size: int,
+    test_size: int,
+    test_participants: list[int] = [],
+):
     all_participants = list(range(n_participants))
     np.random.seed(115)
     np.random.shuffle(all_participants)
 
-    test = all_participants[:test_size]
-    rest = all_participants[test_size:]
+    if len(test_participants) == 0:
+        test = all_participants[:test_size]
+    else:
+        test = test_participants
 
-    folds = []
+    rest = [p for p in all_participants if p not in test]
+
+    folds: list[dict[str, Union[int, list[int]]]] = []
     n_folds = 4
 
     val_chunks = np.array_split(rest, n_folds)
@@ -113,22 +122,29 @@ if __name__ == "__main__":
         "--dataset",
         choices=["ieee", "dalia", "wildppg"],
         required=True,
-        help="You have to choose from [dalia, ucihar, ieee, capture24, ptbxl, mhc6mwt, wildppg]",
+        help="You have to choose from [dalia, ieee, wildppg]",
     )
 
     parser.add_argument(
-        "--datadir", required=True, help="Specify the path were the data is located."
+        "--datadir", required=False, help="Specify the path were the data is located."
     )
 
     args = parser.parse_args()
 
     if args.dataset == "dalia":
-        get_dalia_folds(args.datadir)
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
+        get_dalia_folds(args.datadir)
     elif args.dataset == "wildppg":
-        get_folds(args.datadir, 16, 9, 5)
+        test_participants = [
+            3,
+            5,
+            12,
+            14,
+            15,
+        ]  # these are the participants with the least number of nan / 0.0 values in the heart rate time series
+        # number_of_nans = {"3": 11, "5": 0, "12": 6, "14": 7, "15": 2}
+        get_folds(16, 9, 5, test_participants)
     elif args.dataset == "ieee":
-        get_folds(args.datadir, 12, 6, 4)
-        # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/euler/IEEEPPG/Training_data/Training_data"
+        get_folds(12, 6, 4)
     else:
         raise NotImplementedError()

@@ -16,6 +16,9 @@ class LDaliaDataset(DaLiADataset):
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
+        assert (
+            self.drop_windows_with_invalid_hr is False
+        )  # ensures that we interpolate the data for local forecasting
         assert len(self.participants) == 1
         self.flag = flag
         timeseries = self.data[0]
@@ -59,33 +62,27 @@ class LDalia(DaLiADataModule):
     def __init__(
         self,
         participant: int = 1,
-        window_statistic: str = "mean",
-        use_heart_rate: bool = False,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
-        self.use_heart_rate = use_heart_rate
         self.participant = participant
         self.train_frac = train_frac
         self.val_frac = val_frac
-        self.window_statistic = window_statistic
 
     def setup(self, stage: str = "fit"):
-        common_args = dict(
+        common_args: dict[str, Any] = dict(
             train_frac=self.train_frac,
             val_frac=self.val_frac,
             data_dir=self.data_dir,
             participants=[self.participant],
             use_dynamic_features=self.use_dynamic_features,
             use_static_features=self.use_static_features,
-            use_heart_rate=self.use_heart_rate,
             look_back_window=self.look_back_window,
             prediction_window=self.prediction_window,
             target_channel_dim=self.target_channel_dim,
-            window_statistic=self.window_statistic,
         )
         if stage == "fit":
             self.train_dataset = LDaliaDataset(
