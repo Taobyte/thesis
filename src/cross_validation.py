@@ -75,10 +75,14 @@ def get_folds(
     train_size: int,
     test_size: int,
     test_participants: list[int] = [],
+    exclude: list[int] = [],
 ):
     all_participants = list(range(n_participants))
     np.random.seed(115)
     np.random.shuffle(all_participants)
+
+    # remove the ints in exclude from all_participants
+    all_participants = [p for p in all_participants if p not in exclude]
 
     if len(test_participants) == 0:
         test = all_participants[:test_size]
@@ -135,15 +139,15 @@ if __name__ == "__main__":
         # datadir = "C:/Users/cleme/ETH/Master/Thesis/data/DaLiA/data/PPG_FieldStudy"
         get_dalia_folds(args.datadir)
     elif args.dataset == "wildppg":
+        exclude = [2, 4, 8]
         test_participants = [
-            3,
             5,
             12,
             14,
             15,
         ]  # these are the participants with the least number of nan / 0.0 values in the heart rate time series
         # number_of_nans = {"3": 11, "5": 0, "12": 6, "14": 7, "15": 2}
-        get_folds(16, 9, 5, test_participants)
+        get_folds(16, 9, 5, test_participants, exclude=exclude)
     elif args.dataset == "ieee":
         get_folds(12, 6, 4)
     else:

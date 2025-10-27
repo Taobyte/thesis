@@ -11,7 +11,7 @@ datamodule:
   test_participants: ${folds.dalia.test_participants} 
 
   # IMU FEATURES
-  sensor_location: chest
+  sensor_location: wrist # chest
   imu_features: ${feature.imu_features}
 
   target_channel_dim: 1 

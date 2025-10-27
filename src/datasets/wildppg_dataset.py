@@ -1,10 +1,42 @@
 import numpy as np
 
+from scipy.interpolate import PchipInterpolator
 from typing import Any, List
 from numpy.typing import NDArray
 
 from src.datasets.utils import BaseDataModule
 from src.datasets.dataset import HRDataset
+
+
+def spline_fill_all_nan(
+    y: NDArray[np.float32], kind: str = "pchip"
+) -> NDArray[np.float32]:
+    """
+    Interpolate all NaN values in a 1D HR series using a smooth spline.
+    kind: 'pchip' (default, safe for HR), 'akima', or 'cubic'
+    """
+    y = np.asarray(y, dtype=np.float32).reshape(-1)
+    x = np.arange(len(y), dtype=np.float32)
+    mask = np.isfinite(y)
+
+    if mask.sum() < 2:
+        return y  # not enough points to interpolate
+
+    if kind == "pchip":
+        interp = PchipInterpolator(x[mask], y[mask], extrapolate=True)
+    elif kind == "akima":
+        from scipy.interpolate import Akima1DInterpolator
+
+        interp = Akima1DInterpolator(x[mask], y[mask])
+    elif kind == "cubic":
+        from scipy.interpolate import CubicSpline
+
+        interp = CubicSpline(x[mask], y[mask], bc_type="natural", extrapolate=True)
+    else:
+        raise ValueError("kind must be 'pchip', 'akima', or 'cubic'")
+
+    y_filled = interp(x)
+    return y_filled.astype(np.float32)
 
 
 class WildPPGDataset(HRDataset):
@@ -26,12 +58,15 @@ class WildPPGDataset(HRDataset):
             imus_arr = data["imus"]
 
         arrays: list[NDArray[np.float32]] = []
-        for i, participant in enumerate(self.participants):
+        for participant in self.participants:
             hr = hr_arr[participant].astype(float)
-            print(f"Participant {i} contains {sum(hr < 30)}")
+            print(f"Participant {participant} contains {sum(hr < 30)}")
             hr[hr < 30] = np.nan
 
-            series = hr  # (W, 1)
+            # interpolate nan values with smoothing spline
+            hr_filled = spline_fill_all_nan(hr, kind="pchip")
+            series = hr_filled[:, None]  # (W, 1)
+
             # IMU features
             if self.use_dynamic_features:
                 imu_participant = imus_arr[participant]
@@ -45,6 +80,9 @@ class WildPPGDataset(HRDataset):
                     "ATTENTION: you set use_dynamic_features=True, but pass no imu_features"
                 )
                 series = np.concatenate([series] + features, axis=1)
+            assert not np.isnan(series).any(), (
+                f"series contains nan values at {np.where(np.isnan(series))}"
+            )
             arrays.append(series)
 
         return arrays

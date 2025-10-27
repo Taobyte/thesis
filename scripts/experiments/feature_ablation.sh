@@ -6,7 +6,7 @@ OUT_PREFIX="wppg_feature_ablation"
 
 CMD_CPU="python main.py --multirun \
   hydra/launcher=cpu \
-  dataset=wildppg \
+  dataset=wildppg,dalia \
   lbw=c \
   pw=a \
   use_wandb=True \
@@ -26,7 +26,7 @@ sbatch \
 
 CMD_GPU_SMALL="python main.py --multirun \
   hydra/launcher=gpu_small \
-  dataset=wildppg \
+  dataset=wildppg,dalia \
   lbw=d \
   pw=a \
   use_wandb=True \
@@ -48,7 +48,7 @@ sbatch \
 
 CMD_GPU_LARGE="python main.py --multirun \
   hydra/launcher=gpu_large \
-  dataset=wildppg \
+  dataset=wildppg,dalia \
   lbw=d \
   pw=a \
   use_wandb=True \
