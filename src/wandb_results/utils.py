@@ -6,6 +6,7 @@ import numpy as np
 import wandb
 import ast
 
+from wandb.apis.public.runs import Run
 from tqdm import tqdm
 from collections import defaultdict
 from typing import Tuple
@@ -157,7 +158,7 @@ def get_runs(
     feature: str = "mean",
     local_norm_endo_only: bool = False,
     predictions: bool = False,
-):
+) -> list[Run]:
     conditions = [
         {"config.use_prediction_callback": predictions},
         {"config.local_norm_endo_only": local_norm_endo_only},
@@ -174,7 +175,7 @@ def get_runs(
 
     api = wandb.Api()
     runs = api.runs("c_keusch/thesis", filters=filters)
-    runs = list(runs)
+    runs: list[Run] = list(runs)
     print(f"Found {len(runs)} runs.")
 
     # assert len(runs) > 0, "No runs were found!"

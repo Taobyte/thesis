@@ -14,13 +14,6 @@ from src.normalization import global_z_norm, min_max_norm, local_z_norm_numpy
 
 
 class BaseDataModule(L.LightningDataModule):
-    look_back_channel_dim: int
-    target_channel_dim: int
-    use_static_features: bool
-    use_dynamic_features: bool
-    static_exogenous_variables: int
-    dynamic_exogenous_variables: int
-
     def __init__(
         self,
         data_dir: str,
@@ -42,6 +35,7 @@ class BaseDataModule(L.LightningDataModule):
         return_whole_series: bool = False,
         local_norm: str = "none",
         local_norm_endo_only: bool = False,
+        max_eval_look_back_window: int = 60,
     ):
         super().__init__()
 
@@ -54,7 +48,6 @@ class BaseDataModule(L.LightningDataModule):
         self.look_back_window = look_back_window
         self.prediction_window = prediction_window
 
-        # Experiment Flags
         self.use_dynamic_features = use_dynamic_features
         self.use_static_features = use_static_features
 
@@ -77,6 +70,8 @@ class BaseDataModule(L.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+
+        self.max_eval_look_back_window = max_eval_look_back_window
 
     def postprocess_batch(
         self, look_back_window: Tensor, prediction_window: Tensor

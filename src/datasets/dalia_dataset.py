@@ -97,6 +97,7 @@ class DaLiADataModule(BaseDataModule):
             "val_frac": self.val_frac,
             "sensor_location": self.sensor_location,
             "imu_features": self.imu_features,
+            "max_eval_look_back_window": self.max_eval_look_back_window,
         }
 
     def setup(self, stage: str = "fit"):
@@ -115,5 +116,6 @@ class DaLiADataModule(BaseDataModule):
             self.test_dataset = DaLiADataset(
                 participants=self.test_participants,
                 return_whole_series=False,
+                is_test_dataset=True,
                 **self.common_args,
             )

@@ -60,7 +60,7 @@ class WildPPGDataset(HRDataset):
         arrays: list[NDArray[np.float32]] = []
         for participant in self.participants:
             hr = hr_arr[participant].astype(float)
-            print(f"Participant {participant} contains {sum(hr < 30)}")
+            # print(f"Participant {participant} contains {sum(hr < 30)} nan values.")
             hr[hr < 30] = np.nan
 
             # interpolate nan values with smoothing spline
@@ -119,6 +119,7 @@ class WildPPGDataModule(BaseDataModule):
             "val_frac": self.val_frac,
             "sensor_location": self.sensor_location,
             "imu_features": self.imu_features,
+            "max_eval_look_back_window": self.max_eval_look_back_window,
         }
 
     def setup(self, stage: str):
@@ -137,5 +138,6 @@ class WildPPGDataModule(BaseDataModule):
             self.test_dataset = WildPPGDataset(
                 participants=self.test_participants,
                 return_whole_series=False,
+                is_test_dataset=True,
                 **self.common_args,
             )

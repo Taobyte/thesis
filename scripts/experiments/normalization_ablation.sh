@@ -17,7 +17,7 @@ CMD_CPU="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="cpu" \
+  --job-name="cpu_no_local" \
   --output="${OUT_PREFIX}_cpu_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_CPU"
@@ -36,7 +36,7 @@ CMD_GPU_SMALL="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="gpu_small" \
+  --job-name="gpu_s_no_local" \
   --output="${OUT_PREFIX}_gpu_s_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_GPU_SMALL"
@@ -55,7 +55,7 @@ CMD_GPU_LARGE="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="gpu_large" \
+  --job-name="gpu_l_no_local" \
   --output="${OUT_PREFIX}_gpu_l_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_GPU_LARGE"
@@ -77,7 +77,7 @@ CMD_CPU="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="cpu" \
+  --job-name="cpu_local" \
   --output="${OUT_PREFIX}_cpu_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_CPU"
@@ -97,7 +97,7 @@ CMD_GPU_SMALL="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="gpu_small" \
+  --job-name="gpu_s_local" \
   --output="${OUT_PREFIX}_gpu_s_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_GPU_SMALL"
@@ -117,7 +117,7 @@ CMD_GPU_LARGE="python main.py --multirun \
   feature=mean"
 
 sbatch \
-  --job-name="gpu_large" \
+  --job-name="gpu_l_local" \
   --output="${OUT_PREFIX}_gpu_l_%j.out" \
   --time="${TIME}" \
   --wrap="$CMD_GPU_LARGE"

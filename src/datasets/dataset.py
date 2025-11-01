@@ -14,13 +14,16 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         participants: list[int],
         use_dynamic_features: bool = False,
         use_static_features: bool = False,
-        look_back_window: int = 32,
+        look_back_window: int = 30,
         prediction_window: int = 10,
         target_channel_dim: int = 1,
         test_local: bool = False,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
         return_whole_series: bool = False,
+        is_test_dataset: bool = False,
+        max_eval_look_back_window: int = 60,
+        downsample_factor: int = 1,
     ):
         self.data_dir = data_dir
         self.look_back_window = look_back_window
@@ -33,6 +36,16 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
         self.return_whole_series = return_whole_series
 
         self.data = self.__read_data__()
+
+        downsampled_data: list[NDArray[np.float32]] = []
+        for series in self.data:
+            T = len(series)
+            usable_len = (T // downsample_factor) * downsample_factor
+            trimmed = series[:usable_len, :]
+            reshaped = trimmed.reshape(-1, downsample_factor, series.shape[1])
+            downsampled = np.nanmean(reshaped, axis=1)
+            downsampled_data.append(downsampled.astype(np.float32))
+        self.data = downsampled_data
 
         combined_series = np.concatenate(self.data, axis=0)
         self.mean = np.nanmean(combined_series, axis=0)
@@ -54,6 +67,17 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
                 length = len(series)
                 val_end = int(length * (train_frac + val_frac))
                 transformed_data.append(series[val_end - self.look_back_window :, :])
+            self.data = transformed_data
+        elif is_test_dataset:
+            # for the ablation study, we want to evaluate on the exact same prediction windows
+            # the problem is that the # of windows changes depending on the lookback window length
+            # thus we have to remove the beginning of the series if the lbw < max_lbw
+
+            test_start_idx = max_eval_look_back_window - look_back_window
+            print(f"test_start_idx = {test_start_idx}")
+            transformed_data: list[NDArray[np.float32]] = []
+            for series in self.data:
+                transformed_data.append(series[test_start_idx:, :])
             self.data = transformed_data
 
         self.lengths = [(len(v) - self.window_length + 1) for v in self.data]

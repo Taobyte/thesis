@@ -16,9 +16,6 @@ class LDaliaDataset(DaLiADataset):
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
-        assert (
-            self.drop_windows_with_invalid_hr is False
-        )  # ensures that we interpolate the data for local forecasting
         assert len(self.participants) == 1
         self.flag = flag
         timeseries = self.data[0]

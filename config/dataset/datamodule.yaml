@@ -25,3 +25,5 @@ datamodule:
   dynamic_exogenous_variables: null 
   static_exogenous_variables: null 
   look_back_channel_dim: ${compute_input_channel_dims:${.target_channel_dim},${.dynamic_exogenous_variables},${.static_exogenous_variables},${.use_dynamic_features},${.use_static_features}}
+
+  max_eval_look_back_window: 60
