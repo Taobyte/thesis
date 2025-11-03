@@ -1,20 +1,21 @@
 #!/bin/bash
 
 TIME="24:00:00"
-OUT_PREFIX="wppg_feature_ablation"
+OUT_PREFIX="feature_ablation"
 
 
 CMD_CPU="python main.py --multirun \
   hydra/launcher=cpu \
   dataset=wildppg,dalia \
-  lbw=c \
+  lbw=d \
   pw=a \
   use_wandb=True \
   tune=False \
   normalization=global \
   folds=fold_0,fold_1,fold_2 \
-  model=linear \
+  model=linear,xgboost \
   local_norm=difference \
+  local_norm_endo_only=True \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
 sbatch \
@@ -32,9 +33,10 @@ CMD_GPU_SMALL="python main.py --multirun \
   use_wandb=True \
   tune=False \
   normalization=global \
-  local_norm=difference\
+  local_norm=difference \
+  local_norm_endo_only=True \
   folds=fold_0,fold_1,fold_2 \
-  model=gp \
+  model=mole,msar,kalmanfilter,gp,mlp \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
 sbatch \
@@ -55,8 +57,9 @@ CMD_GPU_LARGE="python main.py --multirun \
   tune=False \
   normalization=global \
   local_norm=local_z \
+  local_norm_endo_only=True \
   folds=fold_0,fold_1,fold_2 \
-  model=timesnet,simpletm \
+  model=timesnet,simpletm,adamshyper,patchtst,timexer,gpt4ts,nbeatsx \
   feature=rms_last2s_rms_jerk_centroid,catch22"
 
 sbatch \

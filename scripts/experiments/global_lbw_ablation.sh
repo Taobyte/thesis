@@ -1,8 +1,5 @@
 #!/bin/bash
 
-source ~/.bashrc
-conda activate thesis
-
 # ressource specs
 TIME=24:00:00
 
