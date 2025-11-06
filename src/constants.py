@@ -123,10 +123,3 @@ dataset_to_name = {
     "lwildppg": "LWildPPG",
     "lieee": "LIEEE",
 }
-
-
-# Human-readable names for experiments
-experiment_to_name = {
-    "endo_only": "Endogenous Only",
-    "endo_exo": "Endogenous & Exogenous",
-}

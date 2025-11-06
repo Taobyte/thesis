@@ -5,7 +5,8 @@ import argparse
 import os
 import re
 
-from typing import Union
+from numpy.typing import NDArray
+from typing import Union, Any
 
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
@@ -14,7 +15,7 @@ def get_dalia_folds(datadir: str, test_size: int = 5):
     participant_paths = glob.glob(
         os.path.join(datadir, "**", "*_quest.csv"), recursive=True
     )
-    series = []
+    series: list[NDArray[np.float32]] = []
     for participant in participant_paths:
         row = pd.read_csv(participant, header=None).T
         row.columns = [el.split(" ")[1] for el in row.iloc[0]]
@@ -24,15 +25,12 @@ def get_dalia_folds(datadir: str, test_size: int = 5):
     df = pd.concat(series, ignore_index=True)
     df["participant_id"] = df["SUBJECT_ID"].apply(lambda s: int(re.sub("S", "", s)))
 
-    # Bin age & gender into strata
     df["age_bin"] = pd.qcut(df["AGE"].astype(int), q=2, labels=False)
     df["gender_bin"] = df["GENDER"].str.strip().map({"m": 0, "f": 1})
     df["strata"] = df["age_bin"].astype(str) + "_" + df["gender_bin"].astype(str)
 
-    # Deduplicate by participant
     df = df.drop_duplicates("participant_id")
 
-    # Split into test and train_val using stratified sampling
     X_all = df["participant_id"]
     y_all = df["strata"]
     X_train_val, X_test, y_train_val, y_test = train_test_split(
@@ -45,7 +43,7 @@ def get_dalia_folds(datadir: str, test_size: int = 5):
 
     # Create 3 stratified folds from the remaining train_val participants
     skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-    folds = []
+    folds: list[dict[str, Any]] = []
 
     for fold_idx, (train_idx, val_idx) in enumerate(
         skf.split(train_val_ids, y_train_val)

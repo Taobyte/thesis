@@ -97,7 +97,7 @@ def create_group_run_name(
     fold_nr: int = 0,
     normalization: str = "global",
     seed: int = 0,
-    local_norm: str = "l_none",
+    local_norm: str = "lnone",
     local_norm_endo_only: bool = False,
     feature_name: str = "mean",
 ) -> Tuple[str, str, list[str]]:
@@ -108,13 +108,23 @@ def create_group_run_name(
         f"{normalization}-{local_norm}-{ln_endo_only_tag}"
         f"-{dataset_name}-imu_{feature_name}"
     )
-    run_name = (
-        group_name
-        + f"-{model_name}-lb{look_back_window}"
-        + f"-pw{prediction_window}-{fold}-s{seed}"
-    )
 
-    tags: list[str] = [dataset_name, model_name, normalization, fold]
+    tags: list[str] = [dataset_name, model_name, normalization]
+    if dataset_name in ["ldalia", "lwildppg", "lieee", "limitbih"]:
+        # local datasets do not use folds
+        run_name = (
+            group_name
+            + f"-{model_name}-lb{look_back_window}"
+            + f"-pw{prediction_window}-s{seed}"
+        )
+
+    else:
+        run_name = (
+            group_name
+            + f"-{model_name}-lb{look_back_window}"
+            + f"-pw{prediction_window}-{fold}-s{seed}"
+        )
+        tags.append(fold)
 
     if local_norm in ["local_z", "difference"]:
         tags.append(local_norm)
