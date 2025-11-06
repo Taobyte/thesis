@@ -68,14 +68,12 @@ class LWildPPG(WildPPGDataModule):
     def __init__(
         self,
         participant: int = 1,
-        use_heart_rate: bool = False,
         train_frac: float = 0.7,
         val_frac: float = 0.1,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
 
-        self.use_heart_rate = use_heart_rate
         self.train_frac = train_frac
         self.val_frac = val_frac
         self.participant = participant

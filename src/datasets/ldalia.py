@@ -65,32 +65,28 @@ class LDalia(DaLiADataModule):
     ):
         super().__init__(**kwargs)
 
-        self.participant = participant
         self.train_frac = train_frac
         self.val_frac = val_frac
+        self.participant = participant
 
-    def setup(self, stage: str = "fit"):
-        common_args: dict[str, Any] = dict(
-            train_frac=self.train_frac,
-            val_frac=self.val_frac,
-            data_dir=self.data_dir,
-            participants=[self.participant],
-            use_dynamic_features=self.use_dynamic_features,
-            use_static_features=self.use_static_features,
-            look_back_window=self.look_back_window,
-            prediction_window=self.prediction_window,
-            target_channel_dim=self.target_channel_dim,
-        )
+    def setup(self, stage: str):
         if stage == "fit":
             self.train_dataset = LDaliaDataset(
                 flag="train",
                 return_whole_series=self.return_whole_series,
-                **common_args,
+                participants=[self.participant],
+                **self.common_args,
             )
             self.val_dataset = LDaliaDataset(
-                flag="val", return_whole_series=self.return_whole_series, **common_args
+                flag="val",
+                return_whole_series=self.return_whole_series,
+                participants=[self.participant],
+                **self.common_args,
             )
         if stage == "test":
             self.test_dataset = LDaliaDataset(
-                flag="test", return_whole_series=False, **common_args
+                flag="test",
+                return_whole_series=False,
+                participants=[self.participant],
+                **self.common_args,
             )

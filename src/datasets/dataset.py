@@ -72,9 +72,7 @@ class HRDataset(Dataset[Union[Tensor, Tuple[Tensor, Tensor]]]):
             # for the ablation study, we want to evaluate on the exact same prediction windows
             # the problem is that the # of windows changes depending on the lookback window length
             # thus we have to remove the beginning of the series if the lbw < max_lbw
-
             test_start_idx = max_eval_look_back_window - look_back_window
-            print(f"test_start_idx = {test_start_idx}")
             transformed_data: list[NDArray[np.float32]] = []
             for series in self.data:
                 transformed_data.append(series[test_start_idx:, :])

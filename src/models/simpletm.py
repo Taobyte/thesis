@@ -474,9 +474,6 @@ class SimpleTM(BaseLightningModule):
                 self.trainer.estimated_stepping_batches // self.trainer.max_epochs
             )
 
-            print(self.trainer.estimated_stepping_batches)
-            print(self.trainer.max_epochs)
-
             scheduler = torch.optim.lr_scheduler.OneCycleLR(
                 optimizer,
                 max_lr=self.hparams.learning_rate,

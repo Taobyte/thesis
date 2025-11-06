@@ -12,7 +12,7 @@ JOB="python main.py --multirun \
   normalization=global \
   local_norm=difference \
   use_wandb=True \
-  feature=mean"
+  feature=none,mean"
 sbatch \
   --job-name="cpu" \
   -o "local_cpu_%j.out" \
@@ -29,7 +29,7 @@ JOB="python main.py --multirun \
   normalization=global \
   local_norm=difference \
   use_wandb=True \
-  feature=mean"
+  feature=none,mean"
 
 sbatch \
   --job-name="gpu_small" \
@@ -47,10 +47,10 @@ JOB="python main.py --multirun \
   normalization=global \
   local_norm=local_z \
   use_wandb=True \
-  feature=mean"
+  feature=none,mean"
 
 sbatch \
   --job-name="gpu_large" \
-  -o "lbw_abl_gpu_l_%j.out" \
+  -o "local_gpu_large_%j.out" \
   --time="$TIME" \
   --wrap="$JOB"
