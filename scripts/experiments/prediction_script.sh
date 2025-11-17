@@ -1,15 +1,9 @@
 #!/bin/bash 
 
-# setup environment 
-source ~/.bashrc
-conda activate thesis
-
-# ressource specs
 TIME=24:00:00
 
-# lookback and prediction window settings
 LBW=b # b = 10
-PW=a # a = 3
+PW=d # a = 3
 
 JOB="python main.py --multirun hydra/launcher=cpu use_prediction_callback=True dataset=dalia,wildppg,ieee lbw=$LBW pw=$PW model=linear,xgboost normalization=global local_norm=difference use_wandb=True feature=none,mean folds=fold_0"
 sbatch --job-name="cpu" -o "prediction_cpu_%j.out" --time="$TIME" --wrap="$JOB"

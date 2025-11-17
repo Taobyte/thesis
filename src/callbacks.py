@@ -163,7 +163,7 @@ class PredictionCallback(Callback):
         metrics: dict[str, list[float]] = pl_module.metric_full
         result_arrays = {
             "preds": stacked_preds,  # (N, H, C)
-            "gt_series": np.asarray(ground_truth, dtype=object),  # ragged → object
+            "gt_series": np.asarray(ground_truth, dtype=object),
         }
 
         outdir = Path(trainer.default_root_dir) / "predictions"
@@ -174,9 +174,8 @@ class PredictionCallback(Callback):
         metrics_path = outdir / (npz_path.stem + "_metrics.json")
 
         with open(metrics_path, "w") as f:
-            json.dump(metrics, f)  # metrics is your dict[str, list[float]]
+            json.dump(metrics, f)
 
-        # Log to W&B
         wb_logger = trainer.logger
         assert isinstance(wb_logger, WandbLogger)
         run = wb_logger.experiment
