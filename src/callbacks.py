@@ -161,6 +161,8 @@ class PredictionCallback(Callback):
 
         stacked_preds = np.concatenate(predictions, axis=0).astype(np.float32)
         metrics: dict[str, list[float]] = pl_module.metric_full
+        metrics_arrays = {k: np.array(v, dtype=np.float32) for k, v in metrics.items()}
+        
         result_arrays = {
             "preds": stacked_preds,  # (N, H, C)
             "gt_series": np.asarray(ground_truth, dtype=object),
@@ -169,12 +171,7 @@ class PredictionCallback(Callback):
         outdir = Path(trainer.default_root_dir) / "predictions"
         outdir.mkdir(parents=True, exist_ok=True)
         npz_path = outdir / self.filename
-        np.savez_compressed(npz_path, **result_arrays)
-
-        metrics_path = outdir / (npz_path.stem + "_metrics.json")
-
-        with open(metrics_path, "w") as f:
-            json.dump(metrics, f)
+        np.savez_compressed(npz_path, **result_arrays, **metrics_arrays)
 
         wb_logger = trainer.logger
         assert isinstance(wb_logger, WandbLogger)
@@ -182,5 +179,4 @@ class PredictionCallback(Callback):
 
         art = wandb.Artifact(f"test_predictions-{run.id}", type="predictions")
         art.add_file(str(npz_path))
-        art.add_file(str(metrics_path))
         run.log_artifact(art)
